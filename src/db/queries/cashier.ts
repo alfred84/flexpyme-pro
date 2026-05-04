@@ -5,7 +5,7 @@ import type { CashierRegisterPayload, CashierRegisterResponse, CashSessionDto } 
  * Cash sessions for an invoice, newest first.
  */
 export async function fetchCashSessionsForInvoice(invoiceId: number): Promise<CashSessionDto[]> {
-  return invoke<CashSessionDto[]>("cashier_sessions_for_invoice", { invoice_id: invoiceId });
+  return invoke<CashSessionDto[]>("cashier_sessions_for_invoice", { invoiceId });
 }
 
 /**

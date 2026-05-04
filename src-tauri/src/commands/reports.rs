@@ -19,9 +19,16 @@ pub struct ReportsSummaryDto {
     pub total_billed: f64,
     pub total_paid: f64,
     pub total_pending: f64,
+    pub invoices_paid_count: i64,
+    pub invoices_partial_count: i64,
+    pub invoices_pending_count: i64,
+    pub average_invoice_amount: f64,
+    pub collection_rate: f64,
+    pub clients_with_receivables_count: i64,
     pub production_total_cost: f64,
     pub production_paid: f64,
     pub production_pending: f64,
+    pub production_batches_count: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -64,23 +71,69 @@ pub fn reports_summary(args: ReportsRangeArgs) -> Result<ReportsSummaryDto, Stri
         "WHERE deleted_at IS NULL"
     };
     let invoice_sql = format!(
-        "SELECT COUNT(*), COALESCE(SUM(total),0), COALESCE(SUM(paid),0), COALESCE(SUM(balance),0)
+        "SELECT COUNT(*),
+                COALESCE(SUM(total),0), COALESCE(SUM(paid),0), COALESCE(SUM(balance),0),
+                COALESCE(SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN status = 'partial' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0)
          FROM invoices {}",
         invoice_where
     );
 
-    let (invoices_count, total_billed, total_paid, total_pending): (i64, f64, f64, f64) =
-        if let (Some(f), Some(t)) = (from.clone(), to.clone()) {
-            conn.query_row(&invoice_sql, params![f, t], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-            })
-            .map_err(|e| e.to_string())?
-        } else {
-            conn.query_row(&invoice_sql, [], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-            })
-            .map_err(|e| e.to_string())?
-        };
+    let (
+        invoices_count,
+        total_billed,
+        total_paid,
+        total_pending,
+        invoices_paid_count,
+        invoices_partial_count,
+        invoices_pending_count,
+    ): (i64, f64, f64, f64, i64, i64, i64) = if let (Some(f), Some(t)) = (from.clone(), to.clone()) {
+        conn.query_row(&invoice_sql, params![f, t], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+    } else {
+        conn.query_row(&invoice_sql, [], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+    };
+
+    let average_invoice_amount = if invoices_count > 0 {
+        total_billed / (invoices_count as f64)
+    } else {
+        0.0
+    };
+    let collection_rate = if total_billed > 1e-9 {
+        (total_paid / total_billed).min(1.0)
+    } else {
+        0.0
+    };
+
+    let clients_with_receivables_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM clients WHERE deleted_at IS NULL AND balance > 0",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
 
     let production_where = if from.is_some() && to.is_some() {
         "WHERE date >= ?1 AND date <= ?2"
@@ -88,19 +141,19 @@ pub fn reports_summary(args: ReportsRangeArgs) -> Result<ReportsSummaryDto, Stri
         ""
     };
     let production_sql = format!(
-        "SELECT COALESCE(SUM(total_cost),0), COALESCE(SUM(paid),0)
+        "SELECT COALESCE(SUM(total_cost),0), COALESCE(SUM(paid),0), COUNT(*)
          FROM production_batches {}",
         production_where
     );
 
-    let (production_total_cost, production_paid): (f64, f64) =
+    let (production_total_cost, production_paid, production_batches_count): (f64, f64, i64) =
         if let (Some(f), Some(t)) = (from, to) {
             conn.query_row(&production_sql, params![f, t], |row| {
-                Ok((row.get(0)?, row.get(1)?))
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
             })
             .map_err(|e| e.to_string())?
         } else {
-            conn.query_row(&production_sql, [], |row| Ok((row.get(0)?, row.get(1)?)))
+            conn.query_row(&production_sql, [], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
                 .map_err(|e| e.to_string())?
         };
     let production_pending = (production_total_cost - production_paid).max(0.0);
@@ -110,9 +163,16 @@ pub fn reports_summary(args: ReportsRangeArgs) -> Result<ReportsSummaryDto, Stri
         total_billed,
         total_paid,
         total_pending,
+        invoices_paid_count,
+        invoices_partial_count,
+        invoices_pending_count,
+        average_invoice_amount,
+        collection_rate,
+        clients_with_receivables_count,
         production_total_cost,
         production_paid,
         production_pending,
+        production_batches_count,
     })
 }
 
