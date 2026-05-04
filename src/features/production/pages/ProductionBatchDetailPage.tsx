@@ -1,21 +1,46 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "@tanstack/react-router";
-import { useState } from "react";
+import { getRouteApi, Link, useRouterState } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
 import { fetchProductionBatchDetail } from "@/db/queries/production";
 import { buildCsvLine, downloadTextFile } from "@/lib/csv";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
 
 const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
 
+const productionBatchRouteApi = getRouteApi("/produccion/$batchId");
+
+function parseBatchIdFromPath(pathname: string): number | null {
+  const m = /^\/produccion\/(\d+)\/?$/.exec(pathname);
+  return m ? Number(m[1]) : null;
+}
+
 export function ProductionBatchDetailPage() {
-  const params = useParams({ strict: false }) as { batchId?: string };
-  const batchId = Number(params.batchId);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { batchId: batchIdParam } = productionBatchRouteApi.useParams({
+    structuralSharing: false,
+  });
+  const batchId = useMemo(() => {
+    const fromParams = Number(batchIdParam);
+    if (Number.isFinite(fromParams) && fromParams > 0) {
+      return fromParams;
+    }
+    return parseBatchIdFromPath(pathname) ?? Number.NaN;
+  }, [batchIdParam, pathname]);
   const [flash] = useState<FlashMessage | null>(() => popFlashMessage());
 
   const detailQuery = useQuery({
     queryKey: ["production", "detail", batchId],
-    queryFn: () => fetchProductionBatchDetail(batchId),
+    queryFn: ({ queryKey }) => {
+      const id = queryKey[2];
+      if (typeof id !== "number" || !Number.isFinite(id) || id <= 0) {
+        throw new Error("ID de lote inválido");
+      }
+      return fetchProductionBatchDetail(id);
+    },
     enabled: Number.isFinite(batchId) && batchId > 0,
+    staleTime: 0,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(250 * 2 ** attempt, 2000),
   });
 
   const exportLinesCsv = () => {
@@ -95,6 +120,11 @@ export function ProductionBatchDetailPage() {
       {detailQuery.isError && (
         <div className="alert alert-error">
           <span>No se pudo cargar el lote.</span>
+          <p className="mt-1 text-xs opacity-90">
+            {detailQuery.error instanceof Error
+              ? detailQuery.error.message
+              : String(detailQuery.error ?? "")}
+          </p>
         </div>
       )}
       {flash && (

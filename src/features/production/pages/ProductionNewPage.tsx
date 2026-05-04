@@ -44,7 +44,7 @@ export function ProductionNewPage() {
   const mutation = useMutation({
     mutationFn: createProductionBatch,
     onSuccess: async (res) => {
-      await queryClient.invalidateQueries({ queryKey: ["production"] });
+      await queryClient.invalidateQueries({ queryKey: ["production", "list"] });
       pushFlashMessage({ kind: "success", text: "Lote de producción creado correctamente." });
       await navigate({ to: "/produccion/$batchId", params: { batchId: String(res.id) } });
     },

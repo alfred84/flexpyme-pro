@@ -4,6 +4,7 @@ import type {
   CreateProductionBatchResponse,
   ProductionBatchDetailDto,
   ProductionBatchListDto,
+  ProductionRangeExportDto,
 } from "@/types/production";
 
 export async function fetchProductionBatches(): Promise<ProductionBatchListDto[]> {
@@ -11,7 +12,17 @@ export async function fetchProductionBatches(): Promise<ProductionBatchListDto[]
 }
 
 export async function fetchProductionBatchDetail(batchId: number): Promise<ProductionBatchDetailDto> {
-  return invoke<ProductionBatchDetailDto>("production_get_detail", { batch_id: batchId });
+  return invoke<ProductionBatchDetailDto>("production_get_detail", { batchId });
+}
+
+export async function fetchProductionExportInDateRange(
+  dateFrom: string,
+  dateTo: string,
+): Promise<ProductionRangeExportDto> {
+  return invoke<ProductionRangeExportDto>("production_export_in_date_range", {
+    dateFrom,
+    dateTo,
+  });
 }
 
 export async function createProductionBatch(

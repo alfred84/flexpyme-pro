@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { fetchInvoices } from "@/db/queries/invoices";
+import { fetchProductionExportInDateRange } from "@/db/queries/production";
 import { fetchReportsSummary, fetchTopDebtors } from "@/db/queries/reports";
 import { buildCsvLine, downloadTextFile } from "@/lib/csv";
 import type { InvoiceListDto } from "@/types/invoice";
+import type { ProductionRangeExportDto } from "@/types/production";
 import type { ReportsSummaryDto, TopDebtorDto } from "@/types/report";
 
 const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
@@ -14,6 +16,7 @@ function buildReportsCsv(
   summary: ReportsSummaryDto,
   debtors: TopDebtorDto[],
   invoices: InvoiceListDto[],
+  productionInRange: ProductionRangeExportDto | null,
 ): string {
   const lines: string[] = [];
   lines.push(buildCsvLine(["Reporte generado", new Date().toISOString()]));
@@ -52,6 +55,73 @@ function buildReportsCsv(
         ]),
       );
     }
+
+    if (productionInRange) {
+      lines.push("");
+      lines.push("PRODUCCION_LOTES_EN_RANGO");
+      lines.push(
+        buildCsvLine([
+          "LoteId",
+          "Tipo",
+          "Fecha",
+          "Trabajador",
+          "CostoTotal",
+          "Pagado",
+          "Pendiente",
+          "Notas",
+        ]),
+      );
+      for (const b of productionInRange.batches) {
+        lines.push(
+          buildCsvLine([
+            b.id,
+            b.type,
+            b.date,
+            b.workerName ?? "",
+            b.totalCost,
+            b.paid,
+            b.pending,
+            b.notes ?? "",
+          ]),
+        );
+      }
+      lines.push("");
+      lines.push("PRODUCCION_LINEAS_EN_RANGO");
+      lines.push(
+        buildCsvLine([
+          "LoteId",
+          "FechaLote",
+          "TipoLote",
+          "Trabajador",
+          "LineaId",
+          "ClienteCodigo",
+          "ClienteNombre",
+          "Formato",
+          "Categoria",
+          "Cantidad",
+          "CostoUnitario",
+          "Subtotal",
+        ]),
+      );
+      for (const row of productionInRange.lines) {
+        lines.push(
+          buildCsvLine([
+            row.batchId,
+            row.batchDate,
+            row.batchType,
+            row.workerName ?? "",
+            row.lineId,
+            row.clientCode,
+            row.clientName,
+            row.formatLabel ?? "",
+            row.category,
+            row.quantity,
+            row.unitCost,
+            row.subtotal,
+          ]),
+        );
+      }
+    }
   }
   return lines.join("\r\n");
 }
@@ -79,7 +149,18 @@ export function ReportsPage() {
     queryFn: fetchInvoices,
   });
 
-  const canExport = summaryQuery.isSuccess && debtorsQuery.isSuccess && invoicesQuery.isSuccess;
+  const rangeSelected = Boolean(dateFrom && dateTo);
+  const productionRangeQuery = useQuery({
+    queryKey: ["production", "export-range", dateFrom, dateTo],
+    queryFn: () => fetchProductionExportInDateRange(dateFrom, dateTo),
+    enabled: rangeSelected,
+  });
+
+  const canExport =
+    summaryQuery.isSuccess &&
+    debtorsQuery.isSuccess &&
+    invoicesQuery.isSuccess &&
+    (!rangeSelected || productionRangeQuery.isSuccess);
 
   const exportFilename = useMemo(() => {
     const d = new Date().toISOString().slice(0, 10);
@@ -88,7 +169,16 @@ export function ReportsPage() {
 
   const handleExportCsv = () => {
     if (!summaryQuery.data || !debtorsQuery.data || !invoicesQuery.data) return;
-    const csv = buildReportsCsv(dateFrom, dateTo, summaryQuery.data, debtorsQuery.data, invoicesQuery.data);
+    const productionInRange =
+      rangeSelected && productionRangeQuery.data ? productionRangeQuery.data : null;
+    const csv = buildReportsCsv(
+      dateFrom,
+      dateTo,
+      summaryQuery.data,
+      debtorsQuery.data,
+      invoicesQuery.data,
+      productionInRange,
+    );
     downloadTextFile(exportFilename, csv);
   };
 
@@ -108,8 +198,8 @@ export function ReportsPage() {
         <div className="card-body">
           <h2 className="card-title text-base">Filtro de fechas (facturas y producción)</h2>
           <p className="text-xs text-base-content/60">
-            El resumen usa este rango. Para incluir el listado de facturas en el CSV, indica también &quot;desde&quot; y
-            &quot;hasta&quot;.
+            El resumen usa este rango. Con &quot;desde&quot; y &quot;hasta&quot; rellenados, el CSV incluye facturas en
+            rango, lotes de producción (cabeceras) y todas sus líneas en ese rango de fechas de lote.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="form-control">
@@ -121,6 +211,12 @@ export function ReportsPage() {
               <input type="date" className="input input-bordered" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
             </label>
           </div>
+          {rangeSelected && productionRangeQuery.isError && (
+            <p className="text-error text-sm mt-2">No se pudo cargar la producción para el exporte. Revisa el rango e intenta de nuevo.</p>
+          )}
+          {rangeSelected && productionRangeQuery.isFetching && (
+            <p className="text-base-content/60 text-sm mt-2">Cargando datos de producción para el CSV...</p>
+          )}
         </div>
       </div>
 

@@ -57,7 +57,12 @@ export function ProductionListPage() {
                     <td className="text-right">{money.format(row.paid)}</td>
                     <td className="text-right">{money.format(row.pending)}</td>
                     <td>
-                      <Link className="btn btn-xs btn-outline" to="/produccion/$batchId" params={{ batchId: String(row.id) }}>
+                      <Link
+                        className="btn btn-xs btn-outline"
+                        to="/produccion/$batchId"
+                        params={{ batchId: String(row.id) }}
+                        preload="intent"
+                      >
                         Ver
                       </Link>
                     </td>

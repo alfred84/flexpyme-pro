@@ -57,3 +57,36 @@ export interface ProductionBatchDetailDto {
   batch: ProductionBatchHeaderDto;
   items: ProductionBatchLineDto[];
 }
+
+/** Lote dentro del rango (exporte reportes / CSV). */
+export interface ProductionBatchInRangeDto {
+  id: number;
+  type: string;
+  date: string;
+  workerName: string | null;
+  totalCost: number;
+  paid: number;
+  pending: number;
+  notes: string | null;
+}
+
+/** Línea de producción con contexto del lote (mismo rango). */
+export interface ProductionLineInRangeDto {
+  batchId: number;
+  batchDate: string;
+  batchType: string;
+  workerName: string | null;
+  lineId: number;
+  clientCode: string;
+  clientName: string;
+  formatLabel: string | null;
+  category: string;
+  quantity: number;
+  unitCost: number;
+  subtotal: number;
+}
+
+export interface ProductionRangeExportDto {
+  batches: ProductionBatchInRangeDto[];
+  lines: ProductionLineInRangeDto[];
+}

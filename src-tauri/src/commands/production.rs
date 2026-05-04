@@ -79,6 +79,45 @@ pub struct ProductionBatchDetailDto {
     pub items: Vec<ProductionBatchLineDto>,
 }
 
+/// Batch header row for CSV / report range export (no line items).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductionBatchInRangeDto {
+    pub id: i64,
+    pub r#type: String,
+    pub date: String,
+    pub worker_name: Option<String>,
+    pub total_cost: f64,
+    pub paid: f64,
+    pub pending: f64,
+    pub notes: Option<String>,
+}
+
+/// One production line with batch context (for range export).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductionLineInRangeDto {
+    pub batch_id: i64,
+    pub batch_date: String,
+    pub batch_type: String,
+    pub worker_name: Option<String>,
+    pub line_id: i64,
+    pub client_code: String,
+    pub client_name: String,
+    pub format_label: Option<String>,
+    pub category: String,
+    pub quantity: i64,
+    pub unit_cost: f64,
+    pub subtotal: f64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductionRangeExportDto {
+    pub batches: Vec<ProductionBatchInRangeDto>,
+    pub lines: Vec<ProductionLineInRangeDto>,
+}
+
 fn trim_optional(value: Option<String>) -> Option<String> {
     value.and_then(|v| {
         let t = v.trim().to_string();
@@ -175,6 +214,83 @@ pub fn production_get_detail(batch_id: i64) -> Result<ProductionBatchDetailDto, 
         .map_err(|e| e.to_string())?;
 
     Ok(ProductionBatchDetailDto { batch: header, items })
+}
+
+/// Batches dated in `[date_from, date_to]` plus all their line items (for report CSV).
+#[tauri::command]
+pub fn production_export_in_date_range(
+    date_from: String,
+    date_to: String,
+) -> Result<ProductionRangeExportDto, String> {
+    let from = date_from.trim();
+    let to = date_to.trim();
+    if from.is_empty() || to.is_empty() {
+        return Err("Rango de fechas incompleto".to_string());
+    }
+
+    let conn = db::open_connection()?;
+
+    let mut batches_stmt = conn
+        .prepare(
+            "SELECT id, type, date, worker_name, total_cost, paid, notes
+             FROM production_batches
+             WHERE date >= ?1 AND date <= ?2
+             ORDER BY date ASC, id ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let batches = batches_stmt
+        .query_map(params![from, to], |row| {
+            let total_cost: f64 = row.get(4)?;
+            let paid: f64 = row.get(5)?;
+            Ok(ProductionBatchInRangeDto {
+                id: row.get(0)?,
+                r#type: row.get(1)?,
+                date: row.get(2)?,
+                worker_name: row.get(3)?,
+                total_cost,
+                paid,
+                pending: (total_cost - paid).max(0.0),
+                notes: row.get(6)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    let mut lines_stmt = conn
+        .prepare(
+            "SELECT pb.id, pb.date, pb.type, pb.worker_name, pbi.id, c.code, c.name, f.label,
+                    pbi.category, pbi.quantity, pbi.unit_cost, pbi.subtotal
+             FROM production_batch_items pbi
+             JOIN production_batches pb ON pb.id = pbi.batch_id
+             JOIN clients c ON c.id = pbi.client_id
+             LEFT JOIN formats f ON f.id = pbi.format_id
+             WHERE pb.date >= ?1 AND pb.date <= ?2
+             ORDER BY pb.date ASC, pb.id ASC, pbi.id ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let lines = lines_stmt
+        .query_map(params![from, to], |row| {
+            Ok(ProductionLineInRangeDto {
+                batch_id: row.get(0)?,
+                batch_date: row.get(1)?,
+                batch_type: row.get(2)?,
+                worker_name: row.get(3)?,
+                line_id: row.get(4)?,
+                client_code: row.get(5)?,
+                client_name: row.get(6)?,
+                format_label: row.get(7)?,
+                category: row.get(8)?,
+                quantity: row.get(9)?,
+                unit_cost: row.get(10)?,
+                subtotal: row.get(11)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(ProductionRangeExportDto { batches, lines })
 }
 
 #[tauri::command]
