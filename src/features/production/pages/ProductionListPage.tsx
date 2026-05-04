@@ -37,12 +37,13 @@ export function ProductionListPage() {
                 <th className="text-right">Costo total</th>
                 <th className="text-right">Pagado</th>
                 <th className="text-right">Pendiente</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {batchesQuery.data.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center text-base-content/60">
+                  <td colSpan={7} className="text-center text-base-content/60">
                     No hay lotes registrados.
                   </td>
                 </tr>
@@ -55,6 +56,11 @@ export function ProductionListPage() {
                     <td className="text-right">{money.format(row.totalCost)}</td>
                     <td className="text-right">{money.format(row.paid)}</td>
                     <td className="text-right">{money.format(row.pending)}</td>
+                    <td>
+                      <Link className="btn btn-xs btn-outline" to="/produccion/$batchId" params={{ batchId: String(row.id) }}>
+                        Ver
+                      </Link>
+                    </td>
                   </tr>
                 ))
               )}

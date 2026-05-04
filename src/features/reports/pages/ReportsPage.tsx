@@ -1,8 +1,60 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { fetchInvoices } from "@/db/queries/invoices";
 import { fetchReportsSummary, fetchTopDebtors } from "@/db/queries/reports";
+import { buildCsvLine, downloadTextFile } from "@/lib/csv";
+import type { InvoiceListDto } from "@/types/invoice";
+import type { ReportsSummaryDto, TopDebtorDto } from "@/types/report";
 
 const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
+
+function buildReportsCsv(
+  dateFrom: string,
+  dateTo: string,
+  summary: ReportsSummaryDto,
+  debtors: TopDebtorDto[],
+  invoices: InvoiceListDto[],
+): string {
+  const lines: string[] = [];
+  lines.push(buildCsvLine(["Reporte generado", new Date().toISOString()]));
+  lines.push(buildCsvLine(["Fecha desde (filtro resumen)", dateFrom || "(vacío = todo)"]));
+  lines.push(buildCsvLine(["Fecha hasta (filtro resumen)", dateTo || "(vacío = todo)"]));
+  lines.push("");
+  lines.push("RESUMEN");
+  lines.push(buildCsvLine(["Facturas conteo", summary.invoicesCount]));
+  lines.push(buildCsvLine(["Total facturado", summary.totalBilled]));
+  lines.push(buildCsvLine(["Total cobrado", summary.totalPaid]));
+  lines.push(buildCsvLine(["Pendiente por cobrar", summary.totalPending]));
+  lines.push(buildCsvLine(["Costo producción", summary.productionTotalCost]));
+  lines.push(buildCsvLine(["Pagado producción", summary.productionPaid]));
+  lines.push(buildCsvLine(["Pendiente producción", summary.productionPending]));
+  lines.push("");
+  lines.push("TOP DEUDORES");
+  lines.push(buildCsvLine(["Codigo", "Cliente", "Balance"]));
+  for (const d of debtors) {
+    lines.push(buildCsvLine([d.clientCode, d.clientName, d.balance]));
+  }
+  if (dateFrom && dateTo) {
+    lines.push("");
+    lines.push("FACTURAS_EN_RANGO");
+    const filtered = invoices.filter((inv) => inv.date >= dateFrom && inv.date <= dateTo);
+    lines.push(buildCsvLine(["Numero", "Cliente", "Fecha", "Total", "Pagado", "Pendiente", "Estado"]));
+    for (const inv of filtered) {
+      lines.push(
+        buildCsvLine([
+          inv.invoiceNumber,
+          inv.clientName,
+          inv.date,
+          inv.total,
+          inv.paid,
+          inv.balance,
+          inv.status,
+        ]),
+      );
+    }
+  }
+  return lines.join("\r\n");
+}
 
 export function ReportsPage() {
   const [dateFrom, setDateFrom] = useState("");
@@ -22,16 +74,43 @@ export function ReportsPage() {
     queryFn: () => fetchTopDebtors(10),
   });
 
+  const invoicesQuery = useQuery({
+    queryKey: ["invoices", "list"],
+    queryFn: fetchInvoices,
+  });
+
+  const canExport = summaryQuery.isSuccess && debtorsQuery.isSuccess && invoicesQuery.isSuccess;
+
+  const exportFilename = useMemo(() => {
+    const d = new Date().toISOString().slice(0, 10);
+    return `reportes-${d}.csv`;
+  }, []);
+
+  const handleExportCsv = () => {
+    if (!summaryQuery.data || !debtorsQuery.data || !invoicesQuery.data) return;
+    const csv = buildReportsCsv(dateFrom, dateTo, summaryQuery.data, debtorsQuery.data, invoicesQuery.data);
+    downloadTextFile(exportFilename, csv);
+  };
+
   return (
     <section className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Reportes</h1>
-        <p className="text-sm text-base-content/70">Métricas de ventas/cobros y cuentas por cobrar.</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Reportes</h1>
+          <p className="text-sm text-base-content/70">Métricas de ventas/cobros y cuentas por cobrar.</p>
+        </div>
+        <button type="button" className="btn btn-outline btn-sm" disabled={!canExport} onClick={() => handleExportCsv()}>
+          Exportar CSV
+        </button>
       </div>
 
       <div className="card bg-base-100 shadow">
         <div className="card-body">
           <h2 className="card-title text-base">Filtro de fechas (facturas y producción)</h2>
+          <p className="text-xs text-base-content/60">
+            El resumen usa este rango. Para incluir el listado de facturas en el CSV, indica también &quot;desde&quot; y
+            &quot;hasta&quot;.
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="form-control">
               <span className="label-text">Desde</span>

@@ -28,3 +28,32 @@ export interface CreateProductionBatchPayload {
 export interface CreateProductionBatchResponse {
   id: number;
 }
+
+export interface ProductionBatchHeaderDto {
+  id: number;
+  type: string;
+  date: string;
+  workerName: string | null;
+  totalCost: number;
+  paid: number;
+  pending: number;
+  notes: string | null;
+}
+
+export interface ProductionBatchLineDto {
+  id: number;
+  clientId: number;
+  clientCode: string;
+  clientName: string;
+  formatId: number | null;
+  formatLabel: string | null;
+  category: string;
+  quantity: number;
+  unitCost: number;
+  subtotal: number;
+}
+
+export interface ProductionBatchDetailDto {
+  batch: ProductionBatchHeaderDto;
+  items: ProductionBatchLineDto[];
+}
