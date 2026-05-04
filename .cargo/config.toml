@@ -1,0 +1,5 @@
+# Mitigates Windows Schannel errors when crates.io CRL/revocation cannot be reached
+# (e.g. CRYPT_E_NO_REVOCATION_CHECK behind corporate TLS inspection).
+# Security trade-off: disables HTTPS certificate revocation checks for Cargo downloads.
+[http]
+check-revoke = false

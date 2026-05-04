@@ -1,0 +1,31 @@
+---
+description: Reglas generales del proyecto FlexPyme Pro
+globs: ["**/*.ts", "**/*.tsx", "**/*.rs"]
+---
+
+# FlexPyme Pro - Reglas del Proyecto
+
+## Stack obligatorio (NO sustituir)
+- Tauri v2, React 18, TypeScript strict
+- Tailwind CSS v3 + DaisyUI v4 (solo estas para estilos)
+- TanStack Router v1 + TanStack Query v5
+- Drizzle ORM con SQLite
+- React Hook Form + Zod para formularios
+- TanStack Table v8 para tablas de datos
+- Recharts para graficas
+
+## Estilo de codigo
+- TypeScript strict mode siempre activo
+- JSDoc obligatorio en toda funcion publica y componente
+- Sin `any` implicito; usar tipos explicitos siempre
+- Imports con alias `@/` para `src/`
+
+## Git
+- Conventional Commits: feat/fix/docs/chore/test/refactor/perf
+- Un commit por cambio logico (atomico)
+- Mensaje en ingles, cuerpo en espanol si se necesita detalle
+
+## Comunicacion Tauri
+- Toda comunicacion con SQLite va por Tauri commands (`invoke`)
+- Nunca acceder a filesystem directamente desde React
+- Definir tipos compartidos en `src/types/`

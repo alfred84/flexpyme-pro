@@ -1,0 +1,23 @@
+---
+description: Reglas para esquema y queries de base de datos
+globs: ["src/db/**/*.ts", "src-tauri/src/**/*.rs"]
+---
+
+# Reglas Base de Datos
+
+## Drizzle ORM
+- Schema definido en `src/db/schema.ts` como fuente de verdad
+- Migraciones generadas con `drizzle-kit generate`
+- Nunca escribir SQL raw desde el frontend
+- Queries reutilizables en `src/db/queries/`
+
+## Tauri Commands (Rust)
+- Un archivo por dominio en `src-tauri/src/commands/`
+- Manejo de errores con `Result<T, String>`
+- Documentar con doc comments `///` en Rust
+- Serializar/deserializar con `serde_json`
+
+## Integridad
+- Usar transacciones para operaciones multi-tabla
+- Soft delete (campo `deleted_at`) para clientes y facturas
+- Auditoria de cambios de precio con timestamp

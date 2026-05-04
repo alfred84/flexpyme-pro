@@ -1,0 +1,181 @@
+import { useQuery } from "@tanstack/react-query";
+import { Link, useParams } from "@tanstack/react-router";
+import { fetchInvoiceDetail } from "@/db/queries/invoices";
+import { fetchCompanySettings } from "@/db/queries/settings";
+
+const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
+
+function statusLabel(status: string): string {
+  if (status === "paid") return "Pagado";
+  if (status === "partial") return "Parcial";
+  return "Pendiente";
+}
+
+/**
+ * Printable invoice layout; uses the browser print dialog (Tauri webview).
+ */
+export function InvoicePrintPage() {
+  const params = useParams({ strict: false }) as { invoiceId?: string };
+  const invoiceId = Number(params.invoiceId);
+
+  const detailQuery = useQuery({
+    queryKey: ["invoices", "detail", invoiceId],
+    queryFn: () => fetchInvoiceDetail(invoiceId),
+    enabled: Number.isFinite(invoiceId) && invoiceId > 0,
+  });
+
+  const companyQuery = useQuery({
+    queryKey: ["settings", "company"],
+    queryFn: fetchCompanySettings,
+  });
+
+  if (!Number.isFinite(invoiceId) || invoiceId <= 0) {
+    return (
+      <div className="alert alert-warning">
+        <span>Identificador de factura no válido.</span>
+      </div>
+    );
+  }
+
+  const inv = detailQuery.data?.invoice;
+  const items = detailQuery.data?.items ?? [];
+  const co = companyQuery.data;
+  const hasCompanyHeader =
+    co &&
+    (co.companyName.trim() ||
+      co.companyRnc.trim() ||
+      co.companyPhone.trim() ||
+      co.companyAddress.trim());
+
+  return (
+    <div className="invoice-print-root">
+      <div className="mb-4 flex flex-wrap gap-2 print:hidden">
+        <Link to="/facturas/$invoiceId" params={{ invoiceId: String(invoiceId) }} className="btn btn-ghost btn-sm">
+          Volver a factura
+        </Link>
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => window.print()} disabled={!inv}>
+          Imprimir
+        </button>
+      </div>
+
+      {detailQuery.isLoading && <p className="print:hidden">Cargando...</p>}
+      {detailQuery.isError && (
+        <div className="alert alert-error print:hidden">
+          <span>No se pudo cargar la factura.</span>
+        </div>
+      )}
+
+      {inv && (
+        <article className="invoice-print-sheet rounded-lg border border-base-300 bg-base-100 p-6 shadow-sm print:border-0 print:bg-white print:p-0 print:shadow-none">
+          <header className="mb-6 border-b border-base-300 pb-4 print:mb-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                {hasCompanyHeader && co ? (
+                  <div className="mb-2 space-y-0.5 print:text-black">
+                    {co.companyName.trim() && <p className="text-xl font-bold">{co.companyName.trim()}</p>}
+                    {co.companyRnc.trim() && (
+                      <p className="text-sm text-base-content/80 print:text-gray-700">RNC: {co.companyRnc.trim()}</p>
+                    )}
+                    {co.companyPhone.trim() && (
+                      <p className="text-sm text-base-content/80 print:text-gray-700">Tel: {co.companyPhone.trim()}</p>
+                    )}
+                    {co.companyAddress.trim() && (
+                      <p className="whitespace-pre-wrap text-sm text-base-content/80 print:text-gray-700">{co.companyAddress.trim()}</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-base-content/70 print:text-gray-600">FlexPyme Pro</p>
+                )}
+                <h1 className="text-2xl font-bold print:text-black">Factura</h1>
+                <p className="font-mono text-lg print:text-black">{inv.invoiceNumber}</p>
+              </div>
+              <div className="text-right text-sm print:text-black">
+                <p>
+                  <span className="text-base-content/60">Fecha:</span> {inv.date}
+                </p>
+                <p>
+                  <span className="text-base-content/60">Estado:</span> {statusLabel(inv.status)}
+                </p>
+              </div>
+            </div>
+          </header>
+
+          <section className="mb-6 grid gap-4 sm:grid-cols-2 print:text-black">
+            <div>
+              <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-base-content/60 print:text-gray-600">
+                Cliente
+              </h2>
+              <p className="font-medium">{inv.clientName}</p>
+              {inv.notes && (
+                <div className="mt-2 text-sm">
+                  <p className="text-base-content/60 print:text-gray-600">Notas</p>
+                  <p className="whitespace-pre-wrap">{inv.notes}</p>
+                </div>
+              )}
+            </div>
+            <div>
+              <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-base-content/60 print:text-gray-600">
+                Totales
+              </h2>
+              <dl className="space-y-1 text-sm">
+                <div className="flex justify-between gap-4">
+                  <dt>Subtotal líneas</dt>
+                  <dd>{money.format(inv.subtotal)}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Deuda anterior</dt>
+                  <dd>{money.format(inv.previousDebt)}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Anticipado</dt>
+                  <dd>{money.format(inv.advancePayment)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 font-semibold">
+                  <dt>Total</dt>
+                  <dd>{money.format(inv.total)}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>Pagado</dt>
+                  <dd>{money.format(inv.paid)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 border-t border-base-300 pt-2 print:border-gray-300">
+                  <dt className="font-semibold">Pendiente</dt>
+                  <dd className="font-semibold">{money.format(inv.balance)}</dd>
+                </div>
+              </dl>
+            </div>
+          </section>
+
+          <div className="overflow-x-auto print:overflow-visible">
+            <table className="table table-sm w-full print:text-black">
+              <thead>
+                <tr className="border-b print:break-inside-avoid">
+                  <th className="text-left">Categoría</th>
+                  <th className="text-left">Formato</th>
+                  <th className="text-left">Servicio</th>
+                  <th className="text-left">Acabado</th>
+                  <th className="text-right">Cant.</th>
+                  <th className="text-right">P. unit.</th>
+                  <th className="text-right">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((line) => (
+                  <tr key={line.id} className="print:break-inside-avoid">
+                    <td>{line.categoryName}</td>
+                    <td>{line.formatLabel ?? "—"}</td>
+                    <td>{line.service ?? "—"}</td>
+                    <td>{line.finish ?? "—"}</td>
+                    <td className="text-right">{line.quantity}</td>
+                    <td className="text-right">{money.format(line.unitPrice)}</td>
+                    <td className="text-right">{money.format(line.subtotal)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </article>
+      )}
+    </div>
+  );
+}

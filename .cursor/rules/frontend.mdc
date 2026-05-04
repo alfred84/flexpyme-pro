@@ -1,0 +1,32 @@
+---
+description: Reglas para componentes React y UI
+globs: ["src/**/*.tsx", "src/**/*.ts"]
+---
+
+# Reglas Frontend
+
+## Componentes
+- Functional components con TypeScript siempre
+- Props tipadas con interface, nunca type inline en JSX
+- JSDoc en cada componente: descripcion, @param props, @returns
+- Nombres en PascalCase para componentes, camelCase para hooks
+
+## Estado y datos
+- TanStack Query para todo dato del servidor (SQLite via Tauri)
+- useState solo para estado de UI local (modals, forms)
+- No usar useEffect para fetch de datos; usar TanStack Query
+
+## Estilos
+- Tailwind utility classes directamente en JSX
+- DaisyUI components como base (btn, card, modal, table, input)
+- Sin CSS modules ni styled-components
+- Tema oscuro/claro usando DaisyUI `data-theme`
+
+## Formularios
+- React Hook Form + resolver de Zod siempre
+- Mensajes de error en espanol
+- Validacion en cliente y en command Rust
+
+## Tablas
+- TanStack Table v8 para todas las tablas de datos
+- Paginacion del lado del cliente (datos locales/SQLite)
