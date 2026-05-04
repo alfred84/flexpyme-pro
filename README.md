@@ -40,9 +40,32 @@ pnpm tauri dev
 - `src/db/`: schema y migraciones Drizzle
 - `.cursor/rules/`: reglas operativas del proyecto
 
+## Repositorio en GitHub
+
+El proyecto ya tiene Git inicializado y un commit en la rama `main`. Para crear el repositorio remoto y subir el código:
+
+1. Inicia sesión con GitHub CLI (una vez):
+
+   ```bash
+   gh auth login
+   ```
+
+2. Desde la raíz del proyecto, crea el repo público y haz push (ajusta el nombre si ya existe):
+
+   ```bash
+   gh repo create flexpyme-pro --public --source=. --remote=origin --push
+   ```
+
+Si prefieres crear el repositorio vacío en la web de GitHub, añade el remoto y sube:
+
+```bash
+git remote add origin https://github.com/TU_USUARIO/flexpyme-pro.git
+git push -u origin main
+```
+
 ## Base de datos (SQLite)
 
-El archivo por defecto es `src-tauri/flexpyme.db`.
+El archivo de trabajo por defecto es `.local/flexpyme.db` (fuera de `src-tauri` para evitar reinicios del watcher en desarrollo).
 
 1. Aplicar migraciones (o usar seed, que las aplica antes de insertar datos):
 
@@ -56,7 +79,7 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-Si tenías una base antigua creada solo con la tabla `settings` y la migración falla por tablas duplicadas, borra `src-tauri/flexpyme.db` y vuelve a ejecutar `pnpm db:migrate` o `pnpm db:seed`.
+Si la migración falla por tablas duplicadas, borra `.local/flexpyme.db` y vuelve a ejecutar `pnpm db:migrate` o `pnpm db:seed`.
 
 ## Clientes
 
