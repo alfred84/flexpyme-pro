@@ -20,6 +20,9 @@ import { InvoicesListPage } from "@/features/invoices/pages/InvoicesListPage";
 type ThemeName = "light" | "dark";
 const THEME_STORAGE_KEY = "flexpyme.theme";
 
+const navTabClass = "btn btn-ghost btn-sm";
+const navTabActiveClass = `${navTabClass} bg-base-200 font-medium`;
+
 /**
  * Root layout with navigation and main content outlet.
  *
@@ -60,25 +63,54 @@ function AppLayout() {
               aria-label="Cambiar entre modo claro y oscuro"
             />
           </label>
-          <Link to="/" className="btn btn-ghost btn-sm">
+          <Link
+            to="/"
+            className={navTabClass}
+            activeProps={{ className: navTabActiveClass }}
+            activeOptions={{ exact: true }}
+          >
             Inicio
           </Link>
-          <Link to="/clientes" className="btn btn-ghost btn-sm">
+          <Link
+            to="/clientes"
+            className={navTabClass}
+            activeProps={{ className: navTabActiveClass }}
+          >
             Clientes
           </Link>
-          <Link to="/precios" className="btn btn-ghost btn-sm">
+          <Link
+            to="/precios"
+            className={navTabClass}
+            activeProps={{ className: navTabActiveClass }}
+          >
             Precios
           </Link>
-          <Link to="/produccion" className="btn btn-ghost btn-sm">
+          <Link
+            to="/produccion"
+            className={navTabClass}
+            activeProps={{ className: navTabActiveClass }}
+          >
             Producción
           </Link>
-          <Link to="/facturas" className="btn btn-ghost btn-sm">
+          <Link
+            to="/facturas"
+            className={navTabClass}
+            activeProps={{ className: navTabActiveClass }}
+          >
             Facturas
           </Link>
-          <Link to="/reportes" className="btn btn-ghost btn-sm">
+          <Link
+            to="/reportes"
+            className={navTabClass}
+            activeProps={{ className: navTabActiveClass }}
+          >
             Reportes
           </Link>
-          <Link to="/configuracion" className="btn btn-ghost btn-sm">
+          <Link
+            to="/configuracion"
+            className={navTabClass}
+            activeProps={{ className: navTabActiveClass }}
+          >
             Configuración
           </Link>
         </div>
