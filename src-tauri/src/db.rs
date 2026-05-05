@@ -1,12 +1,26 @@
 //! Shared database configuration helpers.
+//!
+//! - **Debug (`tauri dev`)**: la BD sigue en `<repo>/.local/flexpyme.db` para alinear con `pnpm db:migrate`.
+//! - **Release**: la BD vive en el directorio local de datos de la app (p. ej. `%LOCALAPPDATA%\\com.flexpyme.pro\\`
+//!   en Windows), estable sin depender del cwd del proceso.
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use rusqlite::{params, Connection};
 
-/// Canonical SQLite database file used by desktop runtime and scripts.
+/// Canonical SQLite database file used by desktop runtime and scripts (solo perfil debug / workspace).
 pub const SQLITE_DB_PATH: &str = ".local/flexpyme.db";
+
+static RELEASE_DB_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+/// Solo release: debe llamarse una vez desde `setup` antes de cualquier acceso a la BD.
+pub fn set_release_db_path(path: PathBuf) -> Result<(), String> {
+    RELEASE_DB_PATH
+        .set(path)
+        .map_err(|_| "La ruta de base de datos para release ya fue inicializada".to_string())
+}
 
 fn workspace_root_dir() -> Result<PathBuf, String> {
     let current = std::env::current_dir().map_err(|err| err.to_string())?;
@@ -27,8 +41,20 @@ fn workspace_root_dir() -> Result<PathBuf, String> {
 
 /// Resolves the canonical SQLite path to an absolute path.
 pub fn resolve_db_path() -> Result<PathBuf, String> {
-    Ok(workspace_root_dir()?.join(SQLITE_DB_PATH))
+    #[cfg(not(debug_assertions))]
+    {
+        return RELEASE_DB_PATH.get().cloned().ok_or_else(|| {
+            "Base de datos no inicializada (release sin set_release_db_path)".to_string()
+        });
+    }
+    #[cfg(debug_assertions)]
+    {
+        Ok(workspace_root_dir()?.join(SQLITE_DB_PATH))
+    }
 }
+
+/// Migración inicial embebida (misma semántica que `src/db/migrations/`).
+const EMBEDDED_INITIAL_SCHEMA: &str = include_str!("../migrations/0000_vengeful_cerebro.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -47,6 +73,35 @@ fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
             )
         })?;
     }
+    Ok(())
+}
+
+/// Crea el archivo si no existe, copia legacy si aplica y aplica el esquema SQL si la BD está vacía.
+/// Debe ejecutarse al arrancar la app (desde `setup`), después de `set_release_db_path` en release.
+pub fn init_database_schema_if_empty() -> Result<(), String> {
+    let db_path = resolve_db_path()?;
+
+    if let Some(parent) = db_path.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    migrate_legacy_db_if_needed(&db_path)?;
+
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+
+    let clients_exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            params!["clients"],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    if clients_exists > 0 {
+        return Ok(());
+    }
+
+    conn.execute_batch(EMBEDDED_INITIAL_SCHEMA)
+        .map_err(|e| format!("No se pudo aplicar el esquema inicial de SQLite: {}", e))?;
     Ok(())
 }
 
