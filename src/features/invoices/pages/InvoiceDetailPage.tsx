@@ -101,7 +101,17 @@ export function InvoiceDetailPage() {
                     <dd>{inv.date}</dd>
                   </div>
                   <div>
-                    <dt className="text-base-content/60">Estado</dt>
+                    <dt className="text-base-content/60">Producción</dt>
+                    <dd>
+                      {inv.productionStatus === "listo" ? "Listo" : "En producción"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-base-content/60">Cobro</dt>
+                    <dd>{inv.paymentStatus === "cobrado" ? "Cobrado" : "Pendiente"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-base-content/60">Estado (legacy)</dt>
                     <dd>{statusLabel(inv.status)}</dd>
                   </div>
                   {inv.notes && (

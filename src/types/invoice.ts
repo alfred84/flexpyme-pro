@@ -11,6 +11,8 @@ export interface InvoiceListDto {
   paid: number;
   balance: number;
   status: string;
+  productionStatus: string;
+  paymentStatus: string;
 }
 
 /**
@@ -29,6 +31,8 @@ export interface InvoiceHeaderDto {
   paid: number;
   balance: number;
   status: string;
+  productionStatus: string;
+  paymentStatus: string;
   paymentMethod: string | null;
   paymentCurrency: string | null;
   exchangeRateSnapshot: number | null;

@@ -62,6 +62,8 @@ export const invoices = sqliteTable("invoices", {
   paid: real("paid").notNull().default(0),
   balance: real("balance").notNull().default(0),
   status: text("status").notNull().default("pending"),
+  productionStatus: text("production_status").notNull().default("en_produccion"),
+  paymentStatus: text("payment_status").notNull().default("pendiente"),
   paymentMethod: text("payment_method"),
   paymentCurrency: text("payment_currency").default("CUP"),
   exchangeRateSnapshot: real("exchange_rate_snapshot"),

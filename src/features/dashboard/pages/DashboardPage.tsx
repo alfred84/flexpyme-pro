@@ -182,9 +182,9 @@ export function DashboardPage() {
                       <td className="text-right">{formatMoney(inv.total)}</td>
                       <td>
                         <span
-                          className={`badge badge-sm ${inv.balance > 0 ? "badge-warning" : "badge-success"}`}
+                          className={`badge badge-sm ${inv.paymentStatus === "cobrado" ? "badge-success" : "badge-warning"}`}
                         >
-                          {inv.balance > 0 ? "Pendiente" : "Cobrado"}
+                          {inv.paymentStatus === "cobrado" ? "Cobrado" : "Pendiente"}
                         </span>
                       </td>
                     </tr>

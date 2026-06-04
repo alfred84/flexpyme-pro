@@ -43,6 +43,8 @@ pub fn run() {
             commands::invoices::invoices_list,
             commands::invoices::invoices_get_detail,
             commands::invoices::invoices_create,
+            commands::invoices::invoices_update_production_status,
+            commands::invoices::invoices_update_payment_status,
             commands::production::production_list,
             commands::production::production_get_detail,
             commands::production::production_export_in_date_range,
