@@ -1,6 +1,6 @@
-import { createRootRoute, createRoute, createRouter, Link } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { AppShell } from "@/components/layout/AppShell";
-import { useDbStatus } from "@/hooks/use-db-status";
+import { DashboardPage } from "@/features/dashboard/pages/DashboardPage";
 import { ClientDetailPage } from "@/features/clients/pages/ClientDetailPage";
 import { ClientEditPage } from "@/features/clients/pages/ClientEditPage";
 import { ClientNewPage } from "@/features/clients/pages/ClientNewPage";
@@ -19,63 +19,6 @@ import { InvoicesListPage } from "@/features/invoices/pages/InvoicesListPage";
 import { EmployeesListPage } from "@/features/employees/pages/EmployeesListPage";
 import { InventoryListPage } from "@/features/inventory/pages/InventoryListPage";
 import { CashflowPage } from "@/features/cashflow/pages/CashflowPage";
-
-/**
- * Dashboard with database status card.
- *
- * @returns Dashboard page.
- */
-function DashboardPage() {
-  const dbStatus = useDbStatus();
-  const dbErrorMessage = dbStatus.error instanceof Error ? dbStatus.error.message : null;
-
-  return (
-    <section className="space-y-4">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
-      <div className="alert alert-info">
-        <span>Base de datos lista. Usa Clientes para gestionar el maestro.</span>
-      </div>
-      <div className="card bg-base-100 shadow">
-        <div className="card-body">
-          <h2 className="card-title text-lg">Estado de base de datos</h2>
-          {dbStatus.isLoading && <p>Comprobando estado...</p>}
-          {dbStatus.isError && (
-            <p className="text-error">
-              No se pudo verificar la base de datos.
-              {dbErrorMessage ? ` (${dbErrorMessage})` : ""}
-            </p>
-          )}
-          {dbStatus.data && (
-            <p className="text-sm">
-              Estado: <strong>{dbStatus.data.status}</strong> · Ruta:{" "}
-              <span className="font-mono">{dbStatus.data.dbPath}</span>
-            </p>
-          )}
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Link to="/clientes" className="btn btn-primary">
-          Ir a clientes
-        </Link>
-        <Link to="/precios" className="btn btn-outline">
-          Lista de precios
-        </Link>
-        <Link to="/produccion" className="btn btn-outline">
-          Producción
-        </Link>
-        <Link to="/facturas" className="btn btn-outline">
-          Facturas
-        </Link>
-        <Link to="/reportes" className="btn btn-outline">
-          Reportes
-        </Link>
-        <Link to="/configuracion" className="btn btn-outline">
-          Configuración
-        </Link>
-      </div>
-    </section>
-  );
-}
 
 const rootRoute = createRootRoute({
   component: AppShell,
