@@ -166,6 +166,74 @@ pub fn prices_update(payload: UpdatePricePayload) -> Result<(), String> {
     Ok(())
 }
 
+/// Cost-list row with format label (employee salary costs).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CostRowDto {
+    pub id: i64,
+    pub work_type: String,
+    pub format_id: Option<i64>,
+    pub format_label: Option<String>,
+    pub unit_cost: f64,
+    pub is_active: bool,
+}
+
+/// Payload for updating a cost-list row.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCostPayload {
+    pub id: i64,
+    pub unit_cost: f64,
+    pub is_active: bool,
+}
+
+/// Lists all employee cost rows joined with format labels.
+#[tauri::command]
+pub fn cost_list_all() -> Result<Vec<CostRowDto>, String> {
+    let conn = db::open_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT cl.id, cl.work_type, cl.format_id, f.label, cl.unit_cost, cl.is_active
+             FROM cost_list cl
+             LEFT JOIN formats f ON f.id = cl.format_id
+             ORDER BY cl.work_type, cl.unit_cost",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            let is_active_i: i64 = row.get(5)?;
+            Ok(CostRowDto {
+                id: row.get(0)?,
+                work_type: row.get(1)?,
+                format_id: row.get(2)?,
+                format_label: row.get(3)?,
+                unit_cost: row.get(4)?,
+                is_active: is_active_i != 0,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Updates the unit cost and active flag for a cost-list row.
+#[tauri::command]
+pub fn cost_update(payload: UpdateCostPayload) -> Result<(), String> {
+    if payload.unit_cost < 0.0 {
+        return Err("El costo no puede ser negativo".to_string());
+    }
+    let conn = db::open_connection()?;
+    let updated = conn
+        .execute(
+            "UPDATE cost_list SET unit_cost = ?1, is_active = ?2 WHERE id = ?3",
+            params![payload.unit_cost, if payload.is_active { 1i64 } else { 0i64 }, payload.id],
+        )
+        .map_err(|e| e.to_string())?;
+    if updated == 0 {
+        return Err("Costo no encontrado".to_string());
+    }
+    Ok(())
+}
+
 fn normalize_lookup_token(value: &Option<String>) -> String {
     value
         .as_ref()

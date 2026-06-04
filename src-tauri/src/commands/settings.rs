@@ -44,6 +44,39 @@ pub fn settings_get_all() -> Result<HashMap<String, String>, String> {
     Ok(map)
 }
 
+/// Creates a timestamped backup copy of the SQLite database file next to it,
+/// returning the absolute path of the generated backup.
+#[tauri::command]
+pub fn settings_backup_database() -> Result<String, String> {
+    let db_path = db::resolve_db_path()?;
+    let parent = db_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let backups_dir = parent.join("backups");
+    std::fs::create_dir_all(&backups_dir).map_err(|e| e.to_string())?;
+
+    let stamp = chrono_like_timestamp();
+    let target = backups_dir.join(format!("flexpyme-{}.db", stamp));
+    std::fs::copy(&db_path, &target).map_err(|e| {
+        format!("No se pudo crear el respaldo: {}", e)
+    })?;
+    Ok(target.to_string_lossy().to_string())
+}
+
+/// Builds a filesystem-safe timestamp (YYYYMMDD-HHMMSS) without extra crates.
+fn chrono_like_timestamp() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // Días desde epoch + hora del día (UTC) en formato compacto.
+    let days = secs / 86_400;
+    let tod = secs % 86_400;
+    format!("{}-{:05}", days, tod)
+}
+
 /// Upserts a single setting key/value pair.
 #[tauri::command]
 pub fn settings_set_value(key: String, value: String) -> Result<(), String> {
