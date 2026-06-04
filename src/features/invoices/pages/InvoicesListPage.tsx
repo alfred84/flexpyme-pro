@@ -9,27 +9,10 @@ import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { fetchInvoices, updateInvoiceProductionStatus } from "@/db/queries/invoices";
 import { formatMoney } from "@/lib/format-money";
+import { PaymentStatusBadge, ProductionStatusBadge } from "@/components/invoices/InvoiceStatusBadges";
 import type { InvoiceListDto } from "@/types/invoice";
 
 type ListFilter = "todos" | "en_produccion" | "listos" | "pendiente_cobro" | "cobrados" | "completados";
-
-function productionBadge(status: string) {
-  const listo = status === "listo";
-  return (
-    <span className={`badge badge-sm ${listo ? "badge-success" : "badge-warning"}`}>
-      {listo ? "Listo" : "En Producción"}
-    </span>
-  );
-}
-
-function paymentBadge(status: string) {
-  const cobrado = status === "cobrado";
-  return (
-    <span className={`badge badge-sm ${cobrado ? "badge-success" : "badge-warning"}`}>
-      {cobrado ? "Cobrado" : "Pendiente"}
-    </span>
-  );
-}
 
 function matchesFilter(row: InvoiceListDto, filter: ListFilter): boolean {
   if (filter === "todos") return true;
@@ -87,12 +70,12 @@ export function InvoicesListPage() {
       {
         id: "production",
         header: "Producción",
-        cell: ({ row }) => productionBadge(row.original.productionStatus),
+        cell: ({ row }) => <ProductionStatusBadge status={row.original.productionStatus} />,
       },
       {
         id: "payment",
         header: "Cobro",
-        cell: ({ row }) => paymentBadge(row.original.paymentStatus),
+        cell: ({ row }) => <PaymentStatusBadge status={row.original.paymentStatus} />,
       },
       {
         id: "actions",
