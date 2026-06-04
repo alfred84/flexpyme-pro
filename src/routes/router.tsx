@@ -22,6 +22,8 @@ import { EmployeeEditPage } from "@/features/employees/pages/EmployeeEditPage";
 import { EmployeeDetailPage } from "@/features/employees/pages/EmployeeDetailPage";
 import { EmployeeWorkBatchPage } from "@/features/employees/pages/EmployeeWorkBatchPage";
 import { InventoryListPage } from "@/features/inventory/pages/InventoryListPage";
+import { InventoryNewPage } from "@/features/inventory/pages/InventoryNewPage";
+import { InventoryItemDetailPage } from "@/features/inventory/pages/InventoryItemDetailPage";
 import { CashflowPage } from "@/features/cashflow/pages/CashflowPage";
 
 const rootRoute = createRootRoute({
@@ -160,6 +162,18 @@ const inventoryListRoute = createRoute({
   component: InventoryListPage,
 });
 
+const inventoryNewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "inventario/nuevo",
+  component: InventoryNewPage,
+});
+
+const inventoryItemDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "inventario/$itemId",
+  component: InventoryItemDetailPage,
+});
+
 const cashflowRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "caja",
@@ -189,6 +203,8 @@ const routeTree = rootRoute.addChildren([
   employeeEditRoute,
   employeeWorkBatchRoute,
   inventoryListRoute,
+  inventoryNewRoute,
+  inventoryItemDetailRoute,
   cashflowRoute,
 ]);
 

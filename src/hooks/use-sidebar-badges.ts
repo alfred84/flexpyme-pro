@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchInvoices } from "@/db/queries/invoices";
+import { fetchInventoryItems } from "@/db/queries/inventory";
 import type { NavBadgeKey } from "@/config/navigation";
 
 /**
@@ -21,12 +22,19 @@ export function useSidebarBadges(): SidebarBadges {
     staleTime: 30_000,
   });
 
+  const inventoryQuery = useQuery({
+    queryKey: ["inventory", "list"],
+    queryFn: fetchInventoryItems,
+    staleTime: 30_000,
+  });
+
   const pedidosPendientes = (invoicesQuery.data ?? []).filter(
     (invoice) => invoice.balance > 0,
   ).length;
+  const stockBajo = (inventoryQuery.data ?? []).filter((item) => item.lowStock).length;
 
   return {
     pedidosPendientes,
-    stockBajo: 0,
+    stockBajo,
   };
 }
