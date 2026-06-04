@@ -1,17 +1,34 @@
 # FlexPyme Pro
 
-Aplicacion de escritorio offline para la gestion de un taller de impresion grafica. El sistema cubre clientes, facturacion, caja por denominaciones, produccion por lotes, reportes y configuracion.
+Aplicación de escritorio **offline** para la gestión integral de un taller de impresión gráfica.
+La fuente de verdad de requisitos es [`REQUIREMENTS.md`](./REQUIREMENTS.md).
+
+## Módulos (v2)
+
+- **Dashboard**: KPIs del mes, ingresos por categoría (Recharts), pedidos recientes y alertas.
+- **Pedidos** (`/pedidos`): alta multi-producto, detalle, impresión y cobro en caja con denominaciones CUP.
+- **Clientes**: CRUD, balance y ficha con historial.
+- **Empleados**: CRUD con baja (soft delete), registro de lotes de trabajo y pago de salarios desde `cost_list`.
+- **Inventario**: ítems con alertas de stock bajo y movimientos (entrada/salida).
+- **Flujo de Caja**: balance CUP/USD, serie de 30 días, movimientos manuales e historial filtrable.
+- **Configuración**: tabs General, Precios, Costos, Moneda (tasa USD→CUP), Formatos y Backup.
+
+## Moneda
+
+- Principal **CUP**; secundaria **USD** con tasa almacenada por operación.
+- Denominaciones CUP: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 5000.
 
 ## Stack Tecnologico
 
 - Tauri v2 + Rust
 - React 18 + TypeScript
-- Tailwind CSS v3 + DaisyUI v4
+- Tailwind CSS v3 + DaisyUI v4 (tema oscuro `business` por defecto)
 - TanStack Router v1 + TanStack Query v5
 - Drizzle ORM + SQLite
 - React Hook Form + Zod
 - TanStack Table v8
 - Recharts
+- Lucide React (iconos)
 - Vitest + Testing Library
 
 ## Requisitos Previos
@@ -89,6 +106,13 @@ En la app (`pnpm tauri dev`), abre **Clientes** en la barra superior: listado co
 
 En **Precios** puedes ver la lista de precios (activos por defecto; opción para incluir inactivos), filtrar en tabla y **editar precio, costo y estado activo** en un modal. Comandos Tauri: `prices_list`, `prices_update`, más catálogo `product_categories_list` y `formats_list` en el backend para uso futuro.
 
-## Facturas (MVP)
+## Pedidos
 
-En **Facturas**: listado, **Nueva factura** con líneas (categoría, formato, servicio, acabado, cantidad, precio), botón **Aplicar precio de lista** (`prices_lookup`), anticipado y pagado. Totales: `total = subtotal + deuda_anterior - anticipado`, `pendiente = total - pagado`. Al guardar se actualiza el **balance del cliente**. Comandos: `invoices_list`, `invoices_get_detail`, `invoices_create`.
+En **Pedidos** (`/pedidos`): listado, **Nuevo pedido** con líneas (categoría, formato, servicio, acabado, cantidad, precio), botón **Aplicar precio de lista** (`prices_lookup`), anticipo y pagado. Totales: `total = subtotal + deuda_anterior - anticipo`, `pendiente = total - pagado`. Al guardar se actualiza el **balance del cliente**. El cobro en caja usa denominaciones CUP. Comandos: `invoices_list`, `invoices_get_detail`, `invoices_create` (internamente la tabla sigue siendo `invoices`).
+
+## Empleados, Inventario y Caja
+
+- **Empleados**: `employees_*` (CRUD + baja), `cost_list_for_work_type`, `work_batch_create`, `work_batches_for_employee`, `work_batch_pay`.
+- **Inventario**: `inventory_items_list`, `inventory_item_get/create/update`, `inventory_movement_register`, `inventory_movements_for_item`.
+- **Caja**: `cash_balance`, `cash_transactions_list`, `cash_daily_series`, `cash_transaction_create`.
+- **Configuración**: `settings_get_all`, `settings_set_value`, `settings_backup_database`, `cost_list_all`, `cost_update`.

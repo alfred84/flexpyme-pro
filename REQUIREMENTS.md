@@ -186,20 +186,28 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 
 | Módulo / Paso | Estado |
 |---|---|
-| REQUIREMENTS.md + Cursor rules | en progreso |
-| Schema Drizzle v2 | pendiente |
-| Migración + Seed v2 | pendiente |
-| Layout sidebar + dark + Lucide | pendiente |
-| Dashboard KPIs | pendiente |
-| Pedidos (naming por decidir) | pendiente |
-| Clientes (ajustes v2) | pendiente |
-| Empleados + lotes + salarios | pendiente |
-| Inventario + movimientos | pendiente |
-| Flujo de caja general CUP/USD | pendiente |
-| Configuración (tabs) | pendiente |
-| Tauri commands nuevos | pendiente |
+| REQUIREMENTS.md + Cursor rules | hecho |
+| Schema Drizzle v2 | hecho |
+| Migración + Seed v2 | hecho |
+| Layout sidebar + dark + Lucide | hecho |
+| Dashboard KPIs | hecho |
+| Pedidos (UI /pedidos, tablas invoices) | hecho |
+| Clientes (ajustes v2) | base v1 (sin cambios) |
+| Empleados + lotes + salarios | hecho |
+| Inventario + movimientos | hecho |
+| Flujo de caja general CUP/USD | hecho |
+| Configuración (tabs) | hecho |
+| Tauri commands nuevos | hecho |
 
-### Notas de decisiones abiertas
-- **Pedidos vs Facturas**: la spec usa `orders`/`/pedidos`; el código v1 usa `invoices`/`/facturas`.
-  Decisión diferida hasta abordar el módulo de Pedidos.
-- **Moneda**: confirmada migración a **CUP principal + USD con tasa**.
+### Notas de decisiones tomadas
+- **Pedidos vs Facturas**: se mantienen las tablas/comandos `invoices` por dentro
+  (sin migración de datos) y se expone la UI como **Pedidos** con rutas `/pedidos`.
+- **Estados**: se conservan los estados de pago (`pending/partial/paid`) y se mapean
+  visualmente a pendiente/ejecutado (badge según saldo).
+- **Moneda**: **CUP principal + USD con tasa** almacenada por operación.
+  Denominaciones CUP: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 5000.
+
+### Pendientes / próximos refinamientos
+- Cobro de pedido con transferencia/USD enlazado a `cash_transactions` (hoy el cobro
+  usa `cash_sessions` en efectivo; los movimientos USD/transferencia se registran en Caja).
+- Edición de empleados con reactivación de bajas y backup con selección de carpeta (diálogo nativo).
