@@ -55,7 +55,16 @@ pub fn run() {
             commands::settings::settings_get_all,
             commands::settings::settings_set_value,
             commands::cashier::cashier_sessions_for_invoice,
-            commands::cashier::cashier_register_payment
+            commands::cashier::cashier_register_payment,
+            commands::employees::employees_list,
+            commands::employees::employees_get_by_id,
+            commands::employees::employees_create,
+            commands::employees::employees_update,
+            commands::employees::employees_deactivate,
+            commands::employees::cost_list_for_work_type,
+            commands::employees::work_batch_create,
+            commands::employees::work_batches_for_employee,
+            commands::employees::work_batch_pay
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

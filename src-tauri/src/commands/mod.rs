@@ -1,5 +1,6 @@
 pub mod cashier;
 pub mod clients;
+pub mod employees;
 pub mod invoices;
 pub mod production;
 pub mod products;
