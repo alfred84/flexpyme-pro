@@ -78,7 +78,7 @@ pub fn product_categories_list() -> Result<Vec<CategoryDto>, String> {
 pub fn formats_list() -> Result<Vec<FormatDto>, String> {
     let conn = db::open_connection()?;
     let mut stmt = conn
-        .prepare("SELECT id, label FROM formats ORDER BY label COLLATE NOCASE")
+        .prepare("SELECT id, label FROM formats WHERE is_active = 1 ORDER BY label COLLATE NOCASE")
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |row| {
