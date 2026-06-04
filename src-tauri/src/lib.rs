@@ -51,6 +51,8 @@ pub fn run() {
             commands::reports::reports_top_debtors,
             commands::settings::settings_get_company,
             commands::settings::settings_save_company,
+            commands::settings::settings_get_all,
+            commands::settings::settings_set_value,
             commands::cashier::cashier_sessions_for_invoice,
             commands::cashier::cashier_register_payment
         ])
