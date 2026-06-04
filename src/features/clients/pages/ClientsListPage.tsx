@@ -12,9 +12,8 @@ import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { fetchClients } from "@/db/queries/clients";
 import type { ClientDto } from "@/types/client";
+import { formatMoney } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
-
-const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
 
 function useClientColumns(): ColumnDef<ClientDto>[] {
   return useMemo(
@@ -29,7 +28,7 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
       {
         accessorKey: "balance",
         header: "Balance",
-        cell: (info) => money.format(info.getValue<number>()),
+        cell: (info) => formatMoney(info.getValue<number>()),
       },
       {
         id: "actions",

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { fetchInvoices } from "@/db/queries/invoices";
 import { fetchProductionExportInDateRange } from "@/db/queries/production";
 import { fetchReportsSummary, fetchTopDebtors } from "@/db/queries/reports";
+import { formatMoney } from "@/lib/format-money";
 import {
   buildReportTables,
   buildReportsCsvFromTables,
@@ -11,8 +12,7 @@ import {
   openReportsPrintablePdf,
 } from "@/lib/report-export";
 
-const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
-const pct = new Intl.NumberFormat("es-DO", { style: "percent", maximumFractionDigits: 1 });
+const pct = new Intl.NumberFormat("es", { style: "percent", maximumFractionDigits: 1 });
 
 export function ReportsPage() {
   const [dateFrom, setDateFrom] = useState("");
@@ -154,15 +154,15 @@ export function ReportsPage() {
             </div>
             <div className="stat bg-base-100 rounded-box shadow">
               <div className="stat-title">Total facturado</div>
-              <div className="stat-value text-2xl">{money.format(s.totalBilled)}</div>
+              <div className="stat-value text-2xl">{formatMoney(s.totalBilled)}</div>
             </div>
             <div className="stat bg-base-100 rounded-box shadow">
               <div className="stat-title">Total cobrado</div>
-              <div className="stat-value text-2xl">{money.format(s.totalPaid)}</div>
+              <div className="stat-value text-2xl">{formatMoney(s.totalPaid)}</div>
             </div>
             <div className="stat bg-base-100 rounded-box shadow">
               <div className="stat-title">Pendiente por cobrar</div>
-              <div className="stat-value text-2xl">{money.format(s.totalPending)}</div>
+              <div className="stat-value text-2xl">{formatMoney(s.totalPending)}</div>
             </div>
             <div className="stat bg-base-100 rounded-box shadow">
               <div className="stat-title">Pagadas / parciales / pendientes</div>
@@ -172,7 +172,7 @@ export function ReportsPage() {
             </div>
             <div className="stat bg-base-100 rounded-box shadow">
               <div className="stat-title">Promedio por factura</div>
-              <div className="stat-value text-2xl">{money.format(s.averageInvoiceAmount)}</div>
+              <div className="stat-value text-2xl">{formatMoney(s.averageInvoiceAmount)}</div>
             </div>
             <div className="stat bg-base-100 rounded-box shadow">
               <div className="stat-title">Tasa de cobro</div>
@@ -184,15 +184,15 @@ export function ReportsPage() {
             </div>
             <div className="stat bg-base-100 rounded-box shadow">
               <div className="stat-title">Costo producción</div>
-              <div className="stat-value text-2xl">{money.format(s.productionTotalCost)}</div>
+              <div className="stat-value text-2xl">{formatMoney(s.productionTotalCost)}</div>
             </div>
             <div className="stat bg-base-100 rounded-box shadow">
               <div className="stat-title">Pagado producción</div>
-              <div className="stat-value text-2xl">{money.format(s.productionPaid)}</div>
+              <div className="stat-value text-2xl">{formatMoney(s.productionPaid)}</div>
             </div>
             <div className="stat bg-base-100 rounded-box shadow">
               <div className="stat-title">Pendiente producción</div>
-              <div className="stat-value text-2xl">{money.format(s.productionPending)}</div>
+              <div className="stat-value text-2xl">{formatMoney(s.productionPending)}</div>
             </div>
             <div className="stat bg-base-100 rounded-box shadow">
               <div className="stat-title">Lotes producción</div>
@@ -229,7 +229,7 @@ export function ReportsPage() {
                       <tr key={row.clientId}>
                         <td>{row.clientCode}</td>
                         <td>{row.clientName}</td>
-                        <td className="text-right">{money.format(row.balance)}</td>
+                        <td className="text-right">{formatMoney(row.balance)}</td>
                       </tr>
                     ))
                   )}

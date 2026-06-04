@@ -1,5 +1,5 @@
 /**
- * Escapes one cell for CSV (semicolon-separated, Excel-friendly in es-DO).
+ * Escapes one cell for CSV (semicolon-separated, Excel-friendly en español).
  */
 export function escapeCsvCell(value: string | number): string {
   const s = String(value);

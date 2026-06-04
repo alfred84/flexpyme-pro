@@ -2,9 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { useState } from "react";
 import { fetchInvoiceDetail } from "@/db/queries/invoices";
+import { formatMoney } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
-
-const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
 
 function statusLabel(status: string): string {
   if (status === "paid") {
@@ -120,27 +119,27 @@ export function InvoiceDetailPage() {
                 <dl className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <dt>Subtotal líneas</dt>
-                    <dd>{money.format(inv.subtotal)}</dd>
+                    <dd>{formatMoney(inv.subtotal)}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt>Deuda anterior</dt>
-                    <dd>{money.format(inv.previousDebt)}</dd>
+                    <dd>{formatMoney(inv.previousDebt)}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt>Anticipado</dt>
-                    <dd>{money.format(inv.advancePayment)}</dd>
+                    <dd>{formatMoney(inv.advancePayment)}</dd>
                   </div>
                   <div className="flex justify-between font-semibold">
                     <dt>Total</dt>
-                    <dd>{money.format(inv.total)}</dd>
+                    <dd>{formatMoney(inv.total)}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt>Pagado</dt>
-                    <dd>{money.format(inv.paid)}</dd>
+                    <dd>{formatMoney(inv.paid)}</dd>
                   </div>
                   <div className="flex justify-between text-primary">
                     <dt>Pendiente (sin saldo)</dt>
-                    <dd>{money.format(inv.balance)}</dd>
+                    <dd>{formatMoney(inv.balance)}</dd>
                   </div>
                 </dl>
               </div>
@@ -168,8 +167,8 @@ export function InvoiceDetailPage() {
                     <td>{line.service ?? "—"}</td>
                     <td>{line.finish ?? "—"}</td>
                     <td className="text-right">{line.quantity}</td>
-                    <td className="text-right">{money.format(line.unitPrice)}</td>
-                    <td className="text-right">{money.format(line.subtotal)}</td>
+                    <td className="text-right">{formatMoney(line.unitPrice)}</td>
+                    <td className="text-right">{formatMoney(line.subtotal)}</td>
                   </tr>
                 ))}
               </tbody>

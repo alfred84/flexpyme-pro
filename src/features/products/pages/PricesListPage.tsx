@@ -10,15 +10,14 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { fetchPrices, updatePrice } from "@/db/queries/prices";
+import { formatMoney } from "@/lib/format-money";
 import type { PriceRowDto } from "@/types/price";
-
-const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
 
 function formatCell(value: number | null | undefined): string {
   if (value === null || value === undefined) {
     return "—";
   }
-  return money.format(value);
+  return formatMoney(value);
 }
 
 /**

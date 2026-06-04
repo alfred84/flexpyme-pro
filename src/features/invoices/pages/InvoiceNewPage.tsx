@@ -4,10 +4,9 @@ import { useMemo, useState } from "react";
 import { fetchClients } from "@/db/queries/clients";
 import { createInvoice } from "@/db/queries/invoices";
 import { fetchFormats, fetchProductCategories, lookupUnitPrice } from "@/db/queries/prices";
+import { formatMoney } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 import type { CreateInvoiceItemPayload } from "@/types/invoice";
-
-const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
 
 interface DraftLine {
   key: string;
@@ -330,11 +329,11 @@ export function InvoiceNewPage() {
             <p className="text-xs text-base-content/60">Deuda anterior = balance actual del cliente al guardar.</p>
             <div className="flex justify-between">
               <span>Subtotal líneas</span>
-              <span>{money.format(linesSubtotal)}</span>
+              <span>{formatMoney(linesSubtotal)}</span>
             </div>
             <div className="flex justify-between">
               <span>Deuda anterior</span>
-              <span>{money.format(previousDebt)}</span>
+              <span>{formatMoney(previousDebt)}</span>
             </div>
             <div className="form-control">
               <label className="label py-0" htmlFor="inv-advance">
@@ -365,11 +364,11 @@ export function InvoiceNewPage() {
             <div className="divider my-1" />
             <div className="flex justify-between font-semibold">
               <span>Total</span>
-              <span>{money.format(total)}</span>
+              <span>{formatMoney(total)}</span>
             </div>
             <div className="flex justify-between text-primary">
               <span>Pendiente</span>
-              <span>{money.format(balance)}</span>
+              <span>{formatMoney(balance)}</span>
             </div>
             <button type="button" className="btn btn-primary mt-2" disabled={mutation.isPending} onClick={handleSubmit}>
               {mutation.isPending ? <span className="loading loading-spinner loading-sm" /> : "Guardar factura"}

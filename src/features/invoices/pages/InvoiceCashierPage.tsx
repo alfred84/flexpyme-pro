@@ -3,9 +3,8 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { fetchCashSessionsForInvoice, registerCashPayment } from "@/db/queries/cashier";
 import { fetchInvoiceDetail } from "@/db/queries/invoices";
+import { formatMoney } from "@/lib/format-money";
 import { CASH_DENOMINATIONS } from "@/types/cashier";
-
-const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
 
 function emptyCounts(): Record<string, number> {
   const o: Record<string, number> = {};
@@ -50,7 +49,7 @@ export function InvoiceCashierPage() {
     mutationFn: registerCashPayment,
     onSuccess: (data) => {
       setFeedback(
-        `Pago registrado. Vuelto: ${money.format(data.changeGiven)} · Nuevo pendiente: ${money.format(data.invoiceNewBalance)}`,
+        `Pago registrado. Vuelto: ${formatMoney(data.changeGiven)} · Nuevo pendiente: ${formatMoney(data.invoiceNewBalance)}`,
       );
       setCounts(emptyCounts());
       void queryClient.invalidateQueries({ queryKey: ["invoices", "detail", invoiceId] });
@@ -131,19 +130,19 @@ export function InvoiceCashierPage() {
                   </div>
                   <div className="flex justify-between font-semibold">
                     <dt>Pendiente a cobrar</dt>
-                    <dd className="text-primary">{money.format(balance)}</dd>
+                    <dd className="text-primary">{formatMoney(balance)}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt>Recibido (conteo)</dt>
-                    <dd>{money.format(received)}</dd>
+                    <dd>{formatMoney(received)}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt>Se aplica a la factura</dt>
-                    <dd>{money.format(applied)}</dd>
+                    <dd>{formatMoney(applied)}</dd>
                   </div>
                   <div className="flex justify-between text-secondary">
                     <dt>Vuelto</dt>
-                    <dd>{money.format(changeDue)}</dd>
+                    <dd>{formatMoney(changeDue)}</dd>
                   </div>
                 </dl>
                 {balance <= 1e-6 && (
@@ -158,7 +157,7 @@ export function InvoiceCashierPage() {
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {CASH_DENOMINATIONS.map((d) => (
                     <label key={d} className="form-control">
-                      <span className="label-text text-xs font-mono">{money.format(d)}</span>
+                      <span className="label-text text-xs font-mono">{formatMoney(d)}</span>
                       <input
                         type="number"
                         min={0}
@@ -209,9 +208,9 @@ export function InvoiceCashierPage() {
                       {sessionsQuery.data.map((row) => (
                         <tr key={row.id}>
                           <td className="whitespace-nowrap text-xs">{row.date}</td>
-                          <td className="text-right">{money.format(row.totalAmount)}</td>
-                          <td className="text-right">{money.format(row.amountReceived)}</td>
-                          <td className="text-right">{money.format(row.changeGiven)}</td>
+                          <td className="text-right">{formatMoney(row.totalAmount)}</td>
+                          <td className="text-right">{formatMoney(row.amountReceived)}</td>
+                          <td className="text-right">{formatMoney(row.changeGiven)}</td>
                         </tr>
                       ))}
                     </tbody>

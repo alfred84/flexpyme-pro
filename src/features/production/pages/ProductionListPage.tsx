@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { fetchProductionBatches } from "@/db/queries/production";
-
-const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
+import { formatMoney } from "@/lib/format-money";
 
 export function ProductionListPage() {
   const batchesQuery = useQuery({
@@ -53,9 +52,9 @@ export function ProductionListPage() {
                     <td>{row.date}</td>
                     <td>{row.type}</td>
                     <td>{row.workerName ?? "—"}</td>
-                    <td className="text-right">{money.format(row.totalCost)}</td>
-                    <td className="text-right">{money.format(row.paid)}</td>
-                    <td className="text-right">{money.format(row.pending)}</td>
+                    <td className="text-right">{formatMoney(row.totalCost)}</td>
+                    <td className="text-right">{formatMoney(row.paid)}</td>
+                    <td className="text-right">{formatMoney(row.pending)}</td>
                     <td>
                       <Link
                         className="btn btn-xs btn-outline"

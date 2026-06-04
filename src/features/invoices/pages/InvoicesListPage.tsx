@@ -9,9 +9,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { fetchInvoices } from "@/db/queries/invoices";
+import { formatMoney } from "@/lib/format-money";
 import type { InvoiceListDto } from "@/types/invoice";
-
-const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
 
 function statusLabel(status: string): string {
   if (status === "paid") {
@@ -43,12 +42,12 @@ export function InvoicesListPage() {
       {
         accessorKey: "total",
         header: "Total",
-        cell: (info) => money.format(info.getValue<number>()),
+        cell: (info) => formatMoney(info.getValue<number>()),
       },
       {
         accessorKey: "balance",
         header: "Pendiente",
-        cell: (info) => money.format(info.getValue<number>()),
+        cell: (info) => formatMoney(info.getValue<number>()),
       },
       {
         accessorKey: "status",

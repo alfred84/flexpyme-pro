@@ -1,10 +1,10 @@
 import { buildCsvLine, downloadTextFile } from "@/lib/csv";
+import { formatMoney } from "@/lib/format-money";
 import type { InvoiceListDto } from "@/types/invoice";
 import type { ProductionRangeExportDto } from "@/types/production";
 import type { ReportsSummaryDto, TopDebtorDto } from "@/types/report";
 
-const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
-const pct = new Intl.NumberFormat("es-DO", { style: "percent", maximumFractionDigits: 1 });
+const pct = new Intl.NumberFormat("es", { style: "percent", maximumFractionDigits: 1 });
 
 export type ReportTableSection = {
   name: string;
@@ -194,19 +194,19 @@ function formatPrintCell(secName: string, col: number, rowIdx: number, label: st
     ) {
       return escapeHtml(String(Math.round(nn)));
     }
-    return escapeHtml(money.format(nn));
+    return escapeHtml(formatMoney(nn));
   }
   if (secName === "TOP_DEUDORES" && col === 2 && rowIdx >= 1) {
-    return escapeHtml(money.format(nn));
+    return escapeHtml(formatMoney(nn));
   }
   if (secName === "FACTURAS_EN_RANGO" && col >= 3 && col <= 5 && rowIdx >= 1) {
-    return escapeHtml(money.format(nn));
+    return escapeHtml(formatMoney(nn));
   }
   if (secName === "PRODUCCION_LOTES" && col >= 4 && col <= 6 && rowIdx >= 1) {
-    return escapeHtml(money.format(nn));
+    return escapeHtml(formatMoney(nn));
   }
   if (secName === "PRODUCCION_LINEAS" && col >= 10 && rowIdx >= 1) {
-    return escapeHtml(money.format(nn));
+    return escapeHtml(formatMoney(nn));
   }
   return escapeHtml(String(v));
 }

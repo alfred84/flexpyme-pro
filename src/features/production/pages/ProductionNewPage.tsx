@@ -4,6 +4,7 @@ import { useState } from "react";
 import { fetchClients } from "@/db/queries/clients";
 import { fetchFormats } from "@/db/queries/prices";
 import { createProductionBatch } from "@/db/queries/production";
+import { formatMoney } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 import type { CreateProductionItemPayload } from "@/types/production";
 
@@ -266,7 +267,7 @@ export function ProductionNewPage() {
             <h2 className="card-title text-base">Resumen</h2>
             <div className="flex justify-between font-semibold">
               <span>Costo total</span>
-              <span>{totalCost.toLocaleString("es-DO", { style: "currency", currency: "DOP" })}</span>
+              <span>{formatMoney(totalCost)}</span>
             </div>
             <button type="button" className="btn btn-primary mt-2" disabled={mutation.isPending} onClick={save}>
               {mutation.isPending ? <span className="loading loading-spinner loading-sm" /> : "Guardar lote"}

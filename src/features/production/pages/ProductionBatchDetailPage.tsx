@@ -3,9 +3,8 @@ import { getRouteApi, Link, useRouterState } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { fetchProductionBatchDetail } from "@/db/queries/production";
 import { buildCsvLine, downloadTextFile } from "@/lib/csv";
+import { formatMoney } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
-
-const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
 
 const productionBatchRouteApi = getRouteApi("/produccion/$batchId");
 
@@ -163,15 +162,15 @@ export function ProductionBatchDetailPage() {
                 <dl className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <dt>Costo total</dt>
-                    <dd>{money.format(b.totalCost)}</dd>
+                    <dd>{formatMoney(b.totalCost)}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt>Pagado</dt>
-                    <dd>{money.format(b.paid)}</dd>
+                    <dd>{formatMoney(b.paid)}</dd>
                   </div>
                   <div className="flex justify-between font-semibold">
                     <dt>Pendiente</dt>
-                    <dd>{money.format(b.pending)}</dd>
+                    <dd>{formatMoney(b.pending)}</dd>
                   </div>
                 </dl>
               </div>
@@ -206,8 +205,8 @@ export function ProductionBatchDetailPage() {
                       <td>{row.formatLabel ?? "—"}</td>
                       <td>{row.category}</td>
                       <td className="text-right">{row.quantity}</td>
-                      <td className="text-right">{money.format(row.unitCost)}</td>
-                      <td className="text-right">{money.format(row.subtotal)}</td>
+                      <td className="text-right">{formatMoney(row.unitCost)}</td>
+                      <td className="text-right">{formatMoney(row.subtotal)}</td>
                     </tr>
                   ))
                 )}

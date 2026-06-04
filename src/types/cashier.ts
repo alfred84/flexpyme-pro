@@ -1,5 +1,5 @@
 /**
- * Bill/coin denominations accepted at register (DOP).
+ * Bill/coin denominations accepted at register (unidades monetarias locales).
  */
 export const CASH_DENOMINATIONS = [1000, 500, 200, 100, 50, 20, 10, 5] as const;
 

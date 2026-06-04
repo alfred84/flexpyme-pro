@@ -2,8 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { fetchInvoiceDetail } from "@/db/queries/invoices";
 import { fetchCompanySettings } from "@/db/queries/settings";
-
-const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
+import { formatMoney } from "@/lib/format-money";
 
 function statusLabel(status: string): string {
   if (status === "paid") return "Pagado";
@@ -120,27 +119,27 @@ export function InvoicePrintPage() {
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between gap-4">
                   <dt>Subtotal líneas</dt>
-                  <dd>{money.format(inv.subtotal)}</dd>
+                  <dd>{formatMoney(inv.subtotal)}</dd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <dt>Deuda anterior</dt>
-                  <dd>{money.format(inv.previousDebt)}</dd>
+                  <dd>{formatMoney(inv.previousDebt)}</dd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <dt>Anticipado</dt>
-                  <dd>{money.format(inv.advancePayment)}</dd>
+                  <dd>{formatMoney(inv.advancePayment)}</dd>
                 </div>
                 <div className="flex justify-between gap-4 font-semibold">
                   <dt>Total</dt>
-                  <dd>{money.format(inv.total)}</dd>
+                  <dd>{formatMoney(inv.total)}</dd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <dt>Pagado</dt>
-                  <dd>{money.format(inv.paid)}</dd>
+                  <dd>{formatMoney(inv.paid)}</dd>
                 </div>
                 <div className="flex justify-between gap-4 border-t border-base-300 pt-2 print:border-gray-300">
                   <dt className="font-semibold">Pendiente</dt>
-                  <dd className="font-semibold">{money.format(inv.balance)}</dd>
+                  <dd className="font-semibold">{formatMoney(inv.balance)}</dd>
                 </div>
               </dl>
             </div>
@@ -167,8 +166,8 @@ export function InvoicePrintPage() {
                     <td>{line.service ?? "—"}</td>
                     <td>{line.finish ?? "—"}</td>
                     <td className="text-right">{line.quantity}</td>
-                    <td className="text-right">{money.format(line.unitPrice)}</td>
-                    <td className="text-right">{money.format(line.subtotal)}</td>
+                    <td className="text-right">{formatMoney(line.unitPrice)}</td>
+                    <td className="text-right">{formatMoney(line.subtotal)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -2,9 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useState } from "react";
 import { fetchClientById, softDeleteClient } from "@/db/queries/clients";
+import { formatMoney } from "@/lib/format-money";
 import { popFlashMessage, pushFlashMessage, type FlashMessage } from "@/lib/flash-message";
-
-const money = new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP" });
 
 /**
  * Shows a single client profile with balance and soft-delete action.
@@ -92,7 +91,7 @@ export function ClientDetailPage() {
               </div>
               <div>
                 <dt className="text-xs uppercase text-base-content/60">Balance</dt>
-                <dd>{money.format(clientQuery.data.balance)}</dd>
+                <dd>{formatMoney(clientQuery.data.balance)}</dd>
               </div>
               <div>
                 <dt className="text-xs uppercase text-base-content/60">Teléfono</dt>
