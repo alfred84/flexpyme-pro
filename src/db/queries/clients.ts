@@ -1,5 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ClientDto, CreateClientPayload, UpdateClientPayload } from "@/types/client";
+import type {
+  ClientDto,
+  ClientWorkHistoryDto,
+  CreateClientPayload,
+  UpdateClientPayload,
+} from "@/types/client";
 
 /**
  * Fetches all active clients from SQLite.
@@ -13,6 +18,13 @@ export async function fetchClients(): Promise<ClientDto[]> {
  */
 export async function fetchClientById(id: number): Promise<ClientDto> {
   return invoke<ClientDto>("clients_get_by_id", { id });
+}
+
+/**
+ * Pedidos del cliente y total histórico facturado.
+ */
+export async function fetchClientWorkHistory(clientId: number): Promise<ClientWorkHistoryDto> {
+  return invoke<ClientWorkHistoryDto>("clients_work_history", { clientId });
 }
 
 /**

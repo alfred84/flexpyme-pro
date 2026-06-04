@@ -31,6 +31,11 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
         cell: (info) => formatMoney(info.getValue<number>()),
       },
       {
+        accessorKey: "totalHistorical",
+        header: "Total histórico",
+        cell: (info) => <span className="tabular-nums">{formatMoney(info.getValue<number>())}</span>,
+      },
+      {
         id: "actions",
         header: "",
         cell: ({ row }) => (

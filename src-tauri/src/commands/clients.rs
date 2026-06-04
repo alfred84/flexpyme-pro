@@ -16,9 +16,39 @@ pub struct ClientDto {
     pub address: Option<String>,
     pub notes: Option<String>,
     pub balance: f64,
+    pub total_historical: f64,
     pub created_at: String,
     pub updated_at: String,
 }
+
+/// Invoice row for a client's work history panel.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientWorkHistoryRow {
+    pub id: i64,
+    pub invoice_number: String,
+    pub date: String,
+    pub total: f64,
+    pub paid: f64,
+    pub balance: f64,
+    pub production_status: String,
+    pub payment_status: String,
+}
+
+/// Work history list and aggregate total for one client.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientWorkHistoryDto {
+    pub invoices: Vec<ClientWorkHistoryRow>,
+    pub total_historical: f64,
+}
+
+const CLIENT_SELECT: &str = "SELECT c.id, c.code, c.name, c.phone, c.address, c.notes, c.balance,
+    COALESCE((
+        SELECT SUM(i.total) FROM invoices i
+        WHERE i.client_id = c.id AND i.deleted_at IS NULL
+    ), 0),
+    c.created_at, c.updated_at";
 
 /// Payload for creating a client.
 #[derive(Debug, Deserialize)]
@@ -58,33 +88,35 @@ fn normalize_optional(value: Option<String>) -> Option<String> {
     })
 }
 
+fn map_client_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClientDto> {
+    Ok(ClientDto {
+        id: row.get(0)?,
+        code: row.get(1)?,
+        name: row.get(2)?,
+        phone: row.get(3)?,
+        address: row.get(4)?,
+        notes: row.get(5)?,
+        balance: row.get(6)?,
+        total_historical: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
+    })
+}
+
 /// Lists active clients ordered by most recently created first.
 #[tauri::command]
 pub fn clients_list() -> Result<Vec<ClientDto>, String> {
     let conn = db::open_connection()?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, code, name, phone, address, notes, balance, created_at, updated_at
-             FROM clients
-             WHERE deleted_at IS NULL
-             ORDER BY created_at DESC, id DESC",
-        )
-        .map_err(|e| e.to_string())?;
+    let sql = format!(
+        "{CLIENT_SELECT}
+         FROM clients c
+         WHERE c.deleted_at IS NULL
+         ORDER BY c.created_at DESC, c.id DESC"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
 
     let rows = stmt
-        .query_map([], |row| {
-            Ok(ClientDto {
-                id: row.get(0)?,
-                code: row.get(1)?,
-                name: row.get(2)?,
-                phone: row.get(3)?,
-                address: row.get(4)?,
-                notes: row.get(5)?,
-                balance: row.get(6)?,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
-            })
-        })
+        .query_map([], map_client_row)
         .map_err(|e| e.to_string())?;
 
     let mut out = Vec::new();
@@ -98,26 +130,72 @@ pub fn clients_list() -> Result<Vec<ClientDto>, String> {
 #[tauri::command]
 pub fn clients_get_by_id(id: i64) -> Result<ClientDto, String> {
     let conn = db::open_connection()?;
-    conn.query_row(
-        "SELECT id, code, name, phone, address, notes, balance, created_at, updated_at
-         FROM clients
-         WHERE id = ?1 AND deleted_at IS NULL",
-        params![id],
-        |row| {
-            Ok(ClientDto {
+    let sql = format!(
+        "{CLIENT_SELECT}
+         FROM clients c
+         WHERE c.id = ?1 AND c.deleted_at IS NULL"
+    );
+    conn.query_row(&sql, params![id], map_client_row)
+        .map_err(|_| "Cliente no encontrado".to_string())
+}
+
+/// Lists all non-deleted invoices for a client and the sum of their totals.
+#[tauri::command]
+pub fn clients_work_history(client_id: i64) -> Result<ClientWorkHistoryDto, String> {
+    let conn = db::open_connection()?;
+    let exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM clients WHERE id = ?1 AND deleted_at IS NULL",
+            params![client_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if exists == 0 {
+        return Err("Cliente no encontrado".to_string());
+    }
+
+    let total_historical: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(total), 0) FROM invoices WHERE client_id = ?1 AND deleted_at IS NULL",
+            params![client_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT i.id, i.invoice_number, i.date, i.total, i.paid, i.balance,
+                    i.production_status, i.payment_status
+             FROM invoices i
+             WHERE i.client_id = ?1 AND i.deleted_at IS NULL
+             ORDER BY i.date DESC, i.id DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map(params![client_id], |row| {
+            Ok(ClientWorkHistoryRow {
                 id: row.get(0)?,
-                code: row.get(1)?,
-                name: row.get(2)?,
-                phone: row.get(3)?,
-                address: row.get(4)?,
-                notes: row.get(5)?,
-                balance: row.get(6)?,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
+                invoice_number: row.get(1)?,
+                date: row.get(2)?,
+                total: row.get(3)?,
+                paid: row.get(4)?,
+                balance: row.get(5)?,
+                production_status: row.get(6)?,
+                payment_status: row.get(7)?,
             })
-        },
-    )
-    .map_err(|_| "Cliente no encontrado".to_string())
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut invoices = Vec::new();
+    for r in rows {
+        invoices.push(r.map_err(|e| e.to_string())?);
+    }
+
+    Ok(ClientWorkHistoryDto {
+        invoices,
+        total_historical,
+    })
 }
 
 /// Creates a new client row.

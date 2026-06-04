@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useState } from "react";
+import { ClientWorkHistorySection } from "@/features/clients/components/ClientWorkHistorySection";
 import { fetchClientById, softDeleteClient } from "@/db/queries/clients";
 import { formatMoney } from "@/lib/format-money";
 import { popFlashMessage, pushFlashMessage, type FlashMessage } from "@/lib/flash-message";
@@ -94,6 +95,10 @@ export function ClientDetailPage() {
                 <dd>{formatMoney(clientQuery.data.balance)}</dd>
               </div>
               <div>
+                <dt className="text-xs uppercase text-base-content/60">Total histórico</dt>
+                <dd className="font-medium tabular-nums">{formatMoney(clientQuery.data.totalHistorical)}</dd>
+              </div>
+              <div>
                 <dt className="text-xs uppercase text-base-content/60">Teléfono</dt>
                 <dd>{clientQuery.data.phone ?? "—"}</dd>
               </div>
@@ -112,6 +117,13 @@ export function ClientDetailPage() {
             </dl>
           </div>
         </div>
+      )}
+
+      {clientQuery.data && (
+        <ClientWorkHistorySection
+          clientId={clientQuery.data.id}
+          totalHistoricalHint={clientQuery.data.totalHistorical}
+        />
       )}
 
       {showDelete && (

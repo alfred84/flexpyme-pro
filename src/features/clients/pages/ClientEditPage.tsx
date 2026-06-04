@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { ClientForm } from "@/features/clients/components/ClientForm";
+import { ClientWorkHistorySection } from "@/features/clients/components/ClientWorkHistorySection";
 import type { ClientFormValues } from "@/features/clients/client.schema";
 import { fetchClientById, updateClient } from "@/db/queries/clients";
 import { pushFlashMessage } from "@/lib/flash-message";
@@ -87,6 +88,13 @@ export function ClientEditPage() {
           onSubmit={async (values) => {
             await mutation.mutateAsync(values);
           }}
+        />
+      )}
+
+      {clientQuery.data && (
+        <ClientWorkHistorySection
+          clientId={clientQuery.data.id}
+          totalHistoricalHint={clientQuery.data.totalHistorical}
         />
       )}
     </section>

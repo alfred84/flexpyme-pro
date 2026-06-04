@@ -9,8 +9,32 @@ export interface ClientDto {
   address: string | null;
   notes: string | null;
   balance: number;
+  /** Suma de totales de todos los pedidos del cliente. */
+  totalHistorical: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Pedido en el historial de trabajos de un cliente.
+ */
+export interface ClientWorkHistoryRow {
+  id: number;
+  invoiceNumber: string;
+  date: string;
+  total: number;
+  paid: number;
+  balance: number;
+  productionStatus: string;
+  paymentStatus: string;
+}
+
+/**
+ * Historial de pedidos y total acumulado de un cliente.
+ */
+export interface ClientWorkHistoryDto {
+  invoices: ClientWorkHistoryRow[];
+  totalHistorical: number;
 }
 
 /**

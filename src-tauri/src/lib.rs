@@ -33,6 +33,7 @@ pub fn run() {
             commands::db_status,
             commands::clients::clients_list,
             commands::clients::clients_get_by_id,
+            commands::clients::clients_work_history,
             commands::clients::clients_create,
             commands::clients::clients_update,
             commands::clients::clients_soft_delete,
