@@ -218,7 +218,6 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 - **Ubicación BD**: `db_location.json`, mover/copiar con verificación.
 
 ### Pendientes / próximos refinamientos
-- Exportes XLSX/PDF nativos completos (Rust) y PDF de pedido con logo.
-- Cobro de pedido con transferencia/USD enlazado a `cash_transactions` (hoy el cobro
-  usa `cash_sessions` en efectivo; los movimientos USD/transferencia se registran en Caja).
-- Edición de empleados con reactivación de bajas.
+- PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
+- Reporte PDF/XLSX con todas las secciones del exporte web (deudores, producción).
+- Cobro parcial con múltiples métodos en una misma factura (hoy un método por pedido).
