@@ -42,3 +42,33 @@ export interface PriceLookupArgs {
 export async function lookupUnitPrice(args: PriceLookupArgs): Promise<number | null> {
   return invoke<number | null>("prices_lookup", { args });
 }
+
+/**
+ * Cost-list row (employee salary costs) with format label.
+ */
+export interface CostRowDto {
+  id: number;
+  workType: string;
+  formatId: number | null;
+  formatLabel: string | null;
+  unitCost: number;
+  isActive: boolean;
+}
+
+/**
+ * Loads all employee cost rows.
+ */
+export async function fetchCostList(): Promise<CostRowDto[]> {
+  return invoke<CostRowDto[]>("cost_list_all");
+}
+
+/**
+ * Updates a single cost-list row (unit cost and active flag).
+ */
+export async function updateCost(payload: {
+  id: number;
+  unitCost: number;
+  isActive: boolean;
+}): Promise<void> {
+  return invoke<void>("cost_update", { payload });
+}

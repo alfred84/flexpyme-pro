@@ -22,3 +22,10 @@ export async function fetchAllSettings(): Promise<Record<string, string>> {
 export async function setSettingValue(key: string, value: string): Promise<void> {
   return invoke<void>("settings_set_value", { key, value });
 }
+
+/**
+ * Creates a timestamped backup copy of the database, returning its path.
+ */
+export async function backupDatabase(): Promise<string> {
+  return invoke<string>("settings_backup_database");
+}
