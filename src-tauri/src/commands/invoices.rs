@@ -291,7 +291,9 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
 
     let mut stmt = conn
         .prepare(
-            "SELECT ii.id, ii.category_id, pc.name, ii.format_id, f.label, ii.finish, ii.service, ii.quantity, ii.unit_price, ii.subtotal
+            "SELECT ii.id, ii.category_id, pc.name, ii.format_id,
+                    COALESCE(ii.format_label_snapshot, f.label) AS format_label,
+                    ii.finish, ii.service, ii.quantity, ii.unit_price, ii.subtotal
              FROM invoice_items ii
              JOIN product_categories pc ON pc.id = ii.category_id
              LEFT JOIN formats f ON f.id = ii.format_id
@@ -497,4 +499,72 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
         id: invoice_id,
         invoice_number,
     })
+}
+
+/// Exports a single invoice as a simple PDF file.
+#[tauri::command]
+pub async fn export_invoice_pdf(app: tauri::AppHandle, id: i64) -> Result<String, String> {
+    use printpdf::*;
+    use tauri_plugin_dialog::DialogExt;
+
+    let detail = invoices_get_detail(id)?;
+    let inv = detail.invoice;
+
+    let dest = app
+        .dialog()
+        .file()
+        .add_filter("PDF", &["pdf"])
+        .set_file_name(format!("{}.pdf", inv.invoice_number))
+        .blocking_save_file()
+        .ok_or_else(|| "Exportación cancelada".to_string())?;
+    let path = dest.into_path().map_err(|e| e.to_string())?;
+
+    let (doc, page1, layer1) =
+        PdfDocument::new(&inv.invoice_number, Mm(210.0), Mm(297.0), "Layer 1");
+    let font = doc
+        .add_builtin_font(BuiltinFont::Helvetica)
+        .map_err(|e| e.to_string())?;
+    let layer = doc.get_page(page1).get_layer(layer1);
+
+    let mut y = 280.0_f32;
+    let header_lines = [
+        format!("PEDIDO {}", inv.invoice_number),
+        format!("Cliente: {}", inv.client_name),
+        format!("Fecha: {}", inv.date),
+        format!("Produccion: {}", inv.production_status),
+        format!("Cobro: {}", inv.payment_status),
+        format!("Total: {:.2} CUP", inv.total),
+        format!("Pagado: {:.2} CUP", inv.paid),
+        format!("Pendiente: {:.2} CUP", inv.balance),
+    ];
+    for line in header_lines {
+        layer.use_text(&line, 11.0, Mm(15.0), Mm(y), &font);
+        y -= 7.0;
+    }
+    y -= 5.0;
+    layer.use_text("DETALLE", 12.0, Mm(15.0), Mm(y), &font);
+    y -= 8.0;
+    for item in detail.items.iter().take(25) {
+        let label = item
+            .format_label
+            .as_deref()
+            .or(item.service.as_deref())
+            .unwrap_or("-");
+        let line = format!(
+            "{} x{} @ {:.2} = {:.2}",
+            label, item.quantity, item.unit_price, item.subtotal
+        );
+        layer.use_text(&line, 9.0, Mm(15.0), Mm(y), &font);
+        y -= 6.0;
+        if y < 15.0 {
+            break;
+        }
+    }
+
+    doc.save(&mut std::io::BufWriter::new(
+        std::fs::File::create(&path).map_err(|e| e.to_string())?,
+    ))
+    .map_err(|e| e.to_string())?;
+
+    Ok(path.to_string_lossy().to_string())
 }

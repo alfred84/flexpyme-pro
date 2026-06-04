@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { fetchInvoiceDetail } from "@/db/queries/invoices";
-import { fetchCompanySettings } from "@/db/queries/settings";
+import { fetchAllSettings, fetchCompanySettings } from "@/db/queries/settings";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { pushFlashMessage } from "@/lib/flash-message";
 import { formatMoney } from "@/lib/format-money";
 
 function statusLabel(status: string): string {
@@ -27,6 +29,13 @@ export function InvoicePrintPage() {
     queryKey: ["settings", "company"],
     queryFn: fetchCompanySettings,
   });
+
+  const settingsQuery = useQuery({
+    queryKey: ["settings", "all"],
+    queryFn: fetchAllSettings,
+  });
+
+  const logoPath = settingsQuery.data?.business_logo_path?.trim() || null;
 
   if (!Number.isFinite(invoiceId) || invoiceId <= 0) {
     return (
@@ -55,6 +64,18 @@ export function InvoicePrintPage() {
         <button type="button" className="btn btn-primary btn-sm" onClick={() => window.print()} disabled={!inv}>
           Imprimir
         </button>
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          disabled={!inv}
+          onClick={() => {
+            void invoke<string>("export_invoice_pdf", { id: invoiceId }).then((path) => {
+              pushFlashMessage({ kind: "success", text: `PDF guardado: ${path}` });
+            });
+          }}
+        >
+          Guardar PDF
+        </button>
       </div>
 
       {detailQuery.isLoading && <p className="print:hidden">Cargando...</p>}
@@ -68,7 +89,15 @@ export function InvoicePrintPage() {
         <article className="invoice-print-sheet rounded-lg border border-base-300 bg-base-100 p-6 shadow-sm print:border-0 print:bg-white print:p-0 print:shadow-none">
           <header className="mb-6 border-b border-base-300 pb-4 print:mb-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
+              <div className="flex gap-3">
+                {logoPath && (
+                  <img
+                    src={convertFileSrc(logoPath)}
+                    alt="Logo"
+                    className="h-16 w-16 object-contain print:h-14 print:w-14"
+                  />
+                )}
+                <div>
                 {hasCompanyHeader && co ? (
                   <div className="mb-2 space-y-0.5 print:text-black">
                     {co.companyName.trim() && <p className="text-xl font-bold">{co.companyName.trim()}</p>}
@@ -85,8 +114,9 @@ export function InvoicePrintPage() {
                 ) : (
                   <p className="text-sm text-base-content/70 print:text-gray-600">FlexPyme Pro</p>
                 )}
-                <h1 className="text-2xl font-bold print:text-black">Factura</h1>
+                <h1 className="text-2xl font-bold print:text-black">Pedido</h1>
                 <p className="font-mono text-lg print:text-black">{inv.invoiceNumber}</p>
+                </div>
               </div>
               <div className="text-right text-sm print:text-black">
                 <p>
