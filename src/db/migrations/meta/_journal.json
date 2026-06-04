@@ -15,6 +15,13 @@
       "when": 1780600190202,
       "tag": "0001_aberrant_talon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780605692446,
+      "tag": "0002_nasty_vermin",
+      "breakpoints": true
     }
   ]
 }

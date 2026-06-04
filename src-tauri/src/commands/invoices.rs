@@ -36,6 +36,11 @@ pub struct InvoiceHeaderDto {
     pub paid: f64,
     pub balance: f64,
     pub status: String,
+    pub payment_method: Option<String>,
+    pub payment_currency: Option<String>,
+    pub exchange_rate_snapshot: Option<f64>,
+    pub amount_usd: f64,
+    pub amount_cup: f64,
     pub notes: Option<String>,
 }
 
@@ -82,6 +87,10 @@ pub struct CreateInvoicePayload {
     pub notes: Option<String>,
     pub advance_payment: f64,
     pub paid: f64,
+    pub payment_method: String,
+    pub payment_currency: String,
+    pub exchange_rate_snapshot: f64,
+    pub transfer_concept: Option<String>,
     pub items: Vec<CreateInvoiceItemPayload>,
 }
 
@@ -179,7 +188,8 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
     let header = conn
         .query_row(
             "SELECT i.id, i.invoice_number, i.client_id, c.name, i.date, i.subtotal, i.advance_payment, i.previous_debt,
-                    i.total, i.paid, i.balance, i.status, i.notes
+                    i.total, i.paid, i.balance, i.status, i.payment_method, i.payment_currency,
+                    i.exchange_rate_snapshot, i.amount_usd, i.amount_cup, i.notes
              FROM invoices i
              JOIN clients c ON c.id = i.client_id
              WHERE i.id = ?1 AND i.deleted_at IS NULL",
@@ -198,7 +208,12 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                     paid: row.get(9)?,
                     balance: row.get(10)?,
                     status: row.get(11)?,
-                    notes: row.get(12)?,
+                    payment_method: row.get(12)?,
+                    payment_currency: row.get(13)?,
+                    exchange_rate_snapshot: row.get(14)?,
+                    amount_usd: row.get(15)?,
+                    amount_cup: row.get(16)?,
+                    notes: row.get(17)?,
                 })
             },
         )
@@ -290,15 +305,51 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
         return Err("El pagado no puede ser mayor que el total".to_string());
     }
 
+    let payment_method = payload.payment_method.trim().to_lowercase();
+    if payment_method != "efectivo" && payment_method != "transferencia" {
+        return Err("Método de pago inválido".to_string());
+    }
+    let mut payment_currency = payload.payment_currency.trim().to_uppercase();
+    if payment_method == "transferencia" {
+        payment_currency = "CUP".to_string();
+    }
+    if payment_currency != "CUP" && payment_currency != "USD" {
+        return Err("Moneda de pago inválida".to_string());
+    }
+    let exchange_rate = if payment_currency == "USD" {
+        if payload.exchange_rate_snapshot <= 0.0 {
+            return Err("La tasa de cambio debe ser mayor que cero".to_string());
+        }
+        payload.exchange_rate_snapshot
+    } else {
+        0.0
+    };
+    let amount_cup = total.max(0.0);
+    let amount_usd = if payment_currency == "USD" && exchange_rate > 0.0 {
+        amount_cup / exchange_rate
+    } else {
+        0.0
+    };
+
     let invoice_number = next_invoice_number(&tx, &year)?;
     let status = compute_invoice_status(balance, payload.paid);
-    let notes = trim_notes(payload.notes);
+    let mut notes = trim_notes(payload.notes);
+    if payment_method == "transferencia" {
+        if let Some(concept) = trim_notes(payload.transfer_concept) {
+            let extra = format!("Ref. transferencia: {}", concept);
+            notes = Some(match notes {
+                Some(n) => format!("{}\n{}", n, extra),
+                None => extra,
+            });
+        }
+    }
 
     let new_balance = previous_debt + subtotal - payload.advance_payment - payload.paid;
 
     tx.execute(
-        "INSERT INTO invoices (invoice_number, client_id, date, subtotal, advance_payment, previous_debt, total, paid, balance, status, notes)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        "INSERT INTO invoices (invoice_number, client_id, date, subtotal, advance_payment, previous_debt, total, paid, balance, status,
+         payment_method, payment_currency, exchange_rate_snapshot, amount_usd, amount_cup, notes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
         params![
             invoice_number,
             payload.client_id,
@@ -310,6 +361,11 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
             payload.paid,
             balance,
             status,
+            payment_method,
+            payment_currency,
+            exchange_rate,
+            amount_usd,
+            amount_cup,
             notes
         ],
     )

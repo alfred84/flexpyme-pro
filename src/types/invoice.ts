@@ -29,6 +29,11 @@ export interface InvoiceHeaderDto {
   paid: number;
   balance: number;
   status: string;
+  paymentMethod: string | null;
+  paymentCurrency: string | null;
+  exchangeRateSnapshot: number | null;
+  amountUsd: number;
+  amountCup: number;
   notes: string | null;
 }
 
@@ -71,12 +76,19 @@ export interface CreateInvoiceItemPayload {
 /**
  * Payload for creating an invoice with lines.
  */
+export type PaymentMethod = "efectivo" | "transferencia";
+export type PaymentCurrency = "CUP" | "USD";
+
 export interface CreateInvoicePayload {
   clientId: number;
   date: string;
   notes?: string | null;
   advancePayment: number;
   paid: number;
+  paymentMethod: PaymentMethod;
+  paymentCurrency: PaymentCurrency;
+  exchangeRateSnapshot: number;
+  transferConcept?: string | null;
   items: CreateInvoiceItemPayload[];
 }
 

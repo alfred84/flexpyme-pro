@@ -142,6 +142,34 @@ export function InvoiceDetailPage() {
                     <dd>{formatMoney(inv.balance)}</dd>
                   </div>
                 </dl>
+                {inv.paymentMethod && (
+                  <div className="divider my-1" />
+                )}
+                {inv.paymentMethod && (
+                  <dl className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <dt>Pagado con</dt>
+                      <dd className="capitalize">
+                        {inv.paymentMethod === "efectivo" ? "Efectivo" : "Transferencia"}
+                        {inv.paymentCurrency ? ` ${inv.paymentCurrency}` : ""}
+                      </dd>
+                    </div>
+                    {inv.paymentCurrency === "USD" && inv.exchangeRateSnapshot && (
+                      <>
+                        <div className="flex justify-between">
+                          <dt>Monto recibido</dt>
+                          <dd>
+                            $ {inv.amountUsd.toFixed(2)} USD (tasa: {inv.exchangeRateSnapshot} CUP/USD)
+                          </dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt>Equivalente</dt>
+                          <dd>{formatMoney(inv.amountCup || inv.total)}</dd>
+                        </div>
+                      </>
+                    )}
+                  </dl>
+                )}
               </div>
             </div>
           </div>

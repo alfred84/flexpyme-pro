@@ -6,6 +6,8 @@ import { createInvoice } from "@/db/queries/invoices";
 import { fetchFormats, fetchProductCategories, lookupUnitPrice } from "@/db/queries/prices";
 import { formatMoney } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
+import { OrderPaymentSection, type OrderPaymentState } from "@/features/invoices/components/OrderPaymentSection";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import type { CreateInvoiceItemPayload } from "@/types/invoice";
 
 interface DraftLine {
@@ -38,6 +40,7 @@ function makeLine(categoryId: number): DraftLine {
 export function InvoiceNewPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const appSettings = useAppSettings();
   const clientsQuery = useQuery({ queryKey: ["clients", "list"], queryFn: fetchClients });
   const categoriesQuery = useQuery({ queryKey: ["categories"], queryFn: fetchProductCategories });
   const formatsQuery = useQuery({ queryKey: ["formats"], queryFn: fetchFormats });
@@ -49,6 +52,12 @@ export function InvoiceNewPage() {
   const [paid, setPaid] = useState("0");
   const [lines, setLines] = useState<DraftLine[]>(() => [makeLine(1)]);
   const [formError, setFormError] = useState<string | null>(null);
+  const [payment, setPayment] = useState<OrderPaymentState>(() => ({
+    paymentMethod: "efectivo",
+    paymentCurrency: "CUP",
+    exchangeRate: "",
+    transferConcept: "",
+  }));
 
   const previousDebt = useMemo(() => {
     if (!clientId) {
@@ -155,12 +164,24 @@ export function InvoiceNewPage() {
       setFormError("El pagado no puede ser mayor que el total.");
       return;
     }
+    const exchangeRate =
+      payment.paymentCurrency === "USD" && payment.paymentMethod === "efectivo"
+        ? Number.parseFloat(payment.exchangeRate.replace(",", ".")) || appSettings.usdExchangeRate
+        : 0;
+    if (payment.paymentMethod === "efectivo" && payment.paymentCurrency === "USD" && exchangeRate <= 0) {
+      setFormError("Indica una tasa USD→CUP válida.");
+      return;
+    }
     void mutation.mutateAsync({
       clientId,
       date,
       notes: notes.trim() || null,
       advancePayment: advanceNum,
       paid: paidNum,
+      paymentMethod: payment.paymentMethod,
+      paymentCurrency: payment.paymentMethod === "transferencia" ? "CUP" : payment.paymentCurrency,
+      exchangeRateSnapshot: exchangeRate,
+      transferConcept: payment.transferConcept.trim() || null,
       items,
     });
   };
@@ -322,6 +343,16 @@ export function InvoiceNewPage() {
             </div>
           </div>
         </div>
+
+        <OrderPaymentSection
+          totalCup={Math.max(total, 0)}
+          value={
+            payment.exchangeRate
+              ? payment
+              : { ...payment, exchangeRate: payment.exchangeRate || String(appSettings.usdExchangeRate || "") }
+          }
+          onChange={setPayment}
+        />
 
         <div className="card bg-base-100 shadow h-fit lg:sticky lg:top-4">
           <div className="card-body space-y-2 text-sm">
