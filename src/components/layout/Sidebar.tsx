@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
+import { BusinessLogo } from "@/components/common/BusinessLogo";
 import { PRIMARY_NAV, SECONDARY_NAV, type NavItem } from "@/config/navigation";
 import { useSidebarBadges } from "@/hooks/use-sidebar-badges";
 
@@ -9,6 +9,7 @@ interface SidebarProps {
   onToggle: () => void;
   businessName: string;
   logoPath: string | null;
+  logoVersion: string | null;
 }
 
 /**
@@ -18,7 +19,7 @@ interface SidebarProps {
  * @returns Barra lateral de navegación.
  */
 export function Sidebar(props: SidebarProps) {
-  const { collapsed, onToggle, businessName, logoPath } = props;
+  const { collapsed, onToggle, businessName, logoPath, logoVersion } = props;
   const badges = useSidebarBadges();
 
   return (
@@ -28,13 +29,7 @@ export function Sidebar(props: SidebarProps) {
       }`}
     >
       <div className="flex h-16 items-center gap-2 border-b border-base-300 px-4">
-        <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-primary text-primary-content">
-          {logoPath ? (
-            <img src={convertFileSrc(logoPath)} alt="Logo" className="h-full w-full object-contain" />
-          ) : (
-            <Printer className="h-5 w-5" />
-          )}
-        </span>
+        <BusinessLogo path={logoPath} version={logoVersion} size="sm" fallbackIcon={Printer} />
         {!collapsed && (
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold leading-tight">FlexPyme Pro</p>

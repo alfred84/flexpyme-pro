@@ -2,7 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { fetchInvoiceDetail } from "@/db/queries/invoices";
 import { fetchAllSettings, fetchCompanySettings } from "@/db/queries/settings";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
+import { BusinessLogo } from "@/components/common/BusinessLogo";
+import { Building2 } from "lucide-react";
 import { pushFlashMessage } from "@/lib/flash-message";
 import { formatMoney } from "@/lib/format-money";
 
@@ -36,6 +38,7 @@ export function InvoicePrintPage() {
   });
 
   const logoPath = settingsQuery.data?.business_logo_path?.trim() || null;
+  const logoVersion = settingsQuery.data?.business_logo_version?.trim() || null;
 
   if (!Number.isFinite(invoiceId) || invoiceId <= 0) {
     return (
@@ -91,10 +94,12 @@ export function InvoicePrintPage() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex gap-3">
                 {logoPath && (
-                  <img
-                    src={convertFileSrc(logoPath)}
-                    alt="Logo"
-                    className="h-16 w-16 object-contain print:h-14 print:w-14"
+                  <BusinessLogo
+                    path={logoPath}
+                    version={logoVersion}
+                    size="md"
+                    fallbackIcon={Building2}
+                    className="print:h-14 print:w-14"
                   />
                 )}
                 <div>

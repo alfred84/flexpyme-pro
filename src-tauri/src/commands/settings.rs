@@ -127,6 +127,7 @@ pub fn settings_save_company(payload: CompanySettingsDto) -> Result<(), String> 
 }
 
 const LOGO_SETTING_KEY: &str = "business_logo_path";
+const LOGO_VERSION_KEY: &str = "business_logo_version";
 
 fn allowed_logo_ext(path: &Path) -> Option<String> {
     let ext = path.extension()?.to_str()?.to_lowercase();
@@ -134,6 +135,27 @@ fn allowed_logo_ext(path: &Path) -> Option<String> {
         "png" | "jpg" | "jpeg" | "webp" | "svg" => Some(ext),
         _ => None,
     }
+}
+
+fn remove_stored_logo_files(data_dir: &Path) -> Result<(), String> {
+    let entries = fs::read_dir(data_dir).map_err(|e| e.to_string())?;
+    for entry in entries.flatten() {
+        let file_name = entry.file_name().to_string_lossy().to_string();
+        if file_name.starts_with("logo") && entry.path().is_file() {
+            fs::remove_file(entry.path()).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn upsert_setting(conn: &rusqlite::Connection, key: &str, value: &str) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![key, value],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Copies the selected image into app data dir and stores the path in settings.
@@ -151,24 +173,33 @@ pub async fn update_business_logo(app: AppHandle, source_path: String) -> Result
         .app_data_dir()
         .map_err(|e| format!("No se pudo resolver app_data_dir: {}", e))?;
     fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
-    let dest = data_dir.join(format!("logo.{}", ext));
+    remove_stored_logo_files(&data_dir)?;
+    let version = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis()
+        .to_string();
+    let dest = data_dir.join(format!("logo-{}.{}", version, ext));
     fs::copy(source, &dest).map_err(|e| format!("No se pudo copiar el logo: {}", e))?;
     let dest_str = dest.to_string_lossy().to_string();
     let conn = db::open_connection()?;
-    conn.execute(
-        "INSERT INTO settings (key, value) VALUES (?1, ?2)
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        params![LOGO_SETTING_KEY, dest_str],
-    )
-    .map_err(|e| e.to_string())?;
+    upsert_setting(&conn, LOGO_SETTING_KEY, &dest_str)?;
+    upsert_setting(&conn, LOGO_VERSION_KEY, &version)?;
     Ok(dest_str)
 }
 
 /// Removes the stored business logo setting.
 #[tauri::command]
-pub fn remove_business_logo() -> Result<(), String> {
+pub fn remove_business_logo(app: AppHandle) -> Result<(), String> {
+    if let Ok(data_dir) = app.path().app_data_dir() {
+        if data_dir.exists() {
+            let _ = remove_stored_logo_files(&data_dir);
+        }
+    }
     let conn = db::open_connection()?;
     conn.execute("DELETE FROM settings WHERE key = ?1", params![LOGO_SETTING_KEY])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM settings WHERE key = ?1", params![LOGO_VERSION_KEY])
         .map_err(|e| e.to_string())?;
     Ok(())
 }

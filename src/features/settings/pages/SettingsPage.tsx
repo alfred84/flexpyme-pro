@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { Building2, Coins, DollarSign, HardDriveDownload, Hammer, Ruler, Tag, Trash2, Upload, Users } from "lucide-react";
+import { BusinessLogo } from "@/components/common/BusinessLogo";
 import { EmployeeRolesTab } from "@/features/settings/components/EmployeeRolesTab";
 import { FormatsTab } from "@/features/settings/components/FormatsTab";
 import { WorkTypesTab } from "@/features/settings/components/WorkTypesTab";
@@ -111,6 +111,7 @@ function GeneralTab() {
 
   const data = settingsQuery.data ?? {};
   const logoPath = data.business_logo_path ?? null;
+  const logoVersion = data.business_logo_version ?? null;
   const [name, setName] = useState<string | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
@@ -118,14 +119,14 @@ function GeneralTab() {
   const logoMutation = useMutation({
     mutationFn: async (path: string) => updateBusinessLogo(path),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["settings"] });
+      await queryClient.invalidateQueries({ queryKey: ["settings", "all"] });
     },
   });
 
   const removeLogoMutation = useMutation({
     mutationFn: removeBusinessLogo,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["settings"] });
+      await queryClient.invalidateQueries({ queryKey: ["settings", "all"] });
     },
   });
 
@@ -157,13 +158,7 @@ function GeneralTab() {
         <h2 className="card-title text-base">Datos del negocio</h2>
         {saved && <div className="alert alert-success py-2 text-sm">Guardado.</div>}
         <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-base-300">
-            {logoPath ? (
-              <img src={convertFileSrc(logoPath)} alt="Logo" className="h-full w-full object-contain" />
-            ) : (
-              <Building2 className="h-8 w-8 text-base-content/40" />
-            )}
-          </div>
+          <BusinessLogo path={logoPath} version={logoVersion} size="md" fallbackIcon={Building2} />
           <div className="flex flex-col gap-2">
             <button type="button" className="btn btn-outline btn-sm gap-2" onClick={() => void handleSelectLogo()}>
               <Upload size={14} /> Cambiar icono

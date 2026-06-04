@@ -9,6 +9,7 @@ export interface AppSettings {
   businessAddress: string;
   businessPhone: string;
   businessLogoPath: string | null;
+  businessLogoVersion: string | null;
   usdExchangeRate: number;
 }
 
@@ -31,6 +32,7 @@ export function useAppSettings(): AppSettings {
     businessAddress: data.business_address || data.company_address || "",
     businessPhone: data.business_phone || data.company_phone || "",
     businessLogoPath: data.business_logo_path?.trim() || null,
+    businessLogoVersion: data.business_logo_version?.trim() || null,
     usdExchangeRate: Number(data.usd_exchange_rate ?? "0") || 0,
   };
 }
