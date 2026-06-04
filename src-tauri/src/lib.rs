@@ -70,7 +70,11 @@ pub fn run() {
             commands::inventory::inventory_item_create,
             commands::inventory::inventory_item_update,
             commands::inventory::inventory_movement_register,
-            commands::inventory::inventory_movements_for_item
+            commands::inventory::inventory_movements_for_item,
+            commands::cashflow::cash_balance,
+            commands::cashflow::cash_transactions_list,
+            commands::cashflow::cash_daily_series,
+            commands::cashflow::cash_transaction_create
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
