@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { DollarSign, Moon, Sun } from "lucide-react";
+import { DollarSign, ExternalLink, Moon, Sun } from "lucide-react";
 import { PRIMARY_NAV, SECONDARY_NAV } from "@/config/navigation";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import type { ThemeName } from "@/lib/theme";
@@ -56,13 +56,13 @@ export function Header(props: HeaderProps) {
       <div className="flex items-center gap-2">
         <Link
           to="/configuracion"
-          className="flex items-center gap-1 rounded-lg border border-base-300 px-3 py-1.5 text-sm hover:bg-base-200"
-          title="Tasa USD → CUP (editar en Configuración)"
+          search={{ tab: "moneda" }}
+          className="group flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-mono text-base-content/70 transition-colors hover:bg-base-200 hover:text-base-content"
+          title="Clic para actualizar la tasa de cambio"
         >
-          <DollarSign className="h-4 w-4 text-success" />
-          <span className="font-mono">
-            {settings.usdExchangeRate > 0 ? `${settings.usdExchangeRate} CUP` : "—"}
-          </span>
+          <DollarSign size={12} className="text-success transition-transform group-hover:scale-110" />
+          <span>1 USD = {settings.usdExchangeRate > 0 ? settings.usdExchangeRate : "—"} CUP</span>
+          <ExternalLink size={10} className="opacity-0 transition-opacity group-hover:opacity-60" />
         </Link>
         <button
           type="button"

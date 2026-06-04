@@ -1,14 +1,36 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Coins, DollarSign, HardDriveDownload, Ruler, Tag, Users } from "lucide-react";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { Building2, Coins, DollarSign, HardDriveDownload, Hammer, Ruler, Tag, Trash2, Upload, Users } from "lucide-react";
 import { EmployeeRolesTab } from "@/features/settings/components/EmployeeRolesTab";
-import { backupDatabase, fetchAllSettings, setSettingValue } from "@/db/queries/settings";
-import { fetchCostList, fetchFormats, updateCost } from "@/db/queries/prices";
+import { FormatsTab } from "@/features/settings/components/FormatsTab";
+import { WorkTypesTab } from "@/features/settings/components/WorkTypesTab";
+import {
+  backupDatabase,
+  fetchAllSettings,
+  getDbLocation,
+  moveDatabase,
+  openDbFolder,
+  removeBusinessLogo,
+  setSettingValue,
+  updateBusinessLogo,
+} from "@/db/queries/settings";
+import { fetchCostList, updateCost } from "@/db/queries/prices";
 import { PricesListPage } from "@/features/products/pages/PricesListPage";
 import { useTheme } from "@/lib/theme";
 import { WORK_TYPE_LABELS, type WorkType } from "@/types/employee";
 
-type TabKey = "general" | "precios" | "costos" | "moneda" | "roles" | "formatos" | "backup";
+type TabKey =
+  | "general"
+  | "precios"
+  | "costos"
+  | "moneda"
+  | "roles"
+  | "formatos"
+  | "tipos-trabajo"
+  | "backup";
 
 const TABS: { key: TabKey; label: string; icon: typeof Building2 }[] = [
   { key: "general", label: "General", icon: Building2 },
@@ -17,6 +39,7 @@ const TABS: { key: TabKey; label: string; icon: typeof Building2 }[] = [
   { key: "moneda", label: "Moneda", icon: DollarSign },
   { key: "roles", label: "Roles", icon: Users },
   { key: "formatos", label: "Formatos", icon: Ruler },
+  { key: "tipos-trabajo", label: "Tipos de Trabajo", icon: Hammer },
   { key: "backup", label: "Backup", icon: HardDriveDownload },
 ];
 
@@ -26,7 +49,24 @@ const TABS: { key: TabKey; label: string; icon: typeof Building2 }[] = [
  * @returns Página de configuración.
  */
 export function SettingsPage() {
-  const [tab, setTab] = useState<TabKey>("general");
+  const { tab: initialTab } = useSearch({ from: "/configuracion" });
+  const [tab, setTab] = useState<TabKey>((initialTab as TabKey) ?? "general");
+
+  useEffect(() => {
+    if (initialTab) {
+      setTab(initialTab as TabKey);
+    }
+  }, [initialTab]);
+
+  useEffect(() => {
+    if (tab === "moneda") {
+      const timer = window.setTimeout(() => {
+        document.getElementById("exchange-rate-input")?.focus();
+      }, 300);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [tab]);
 
   return (
     <section className="space-y-4">
@@ -54,6 +94,7 @@ export function SettingsPage() {
       {tab === "moneda" && <CurrencyTab />}
       {tab === "roles" && <EmployeeRolesTab />}
       {tab === "formatos" && <FormatsTab />}
+      {tab === "tipos-trabajo" && <WorkTypesTab />}
       {tab === "backup" && <BackupTab />}
     </section>
   );
@@ -69,9 +110,34 @@ function GeneralTab() {
   const [saved, setSaved] = useState(false);
 
   const data = settingsQuery.data ?? {};
+  const logoPath = data.business_logo_path ?? null;
   const [name, setName] = useState<string | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
+
+  const logoMutation = useMutation({
+    mutationFn: async (path: string) => updateBusinessLogo(path),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["settings"] });
+    },
+  });
+
+  const removeLogoMutation = useMutation({
+    mutationFn: removeBusinessLogo,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["settings"] });
+    },
+  });
+
+  const handleSelectLogo = async () => {
+    const selected = await open({
+      filters: [{ name: "Imagen", extensions: ["png", "jpg", "jpeg", "webp", "svg"] }],
+      multiple: false,
+    });
+    if (typeof selected === "string") {
+      await logoMutation.mutateAsync(selected);
+    }
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -90,6 +156,30 @@ function GeneralTab() {
       <div className="card-body space-y-3">
         <h2 className="card-title text-base">Datos del negocio</h2>
         {saved && <div className="alert alert-success py-2 text-sm">Guardado.</div>}
+        <div className="flex items-center gap-4">
+          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-base-300">
+            {logoPath ? (
+              <img src={convertFileSrc(logoPath)} alt="Logo" className="h-full w-full object-contain" />
+            ) : (
+              <Building2 className="h-8 w-8 text-base-content/40" />
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <button type="button" className="btn btn-outline btn-sm gap-2" onClick={() => void handleSelectLogo()}>
+              <Upload size={14} /> Cambiar icono
+            </button>
+            {logoPath && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm gap-2 text-error"
+                onClick={() => void removeLogoMutation.mutateAsync()}
+              >
+                <Trash2 size={14} /> Quitar icono
+              </button>
+            )}
+            <p className="text-xs text-base-content/50">PNG, JPG, WEBP o SVG · Máx. 2MB</p>
+          </div>
+        </div>
         <label className="form-control">
           <span className="label-text">Nombre</span>
           <input
@@ -162,6 +252,7 @@ function CurrencyTab() {
         <label className="form-control">
           <span className="label-text">Cuántos CUP equivale 1 USD</span>
           <input
+            id="exchange-rate-input"
             type="number"
             className="input input-bordered"
             defaultValue={current}
@@ -234,37 +325,65 @@ function CostsTab() {
 }
 
 /**
- * Tab Formatos: listado de formatos disponibles (solo lectura).
- */
-function FormatsTab() {
-  const formatsQuery = useQuery({ queryKey: ["formats", "all"], queryFn: fetchFormats });
-  return (
-    <div className="card max-w-md bg-base-200">
-      <div className="card-body">
-        <h2 className="card-title text-base">Formatos disponibles</h2>
-        <div className="flex flex-wrap gap-2">
-          {(formatsQuery.data ?? []).map((format) => (
-            <span key={format.id} className="badge badge-lg badge-outline">
-              {format.label}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
  * Tab Backup: respaldo de la base de datos a un archivo con marca de tiempo.
  */
 function BackupTab() {
   const [path, setPath] = useState<string | null>(null);
+  const dbPathQuery = useQuery({ queryKey: ["settings", "db-path"], queryFn: getDbLocation });
+  const [moving, setMoving] = useState(false);
   const mutation = useMutation({
     mutationFn: backupDatabase,
     onSuccess: (resultPath) => setPath(resultPath),
   });
 
+  const handleMoveDb = async () => {
+    const dest = await save({
+      filters: [{ name: "SQLite", extensions: ["db"] }],
+      defaultPath: "flexpyme.db",
+    });
+    if (!dest) return;
+    setMoving(true);
+    try {
+      const newPath = await moveDatabase(dest);
+      await dbPathQuery.refetch();
+      setPath(`Base de datos movida a: ${newPath}`);
+    } catch (e) {
+      setPath((e as Error).message);
+    } finally {
+      setMoving(false);
+    }
+  };
+
   return (
+    <div className="space-y-4">
+    <div className="card max-w-2xl bg-base-200">
+      <div className="card-body space-y-3">
+        <h2 className="card-title text-base">Ubicación de la base de datos</h2>
+        <p className="text-sm break-all text-base-content/80">
+          Ruta actual: {dbPathQuery.data ?? "…"}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => {
+              void navigator.clipboard.writeText(dbPathQuery.data ?? "");
+            }}
+          >
+            Copiar ruta
+          </button>
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => void openDbFolder()}>
+            Abrir carpeta
+          </button>
+          <button type="button" className="btn btn-warning btn-sm" disabled={moving} onClick={() => void handleMoveDb()}>
+            {moving ? <span className="loading loading-spinner loading-sm" /> : "Mover base de datos"}
+          </button>
+        </div>
+        <p className="text-xs text-warning">
+          Al mover la BD, la app se reconectará automáticamente. Se recomienda hacer un respaldo antes.
+        </p>
+      </div>
+    </div>
     <div className="card max-w-xl bg-base-200">
       <div className="card-body space-y-3">
         <h2 className="card-title text-base">Respaldo de la base de datos</h2>
@@ -287,6 +406,7 @@ function BackupTab() {
           </button>
         </div>
       </div>
+    </div>
     </div>
   );
 }

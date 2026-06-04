@@ -95,6 +95,9 @@ const reportsRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "configuracion",
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: typeof search.tab === "string" ? search.tab : "general",
+  }),
   component: SettingsPage,
 });
 
