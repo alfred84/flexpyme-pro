@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   cashSessions,
+  cashTransactions,
   clients,
+  costList,
+  employees,
   formats,
+  inventoryItems,
+  inventoryMovements,
   invoiceItems,
   invoices,
   priceList,
@@ -24,5 +29,13 @@ describe("database schema", () => {
     expect(productionBatchItems).toBeDefined();
     expect(cashSessions).toBeDefined();
     expect(settings).toBeDefined();
+  });
+
+  it("defines v2 tables (employees, inventory, cashflow, costs)", () => {
+    expect(costList).toBeDefined();
+    expect(employees).toBeDefined();
+    expect(inventoryItems).toBeDefined();
+    expect(inventoryMovements).toBeDefined();
+    expect(cashTransactions).toBeDefined();
   });
 });
