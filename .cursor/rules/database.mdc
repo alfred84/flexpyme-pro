@@ -1,23 +1,23 @@
 ---
-description: Reglas para esquema y queries de base de datos
+description: Reglas para base de datos SQLite y Tauri commands
 globs: ["src/db/**/*.ts", "src-tauri/src/**/*.rs"]
 ---
 
 # Reglas Base de Datos
 
-## Drizzle ORM
-- Schema definido en `src/db/schema.ts` como fuente de verdad
-- Migraciones generadas con `drizzle-kit generate`
-- Nunca escribir SQL raw desde el frontend
-- Queries reutilizables en `src/db/queries/`
+## Schema Drizzle
+- Único source of truth: `src/db/schema.ts`
+- Migraciones con `drizzle-kit generate` — nunca SQL manual
+- Soft delete con campo `deleted_at` para clientes, empleados, pedidos
+- Auditoría: `created_at` y `updated_at` en todas las tablas
 
-## Tauri Commands (Rust)
-- Un archivo por dominio en `src-tauri/src/commands/`
-- Manejo de errores con `Result<T, String>`
-- Documentar con doc comments `///` en Rust
-- Serializar/deserializar con `serde_json`
+## Tauri Commands
+- Un archivo Rust por dominio: orders.rs, clients.rs, employees.rs, inventory.rs, cashflow.rs, settings.rs
+- Manejo de errores con `Result<T, String>` serializable
+- Doc comments `///` en Rust para todos los commands públicos
+- Transacciones para operaciones multi-tabla
 
-## Integridad
-- Usar transacciones para operaciones multi-tabla
-- Soft delete (campo `deleted_at`) para clientes y facturas
-- Auditoria de cambios de precio con timestamp
+## Moneda en BD
+- Todos los importes en CUP como REAL
+- Tasa USD/CUP almacenada en cada transacción como campo separado
+- Denominaciones de billetes como JSON TEXT en cash_sessions

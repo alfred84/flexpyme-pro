@@ -3,30 +3,36 @@ description: Reglas para componentes React y UI
 globs: ["src/**/*.tsx", "src/**/*.ts"]
 ---
 
-# Reglas Frontend
+# Reglas Frontend FlexPyme Pro
+
+## Diseño
+- Dark mode por defecto con DaisyUI data-theme="business" o similar oscuro profesional
+- Sidebar colapsable con iconos Lucide React
+- Lucide React para TODOS los iconos — no usar otras librerías de iconos
+- DaisyUI components como base — no re-inventar buttons, modals, inputs
+- Badges de colores para estados: pendiente=badge-warning, ejecutado=badge-success
 
 ## Componentes
-- Functional components con TypeScript siempre
-- Props tipadas con interface, nunca type inline en JSX
-- JSDoc en cada componente: descripcion, @param props, @returns
-- Nombres en PascalCase para componentes, camelCase para hooks
+- Functional components + TypeScript interfaces para props
+- JSDoc con @description, @param, @returns en cada componente
+- Nombres en PascalCase, hooks en camelCase con prefijo `use`
 
 ## Estado y datos
-- TanStack Query para todo dato del servidor (SQLite via Tauri)
-- useState solo para estado de UI local (modals, forms)
-- No usar useEffect para fetch de datos; usar TanStack Query
-
-## Estilos
-- Tailwind utility classes directamente en JSX
-- DaisyUI components como base (btn, card, modal, table, input)
-- Sin CSS modules ni styled-components
-- Tema oscuro/claro usando DaisyUI `data-theme`
+- TanStack Query para TODO dato de SQLite (via Tauri invoke)
+- useState solo para UI local (abrir/cerrar modales, tabs activos)
+- NUNCA useEffect para fetch — usar TanStack Query hooks
 
 ## Formularios
-- React Hook Form + resolver de Zod siempre
-- Mensajes de error en espanol
-- Validacion en cliente y en command Rust
+- React Hook Form + Zod resolver siempre
+- Mensajes de error en español
+- Validar en cliente con Zod Y en el command Rust
 
-## Tablas
-- TanStack Table v8 para todas las tablas de datos
-- Paginacion del lado del cliente (datos locales/SQLite)
+## Tablas de datos
+- TanStack Table v8 para todas las tablas
+- Siempre incluir: búsqueda, ordenamiento, paginación
+- Skeleton loader mientras cargan los datos
+
+## Módulo de caja
+- Grid de denominaciones: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 5000 CUP
+- Mostrar vuelto en verde (>0) o rojo (<0)
+- Registrar desglose de billetes como JSON en la transacción

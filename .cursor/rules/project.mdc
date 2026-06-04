@@ -1,31 +1,38 @@
 ---
-description: Reglas generales del proyecto FlexPyme Pro
+description: Reglas generales FlexPyme Pro v2
 globs: ["**/*.ts", "**/*.tsx", "**/*.rs"]
+alwaysApply: true
 ---
 
-# FlexPyme Pro - Reglas del Proyecto
+# FlexPyme Pro — Reglas Permanentes del Proyecto
 
-## Stack obligatorio (NO sustituir)
-- Tauri v2, React 18, TypeScript strict
-- Tailwind CSS v3 + DaisyUI v4 (solo estas para estilos)
-- TanStack Router v1 + TanStack Query v5
-- Drizzle ORM con SQLite
-- React Hook Form + Zod para formularios
-- TanStack Table v8 para tablas de datos
-- Recharts para graficas
+## Fuente de verdad
+- Lee REQUIREMENTS.md antes de implementar cualquier módulo
+- Toda decisión de diseño o arquitectura debe ser coherente con REQUIREMENTS.md
+- Si hay conflicto entre instrucción puntual y REQUIREMENTS.md → consultar al usuario
 
-## Estilo de codigo
-- TypeScript strict mode siempre activo
-- JSDoc obligatorio en toda funcion publica y componente
-- Sin `any` implicito; usar tipos explicitos siempre
+## Stack (INMUTABLE — no instalar alternativas)
+- Tauri v2 | React 18 + TypeScript strict | Tailwind CSS v3 + DaisyUI v4
+- TanStack Router v1 + TanStack Query v5 + TanStack Table v8
+- Drizzle ORM + SQLite | React Hook Form + Zod | Recharts | Lucide React
+
+## Estilo de código
+- TypeScript strict: sin `any` implícito, tipos explícitos siempre
+- JSDoc obligatorio en TODA función pública y componente
+- Nombres en español para variables de dominio de negocio (pedido, cliente, factura...)
 - Imports con alias `@/` para `src/`
+- Errores en español para el usuario, logs en inglés para debugging
 
 ## Git
-- Conventional Commits: feat/fix/docs/chore/test/refactor/perf
-- Un commit por cambio logico (atomico)
-- Mensaje en ingles, cuerpo en espanol si se necesita detalle
+- Conventional Commits en inglés
+- Un commit por cambio lógico (atómico)
+- Nunca commitear sin actualizar JSDoc y tipos TypeScript
 
-## Comunicacion Tauri
-- Toda comunicacion con SQLite va por Tauri commands (`invoke`)
-- Nunca acceder a filesystem directamente desde React
-- Definir tipos compartidos en `src/types/`
+## Moneda
+- CUP como moneda principal en TODA la UI
+- Denominaciones: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 5000 CUP
+- USD siempre con tasa de cambio almacenada en la operación
+
+## Estados de pedido
+- SOLO dos estados: 'pendiente' | 'ejecutado'
+- pendiente = amarillo/warning | ejecutado = verde/success
