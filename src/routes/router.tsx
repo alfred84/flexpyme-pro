@@ -17,6 +17,10 @@ import { InvoicePrintPage } from "@/features/invoices/pages/InvoicePrintPage";
 import { InvoiceNewPage } from "@/features/invoices/pages/InvoiceNewPage";
 import { InvoicesListPage } from "@/features/invoices/pages/InvoicesListPage";
 import { EmployeesListPage } from "@/features/employees/pages/EmployeesListPage";
+import { EmployeeNewPage } from "@/features/employees/pages/EmployeeNewPage";
+import { EmployeeEditPage } from "@/features/employees/pages/EmployeeEditPage";
+import { EmployeeDetailPage } from "@/features/employees/pages/EmployeeDetailPage";
+import { EmployeeWorkBatchPage } from "@/features/employees/pages/EmployeeWorkBatchPage";
 import { InventoryListPage } from "@/features/inventory/pages/InventoryListPage";
 import { CashflowPage } from "@/features/cashflow/pages/CashflowPage";
 
@@ -126,6 +130,30 @@ const employeesListRoute = createRoute({
   component: EmployeesListPage,
 });
 
+const employeeNewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "empleados/nuevo",
+  component: EmployeeNewPage,
+});
+
+const employeeDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "empleados/$employeeId",
+  component: EmployeeDetailPage,
+});
+
+const employeeEditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "empleados/$employeeId/editar",
+  component: EmployeeEditPage,
+});
+
+const employeeWorkBatchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "empleados/$employeeId/lote",
+  component: EmployeeWorkBatchPage,
+});
+
 const inventoryListRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "inventario",
@@ -156,6 +184,10 @@ const routeTree = rootRoute.addChildren([
   invoiceCashierRoute,
   invoiceDetailRoute,
   employeesListRoute,
+  employeeNewRoute,
+  employeeDetailRoute,
+  employeeEditRoute,
+  employeeWorkBatchRoute,
   inventoryListRoute,
   cashflowRoute,
 ]);

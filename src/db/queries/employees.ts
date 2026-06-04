@@ -1,0 +1,72 @@
+import { invoke } from "@tauri-apps/api/core";
+import type {
+  CreateEmployeePayload,
+  CreateWorkBatchPayload,
+  EmployeeDto,
+  UpdateEmployeePayload,
+  WorkBatchDto,
+  WorkCostDto,
+} from "@/types/employee";
+
+/**
+ * Lists employees; pass `activeOnly` to hide deactivated employees.
+ */
+export async function fetchEmployees(activeOnly = false): Promise<EmployeeDto[]> {
+  return invoke<EmployeeDto[]>("employees_list", { activeOnly });
+}
+
+/**
+ * Loads a single employee by id.
+ */
+export async function fetchEmployeeById(id: number): Promise<EmployeeDto> {
+  return invoke<EmployeeDto>("employees_get_by_id", { id });
+}
+
+/**
+ * Creates an employee, returning the new id.
+ */
+export async function createEmployee(payload: CreateEmployeePayload): Promise<number> {
+  return invoke<number>("employees_create", { payload });
+}
+
+/**
+ * Updates an existing employee.
+ */
+export async function updateEmployee(payload: UpdateEmployeePayload): Promise<void> {
+  return invoke<void>("employees_update", { payload });
+}
+
+/**
+ * Deactivates an employee (soft delete).
+ */
+export async function deactivateEmployee(id: number): Promise<void> {
+  return invoke<void>("employees_deactivate", { id });
+}
+
+/**
+ * Loads active cost rows for a work type (to build the batch form).
+ */
+export async function fetchCostListForWorkType(workType: string): Promise<WorkCostDto[]> {
+  return invoke<WorkCostDto[]>("cost_list_for_work_type", { workType });
+}
+
+/**
+ * Creates a work batch and its items; returns the new batch id.
+ */
+export async function createWorkBatch(payload: CreateWorkBatchPayload): Promise<number> {
+  return invoke<number>("work_batch_create", { payload });
+}
+
+/**
+ * Lists work batches for an employee.
+ */
+export async function fetchWorkBatches(employeeId: number): Promise<WorkBatchDto[]> {
+  return invoke<WorkBatchDto[]>("work_batches_for_employee", { employeeId });
+}
+
+/**
+ * Marks a work batch as paid (registers cash egress).
+ */
+export async function payWorkBatch(batchId: number): Promise<void> {
+  return invoke<void>("work_batch_pay", { batchId });
+}
