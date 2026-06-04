@@ -20,14 +20,22 @@ export interface CashSessionDto {
 
 export interface CashierRegisterPayload {
   invoiceId: number;
-  counts: Record<string, number>;
+  /** Conteo de billetes CUP (efectivo con desglose). */
+  counts?: Record<string, number> | null;
+  /** Monto directo en CUP (transferencia o efectivo sin desglose). */
+  amountCup?: number | null;
+  /** Monto en USD si el pedido se cobra en dólares. */
+  amountUsd?: number | null;
+  exchangeRate?: number | null;
+  transferConcept?: string | null;
 }
 
 export interface CashierRegisterResponse {
-  sessionId: number;
+  sessionId: number | null;
   amountReceived: number;
   changeGiven: number;
   amountApplied: number;
   invoiceNewBalance: number;
   invoiceStatus: string;
+  paymentStatus: string;
 }

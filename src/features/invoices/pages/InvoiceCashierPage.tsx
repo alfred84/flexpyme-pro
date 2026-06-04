@@ -3,6 +3,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { fetchCashSessionsForInvoice, registerCashPayment } from "@/db/queries/cashier";
 import { fetchInvoiceDetail } from "@/db/queries/invoices";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import { formatMoney } from "@/lib/format-money";
 import { CASH_DENOMINATIONS } from "@/types/cashier";
 
@@ -24,13 +25,20 @@ function sumCounts(counts: Record<string, number>): number {
 }
 
 /**
- * Cash register for an invoice: denomination counts, change, register payment.
+ * Cobro de pedido: efectivo CUP (conteo), efectivo USD o transferencia, enlazado a `cash_transactions`.
+ *
+ * @returns Página de caja del pedido.
  */
 export function InvoiceCashierPage() {
   const params = useParams({ strict: false }) as { invoiceId?: string };
   const invoiceId = Number(params.invoiceId);
   const queryClient = useQueryClient();
+  const appSettings = useAppSettings();
   const [counts, setCounts] = useState(emptyCounts);
+  const [amountCup, setAmountCup] = useState("");
+  const [amountUsd, setAmountUsd] = useState("");
+  const [exchangeRate, setExchangeRate] = useState("");
+  const [transferConcept, setTransferConcept] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const detailQuery = useQuery({
@@ -49,28 +57,55 @@ export function InvoiceCashierPage() {
     mutationFn: registerCashPayment,
     onSuccess: (data) => {
       setFeedback(
-        `Pago registrado. Vuelto: ${formatMoney(data.changeGiven)} · Nuevo pendiente: ${formatMoney(data.invoiceNewBalance)}`,
+        `Pago registrado (${data.paymentStatus}). Vuelto: ${formatMoney(data.changeGiven)} · Pendiente: ${formatMoney(data.invoiceNewBalance)}`,
       );
       setCounts(emptyCounts());
+      setAmountCup("");
+      setAmountUsd("");
       void queryClient.invalidateQueries({ queryKey: ["invoices", "detail", invoiceId] });
       void queryClient.invalidateQueries({ queryKey: ["cashier", "sessions", invoiceId] });
       void queryClient.invalidateQueries({ queryKey: ["invoices", "list"] });
       void queryClient.invalidateQueries({ queryKey: ["clients"] });
+      void queryClient.invalidateQueries({ queryKey: ["cashflow"] });
     },
     onError: (err: Error) => {
       setFeedback(err.message ?? "No se pudo registrar el pago");
     },
   });
 
-  const balance = detailQuery.data?.invoice.balance ?? 0;
-  const received = useMemo(() => sumCounts(counts), [counts]);
+  const inv = detailQuery.data?.invoice;
+  const balance = inv?.balance ?? 0;
+  const paymentMethod = inv?.paymentMethod ?? "efectivo";
+  const paymentCurrency = inv?.paymentCurrency ?? "CUP";
+  const isTransfer = paymentMethod === "transferencia";
+  const isUsd = !isTransfer && paymentCurrency === "USD";
+
+  const rate =
+    Number.parseFloat(exchangeRate.replace(",", ".")) ||
+    inv?.exchangeRateSnapshot ||
+    appSettings.usdExchangeRate ||
+    0;
+
+  const received = useMemo(() => {
+    if (isTransfer || (paymentMethod === "efectivo" && paymentCurrency === "CUP" && !isUsd)) {
+      const direct = Number.parseFloat(amountCup.replace(",", ".")) || 0;
+      const fromCounts = sumCounts(counts);
+      return direct > 0 ? direct : fromCounts;
+    }
+    if (isUsd) {
+      const usd = Number.parseFloat(amountUsd.replace(",", ".")) || 0;
+      return rate > 0 ? usd * rate : 0;
+    }
+    return Number.parseFloat(amountCup.replace(",", ".")) || 0;
+  }, [isTransfer, isUsd, paymentMethod, paymentCurrency, amountCup, amountUsd, rate, counts]);
+
   const changeDue = Math.max(0, received - balance);
   const applied = Math.min(received, balance);
 
   if (!Number.isFinite(invoiceId) || invoiceId <= 0) {
     return (
       <div className="alert alert-warning">
-        <span>Identificador de factura no válido.</span>
+        <span>Identificador de pedido no válido.</span>
       </div>
     );
   }
@@ -87,17 +122,24 @@ export function InvoiceCashierPage() {
       const k = String(d);
       payloadCounts[k] = counts[k] ?? 0;
     }
-    registerMutation.mutate({ invoiceId, counts: payloadCounts });
+    const hasCounts = Object.values(payloadCounts).some((n) => n > 0);
+    registerMutation.mutate({
+      invoiceId,
+      counts: hasCounts ? payloadCounts : null,
+      amountCup: amountCup.trim() ? Number.parseFloat(amountCup.replace(",", ".")) : null,
+      amountUsd: amountUsd.trim() ? Number.parseFloat(amountUsd.replace(",", ".")) : null,
+      exchangeRate: isUsd ? rate : null,
+      transferConcept: transferConcept.trim() || null,
+    });
   }
 
-  const inv = detailQuery.data?.invoice;
   const canPay = balance > 1e-6 && received > 1e-6;
 
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold">Caja</h1>
+          <h1 className="text-2xl font-bold">Cobro</h1>
           {inv && <p className="text-lg font-mono">{inv.invoiceNumber}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -113,12 +155,20 @@ export function InvoiceCashierPage() {
       {detailQuery.isLoading && <p>Cargando pedido...</p>}
       {detailQuery.isError && (
         <div className="alert alert-error">
-          <span>No se pudo cargar la factura.</span>
+          <span>No se pudo cargar el pedido.</span>
         </div>
       )}
 
       {inv && (
         <>
+          <div className="alert alert-info text-sm">
+            Forma de pago del pedido:{" "}
+            <strong>
+              {isTransfer ? "Transferencia (CUP)" : isUsd ? "Efectivo USD" : "Efectivo CUP"}
+            </strong>
+            . El cobro se registrará en el flujo de caja.
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2">
             <div className="card bg-base-100 shadow">
               <div className="card-body">
@@ -133,11 +183,11 @@ export function InvoiceCashierPage() {
                     <dd className="text-primary">{formatMoney(balance)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt>Recibido (conteo)</dt>
+                    <dt>Recibido</dt>
                     <dd>{formatMoney(received)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt>Se aplica a la factura</dt>
+                    <dt>Se aplica</dt>
                     <dd>{formatMoney(applied)}</dd>
                   </div>
                   <div className="flex justify-between text-secondary">
@@ -146,39 +196,104 @@ export function InvoiceCashierPage() {
                   </div>
                 </dl>
                 {balance <= 1e-6 && (
-                  <div className="alert alert-success mt-2 text-sm">No hay saldo pendiente en esta factura.</div>
+                  <div className="alert alert-success mt-2 text-sm">No hay saldo pendiente.</div>
                 )}
               </div>
             </div>
 
             <div className="card bg-base-100 shadow">
-              <div className="card-body">
-                <h2 className="card-title text-base">Billetes y monedas</h2>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {CASH_DENOMINATIONS.map((d) => (
-                    <label key={d} className="form-control">
-                      <span className="label-text text-xs font-mono">{formatMoney(d)}</span>
+              <div className="card-body space-y-3">
+                <h2 className="card-title text-base">Registrar cobro</h2>
+
+                {isTransfer && (
+                  <>
+                    <label className="form-control">
+                      <span className="label-text">Monto recibido (CUP)</span>
                       <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        className="input input-bordered input-sm"
-                        value={counts[String(d)] ?? 0}
-                        onChange={(e) => setDenom(String(d), Number(e.target.value))}
+                        className="input input-bordered"
+                        inputMode="decimal"
+                        value={amountCup}
+                        onChange={(e) => setAmountCup(e.target.value)}
                       />
                     </label>
-                  ))}
-                </div>
+                    <label className="form-control">
+                      <span className="label-text">Referencia / concepto</span>
+                      <input
+                        className="input input-bordered"
+                        value={transferConcept}
+                        onChange={(e) => setTransferConcept(e.target.value)}
+                      />
+                    </label>
+                  </>
+                )}
+
+                {isUsd && (
+                  <>
+                    <label className="form-control">
+                      <span className="label-text">Tasa (1 USD = CUP)</span>
+                      <input
+                        className="input input-bordered"
+                        inputMode="decimal"
+                        value={exchangeRate || String(inv.exchangeRateSnapshot ?? appSettings.usdExchangeRate)}
+                        onChange={(e) => setExchangeRate(e.target.value)}
+                      />
+                    </label>
+                    <label className="form-control">
+                      <span className="label-text">Monto recibido (USD)</span>
+                      <input
+                        className="input input-bordered"
+                        inputMode="decimal"
+                        value={amountUsd}
+                        onChange={(e) => setAmountUsd(e.target.value)}
+                      />
+                    </label>
+                    {rate > 0 && (
+                      <p className="text-sm">Equivalente: {formatMoney(received)}</p>
+                    )}
+                  </>
+                )}
+
+                {!isTransfer && !isUsd && (
+                  <>
+                    <p className="text-xs text-base-content/60">Conteo de billetes o monto total:</p>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {CASH_DENOMINATIONS.map((d) => (
+                        <label key={d} className="form-control">
+                          <span className="label-text text-xs font-mono">{formatMoney(d)}</span>
+                          <input
+                            type="number"
+                            min={0}
+                            className="input input-bordered input-sm"
+                            value={counts[String(d)] ?? 0}
+                            onChange={(e) => setDenom(String(d), Number(e.target.value))}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <label className="form-control">
+                      <span className="label-text">O monto total CUP</span>
+                      <input
+                        className="input input-bordered input-sm"
+                        inputMode="decimal"
+                        value={amountCup}
+                        onChange={(e) => setAmountCup(e.target.value)}
+                      />
+                    </label>
+                  </>
+                )}
+
                 <button
                   type="button"
-                  className="btn btn-primary mt-4 w-full"
+                  className="btn btn-primary w-full"
                   disabled={!canPay || registerMutation.isPending}
                   onClick={() => submit()}
                 >
-                  {registerMutation.isPending ? "Registrando..." : "Registrar pago en caja"}
+                  {registerMutation.isPending ? "Registrando..." : "Registrar cobro"}
                 </button>
                 {feedback && (
-                  <div className={`alert mt-2 text-sm ${registerMutation.isError ? "alert-error" : "alert-success"}`}>
+                  <div
+                    className={`alert text-sm ${registerMutation.isError ? "alert-error" : "alert-success"}`}
+                  >
                     <span>{feedback}</span>
                   </div>
                 )}
@@ -188,10 +303,12 @@ export function InvoiceCashierPage() {
 
           <div className="card bg-base-100 shadow">
             <div className="card-body">
-              <h2 className="card-title text-base">Historial de caja (esta factura)</h2>
+              <h2 className="card-title text-base">Historial de caja (conteo físico)</h2>
               {sessionsQuery.isLoading && <p className="text-sm">Cargando...</p>}
               {sessionsQuery.data && sessionsQuery.data.length === 0 && (
-                <p className="text-sm text-base-content/60">Aún no hay movimientos registrados.</p>
+                <p className="text-sm text-base-content/60">
+                  Sin sesiones de conteo (transferencia/USD solo aparecen en Flujo de caja).
+                </p>
               )}
               {sessionsQuery.data && sessionsQuery.data.length > 0 && (
                 <div className="overflow-x-auto">
@@ -199,7 +316,7 @@ export function InvoiceCashierPage() {
                     <thead>
                       <tr>
                         <th>Fecha</th>
-                        <th className="text-right">Pendiente (sesión)</th>
+                        <th className="text-right">Pendiente</th>
                         <th className="text-right">Recibido</th>
                         <th className="text-right">Vuelto</th>
                       </tr>

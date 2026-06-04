@@ -7,18 +7,20 @@ use serde::{Deserialize, Serialize};
 
 use crate::db;
 
-/// Bill/coin face values (DOP).
-pub const DENOMINATIONS: &[i64] = &[1000, 500, 200, 100, 50, 20, 10, 5];
+/// Bill/coin face values (CUP).
+pub const DENOMINATIONS: &[i64] = &[5000, 1000, 500, 200, 100, 50, 20, 10, 5, 1];
 
 const EPS: f64 = 1e-6;
 
-fn compute_invoice_status(balance: f64, paid: f64) -> String {
-    if balance <= EPS {
+fn sync_legacy_status(production: &str, payment: &str, balance: f64, paid: f64) -> String {
+    if payment == "cobrado" || balance <= EPS {
         "paid".to_string()
-    } else if paid <= EPS {
-        "pending".to_string()
-    } else {
+    } else if paid > 1e-6 {
         "partial".to_string()
+    } else if production == "listo" {
+        "partial".to_string()
+    } else {
+        "pending".to_string()
     }
 }
 
@@ -39,19 +41,26 @@ pub struct CashSessionDto {
 #[serde(rename_all = "camelCase")]
 pub struct CashierRegisterPayload {
     pub invoice_id: i64,
-    /// Map of denomination string (e.g. "1000") to count.
-    pub counts: HashMap<String, i64>,
+    /// Map of denomination string (e.g. "1000") to count — solo efectivo CUP con conteo.
+    pub counts: Option<HashMap<String, i64>>,
+    /// Monto directo en CUP (transferencia o efectivo sin desglose).
+    pub amount_cup: Option<f64>,
+    /// Monto en USD si el cobro es en dólares.
+    pub amount_usd: Option<f64>,
+    pub exchange_rate: Option<f64>,
+    pub transfer_concept: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CashierRegisterResponse {
-    pub session_id: i64,
+    pub session_id: Option<i64>,
     pub amount_received: f64,
     pub change_given: f64,
     pub amount_applied: f64,
     pub invoice_new_balance: f64,
     pub invoice_status: String,
+    pub payment_status: String,
 }
 
 fn sum_from_counts(counts: &HashMap<String, i64>) -> Result<f64, String> {
@@ -72,6 +81,45 @@ fn sum_from_counts(counts: &HashMap<String, i64>) -> Result<f64, String> {
         sum += (d as f64) * (n as f64);
     }
     Ok(sum)
+}
+
+fn resolve_amount_received(
+    payment_method: &str,
+    payment_currency: &str,
+    payload: &CashierRegisterPayload,
+) -> Result<(f64, f64, f64, String), String> {
+    let method = payment_method.trim().to_lowercase();
+    let currency = payment_currency.trim().to_uppercase();
+
+    if method == "transferencia" {
+        let cup = payload.amount_cup.unwrap_or(0.0);
+        if cup <= EPS {
+            return Err("Indica el monto recibido en CUP".to_string());
+        }
+        return Ok((cup, 0.0, 0.0, "transferencia".to_string()));
+    }
+
+    if currency == "USD" {
+        let usd = payload.amount_usd.unwrap_or(0.0);
+        let rate = payload.exchange_rate.unwrap_or(0.0);
+        if usd <= EPS || rate <= EPS {
+            return Err("Indica monto USD y tasa de cambio válidos".to_string());
+        }
+        let cup = usd * rate;
+        return Ok((cup, usd, rate, "efectivo".to_string()));
+    }
+
+    if let Some(counts) = &payload.counts {
+        let from_counts = sum_from_counts(counts)?;
+        if from_counts > EPS {
+            return Ok((from_counts, 0.0, 0.0, "efectivo".to_string()));
+        }
+    }
+    let cup = payload.amount_cup.unwrap_or(0.0);
+    if cup <= EPS {
+        return Err("Indica el monto recibido o el conteo de billetes".to_string());
+    }
+    Ok((cup, 0.0, 0.0, "efectivo".to_string()))
 }
 
 /// Lists cash sessions for an invoice, newest first.
@@ -100,40 +148,75 @@ pub fn cashier_sessions_for_invoice(invoice_id: i64) -> Result<Vec<CashSessionDt
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
-/// Registers physical cash: persists `cash_sessions` and applies payment to invoice + client balance.
+/// Registers payment: updates invoice, client balance, `cash_transactions` and optional `cash_sessions`.
 #[tauri::command]
 pub fn cashier_register_payment(
     payload: CashierRegisterPayload,
 ) -> Result<CashierRegisterResponse, String> {
-    let amount_received = sum_from_counts(&payload.counts)?;
-    if amount_received <= EPS {
-        return Err("Indica al menos un billete o moneda".to_string());
-    }
-
-    let breakdown_json =
-        serde_json::to_string(&payload.counts).map_err(|e| e.to_string())?;
-
     let mut conn = db::open_connection()?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
-    let (client_id, total, paid, balance): (i64, f64, f64, f64) = tx
+    let (
+        client_id,
+        total,
+        paid,
+        balance,
+        payment_method,
+        payment_currency,
+        exchange_rate_snapshot,
+        production_status,
+    ): (i64, f64, f64, f64, Option<String>, Option<String>, Option<f64>, String) = tx
         .query_row(
-            "SELECT client_id, total, paid, balance FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
+            "SELECT client_id, total, paid, balance, payment_method, payment_currency,
+                    exchange_rate_snapshot, production_status
+             FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
             params![payload.invoice_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                ))
+            },
         )
-        .map_err(|_| "Factura no encontrada".to_string())?;
+        .map_err(|_| "Pedido no encontrado".to_string())?;
 
     if balance <= EPS {
-        return Err("Esta factura no tiene saldo pendiente".to_string());
+        return Err("Este pedido no tiene saldo pendiente".to_string());
     }
 
-    let amount_applied = amount_received.min(balance);
-    let change_given = (amount_received - balance).max(0.0);
+    let method = payment_method
+        .as_deref()
+        .unwrap_or("efectivo")
+        .to_string();
+    let currency = if method == "transferencia" {
+        "CUP".to_string()
+    } else {
+        payment_currency
+            .as_deref()
+            .unwrap_or("CUP")
+            .to_uppercase()
+    };
+
+    let (amount_received_cup, amount_usd, exchange_rate, tx_method) =
+        resolve_amount_received(&method, &currency, &payload)?;
+
+    let amount_applied = amount_received_cup.min(balance);
+    let change_given = (amount_received_cup - balance).max(0.0);
 
     let new_paid = paid + amount_applied;
     let new_balance = (total - new_paid).max(0.0);
-    let status = compute_invoice_status(new_balance, new_paid);
+    let payment_status = if new_balance <= EPS {
+        "cobrado"
+    } else {
+        "pendiente"
+    };
+    let status = sync_legacy_status(&production_status, payment_status, new_balance, new_paid);
 
     let client_balance: f64 = tx
         .query_row(
@@ -148,18 +231,79 @@ pub fn cashier_register_payment(
         return Err("Inconsistencia de saldo del cliente".to_string());
     }
 
+    let breakdown_json = payload
+        .counts
+        .as_ref()
+        .map(|c| serde_json::to_string(c))
+        .transpose()
+        .map_err(|e| e.to_string())?;
+
+    let mut session_id: Option<i64> = None;
+    if tx_method == "efectivo" && breakdown_json.is_some() {
+        tx.execute(
+            "INSERT INTO cash_sessions (invoice_id, total_amount, amount_received, change_given, denomination_breakdown)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                payload.invoice_id,
+                balance,
+                amount_received_cup,
+                change_given,
+                breakdown_json
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        session_id = Some(tx.last_insert_rowid());
+    }
+
+    let concept = if method == "transferencia" {
+        let extra = payload
+            .transfer_concept
+            .as_ref()
+            .map(|c| format!(" · {}", c.trim()))
+            .unwrap_or_default();
+        format!("Cobro pedido #{} (transferencia){}", payload.invoice_id, extra)
+    } else if currency == "USD" {
+        format!(
+            "Cobro pedido #{} (USD {:.2} @ {:.0})",
+            payload.invoice_id, amount_usd, exchange_rate
+        )
+    } else {
+        format!("Cobro pedido #{}", payload.invoice_id)
+    };
+
+    let rate_used = if currency == "USD" {
+        exchange_rate
+    } else {
+        exchange_rate_snapshot.unwrap_or(0.0)
+    };
+
     tx.execute(
-        "INSERT INTO cash_sessions (invoice_id, total_amount, amount_received, change_given, denomination_breakdown)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![payload.invoice_id, balance, amount_received, change_given, breakdown_json],
+        "INSERT INTO cash_transactions
+            (type, concept, reference_type, reference_id, amount_cup, amount_usd, exchange_rate,
+             payment_method, denomination_breakdown, date)
+         VALUES ('ingreso', ?1, 'pedido', ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))",
+        params![
+            concept,
+            payload.invoice_id,
+            amount_applied,
+            amount_usd,
+            rate_used,
+            tx_method,
+            breakdown_json
+        ],
     )
     .map_err(|e| e.to_string())?;
 
-    let session_id = tx.last_insert_rowid();
-
     tx.execute(
-        "UPDATE invoices SET paid = ?1, balance = ?2, status = ?3 WHERE id = ?4 AND deleted_at IS NULL",
-        params![new_paid, new_balance, status, payload.invoice_id],
+        "UPDATE invoices SET paid = ?1, balance = ?2, status = ?3, payment_status = ?4
+         WHERE id = ?5 AND deleted_at IS NULL",
+        params![
+            new_paid,
+            new_balance,
+            status,
+            payment_status,
+            payload.invoice_id
+        ],
     )
     .map_err(|e| e.to_string())?;
 
@@ -173,10 +317,11 @@ pub fn cashier_register_payment(
 
     Ok(CashierRegisterResponse {
         session_id,
-        amount_received,
+        amount_received: amount_received_cup,
         change_given,
         amount_applied,
         invoice_new_balance: new_balance,
         invoice_status: status,
+        payment_status: payment_status.to_string(),
     })
 }
