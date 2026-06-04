@@ -64,7 +64,13 @@ pub fn run() {
             commands::employees::cost_list_for_work_type,
             commands::employees::work_batch_create,
             commands::employees::work_batches_for_employee,
-            commands::employees::work_batch_pay
+            commands::employees::work_batch_pay,
+            commands::inventory::inventory_items_list,
+            commands::inventory::inventory_item_get,
+            commands::inventory::inventory_item_create,
+            commands::inventory::inventory_item_update,
+            commands::inventory::inventory_movement_register,
+            commands::inventory::inventory_movements_for_item
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
