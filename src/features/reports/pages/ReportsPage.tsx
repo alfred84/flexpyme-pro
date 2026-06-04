@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
+import { invoke } from "@tauri-apps/api/core";
 import { useMemo, useState } from "react";
+import { pushFlashMessage } from "@/lib/flash-message";
 import { fetchInvoices } from "@/db/queries/invoices";
 import { fetchProductionExportInDateRange } from "@/db/queries/production";
 import { fetchReportsSummary, fetchTopDebtors } from "@/db/queries/reports";
@@ -71,12 +73,10 @@ export function ReportsPage() {
 
   const handleExportCsv = async () => {
     try {
-      const path = await import("@tauri-apps/api/core").then((m) =>
-        m.invoke<string>("export_orders_csv", {
-          args: { dateFrom: dateFrom || null, dateTo: dateTo || null },
-        }),
-      );
-      window.alert(`CSV guardado: ${path}`);
+      const path = await invoke<string>("export_orders_csv", {
+        args: { dateFrom: dateFrom || null, dateTo: dateTo || null },
+      });
+      pushFlashMessage({ kind: "success", text: `CSV guardado: ${path}` });
       return;
     } catch {
       /* fallback al exporte en navegador */
@@ -87,12 +87,30 @@ export function ReportsPage() {
   };
 
   const handleExportXlsx = async () => {
+    try {
+      const path = await invoke<string>("export_reports_xlsx", {
+        args: { dateFrom: dateFrom || null, dateTo: dateTo || null },
+      });
+      pushFlashMessage({ kind: "success", text: `XLSX guardado: ${path}` });
+      return;
+    } catch {
+      /* fallback */
+    }
     const sections = buildExportSections();
     if (!sections) return;
     await downloadReportsXlsx(exportBasename, sections);
   };
 
-  const handleExportPdf = () => {
+  const handleExportPdf = async () => {
+    try {
+      const path = await invoke<string>("export_reports_pdf", {
+        args: { dateFrom: dateFrom || null, dateTo: dateTo || null },
+      });
+      pushFlashMessage({ kind: "success", text: `PDF guardado: ${path}` });
+      return;
+    } catch {
+      /* fallback */
+    }
     const sections = buildExportSections();
     if (!sections) return;
     openReportsPrintablePdf(`Reportes FlexPyme · ${exportBasename}`, sections);

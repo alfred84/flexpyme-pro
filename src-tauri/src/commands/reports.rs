@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::db;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReportsRangeArgs {
     pub date_from: Option<String>,
@@ -339,5 +339,313 @@ pub async fn export_orders_csv(
         .map_err(|e| e.to_string())?;
     }
     wtr.flush().map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Exports summary + invoices to XLSX via native save dialog.
+#[tauri::command]
+pub async fn export_reports_xlsx(
+    app: tauri::AppHandle,
+    args: ReportsRangeArgs,
+) -> Result<String, String> {
+    use rust_xlsxwriter::Workbook;
+    use tauri_plugin_dialog::DialogExt;
+
+    let summary = reports_summary(args.clone())?;
+    let conn = db::open_connection()?;
+    let (from, to) = normalize_range(args);
+    let sql = if from.is_some() && to.is_some() {
+        "SELECT invoice_number, client_id, date, total, balance FROM invoices
+         WHERE deleted_at IS NULL AND date >= ?1 AND date <= ?2 ORDER BY date DESC"
+    } else {
+        "SELECT invoice_number, client_id, date, total, balance FROM invoices
+         WHERE deleted_at IS NULL ORDER BY date DESC"
+    };
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let invoice_rows: Vec<(String, i64, String, f64, f64)> = if let (Some(f), Some(t)) = (&from, &to) {
+        stmt.query_map(params![f, t], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?
+    } else {
+        stmt.query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?
+    };
+
+    let dest = app
+        .dialog()
+        .file()
+        .add_filter("Excel", &["xlsx"])
+        .set_file_name("reportes.xlsx")
+        .blocking_save_file()
+        .ok_or_else(|| "Exportación cancelada".to_string())?;
+    let path = dest.into_path().map_err(|e| e.to_string())?;
+
+    let mut workbook = Workbook::new();
+    let summary_sheet = workbook.add_worksheet();
+    summary_sheet.set_name("Resumen").map_err(|e| e.to_string())?;
+    summary_sheet.write_string(0, 0, "Métrica").map_err(|e| e.to_string())?;
+    summary_sheet.write_string(0, 1, "Valor").map_err(|e| e.to_string())?;
+    let rows = [
+        ("Facturas", summary.invoices_count.to_string()),
+        ("Total facturado", summary.total_billed.to_string()),
+        ("Total cobrado", summary.total_paid.to_string()),
+        ("Pendiente", summary.total_pending.to_string()),
+    ];
+    for (i, (k, v)) in rows.iter().enumerate() {
+        let r = (i + 1) as u32;
+        summary_sheet.write_string(r, 0, *k).map_err(|e| e.to_string())?;
+        summary_sheet.write_string(r, 1, v).map_err(|e| e.to_string())?;
+    }
+
+    let inv_sheet = workbook.add_worksheet();
+    inv_sheet.set_name("Pedidos").map_err(|e| e.to_string())?;
+    inv_sheet.write_string(0, 0, "Numero").map_err(|e| e.to_string())?;
+    inv_sheet.write_string(0, 1, "Fecha").map_err(|e| e.to_string())?;
+    inv_sheet.write_string(0, 2, "Total").map_err(|e| e.to_string())?;
+    inv_sheet.write_string(0, 3, "Pendiente").map_err(|e| e.to_string())?;
+    for (i, row) in invoice_rows.iter().enumerate() {
+        let r = (i + 1) as u32;
+        inv_sheet.write_string(r, 0, &row.0).map_err(|e| e.to_string())?;
+        inv_sheet.write_string(r, 1, &row.2).map_err(|e| e.to_string())?;
+        inv_sheet.write_number(r, 2, row.3).map_err(|e| e.to_string())?;
+        inv_sheet.write_number(r, 3, row.4).map_err(|e| e.to_string())?;
+    }
+
+    workbook.save(&path).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Exports a simple text PDF report via native save dialog.
+#[tauri::command]
+pub async fn export_reports_pdf(
+    app: tauri::AppHandle,
+    args: ReportsRangeArgs,
+) -> Result<String, String> {
+    use printpdf::*;
+    use tauri_plugin_dialog::DialogExt;
+
+    let summary = reports_summary(args)?;
+
+    let dest = app
+        .dialog()
+        .file()
+        .add_filter("PDF", &["pdf"])
+        .set_file_name("reportes.pdf")
+        .blocking_save_file()
+        .ok_or_else(|| "Exportación cancelada".to_string())?;
+    let path = dest.into_path().map_err(|e| e.to_string())?;
+
+    let (doc, page1, layer1) =
+        PdfDocument::new("Reportes FlexPyme", Mm(210.0), Mm(297.0), "Layer 1");
+    let font = doc
+        .add_builtin_font(BuiltinFont::Helvetica)
+        .map_err(|e| e.to_string())?;
+    let current_layer = doc.get_page(page1).get_layer(layer1);
+
+    let lines = [
+        "FlexPyme Pro - Reporte",
+        &format!("Facturas: {}", summary.invoices_count),
+        &format!("Total facturado: {:.2} CUP", summary.total_billed),
+        &format!("Total cobrado: {:.2} CUP", summary.total_paid),
+        &format!("Pendiente: {:.2} CUP", summary.total_pending),
+    ];
+    let mut y = 280.0_f32;
+    for line in lines {
+        current_layer.use_text(line, 12.0, Mm(15.0), Mm(y), &font);
+        y -= 8.0;
+    }
+
+    doc.save(&mut std::io::BufWriter::new(
+        std::fs::File::create(&path).map_err(|e| e.to_string())?,
+    ))
+    .map_err(|e| e.to_string())?;
+
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Exports clients with balance to CSV, XLSX or PDF.
+#[tauri::command]
+pub async fn export_clients_report(app: tauri::AppHandle, format: String) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let debtors = reports_top_debtors(Some(500))?;
+    let fmt = format.trim().to_lowercase();
+
+    if fmt == "csv" {
+        let dest = app
+            .dialog()
+            .file()
+            .add_filter("CSV", &["csv"])
+            .set_file_name("clientes.csv")
+            .blocking_save_file()
+            .ok_or_else(|| "Exportación cancelada".to_string())?;
+        let path = dest.into_path().map_err(|e| e.to_string())?;
+        let mut wtr = csv::Writer::from_path(&path).map_err(|e| e.to_string())?;
+        wtr.write_record(["codigo", "nombre", "balance"])
+            .map_err(|e| e.to_string())?;
+        for d in &debtors {
+            wtr.write_record([&d.client_code, &d.client_name, &d.balance.to_string()])
+                .map_err(|e| e.to_string())?;
+        }
+        wtr.flush().map_err(|e| e.to_string())?;
+        return Ok(path.to_string_lossy().to_string());
+    }
+
+    if fmt == "xlsx" {
+        use rust_xlsxwriter::Workbook;
+        let dest = app
+            .dialog()
+            .file()
+            .add_filter("Excel", &["xlsx"])
+            .set_file_name("clientes.xlsx")
+            .blocking_save_file()
+            .ok_or_else(|| "Exportación cancelada".to_string())?;
+        let path = dest.into_path().map_err(|e| e.to_string())?;
+        let mut workbook = Workbook::new();
+        let sheet = workbook.add_worksheet();
+        sheet.write_string(0, 0, "Codigo").map_err(|e| e.to_string())?;
+        sheet.write_string(0, 1, "Nombre").map_err(|e| e.to_string())?;
+        sheet.write_string(0, 2, "Balance").map_err(|e| e.to_string())?;
+        for (i, d) in debtors.iter().enumerate() {
+            let r = (i + 1) as u32;
+            sheet.write_string(r, 0, &d.client_code).map_err(|e| e.to_string())?;
+            sheet.write_string(r, 1, &d.client_name).map_err(|e| e.to_string())?;
+            sheet.write_number(r, 2, d.balance).map_err(|e| e.to_string())?;
+        }
+        workbook.save(&path).map_err(|e| e.to_string())?;
+        return Ok(path.to_string_lossy().to_string());
+    }
+
+    if fmt == "pdf" {
+        use printpdf::*;
+        let dest = app
+            .dialog()
+            .file()
+            .add_filter("PDF", &["pdf"])
+            .set_file_name("clientes.pdf")
+            .blocking_save_file()
+            .ok_or_else(|| "Exportación cancelada".to_string())?;
+        let path = dest.into_path().map_err(|e| e.to_string())?;
+        let (doc, page1, layer1) =
+            PdfDocument::new("Clientes", Mm(210.0), Mm(297.0), "Layer 1");
+        let font = doc
+            .add_builtin_font(BuiltinFont::Helvetica)
+            .map_err(|e| e.to_string())?;
+        let layer = doc.get_page(page1).get_layer(layer1);
+        let mut y = 280.0_f32;
+        layer.use_text("Clientes con saldo", 14.0, Mm(15.0), Mm(y), &font);
+        y -= 10.0;
+        for d in debtors.iter().take(40) {
+            let line = format!("{} - {}: {:.2}", d.client_code, d.client_name, d.balance);
+            layer.use_text(&line, 10.0, Mm(15.0), Mm(y), &font);
+            y -= 6.0;
+            if y < 20.0 {
+                break;
+            }
+        }
+        doc.save(&mut std::io::BufWriter::new(
+            std::fs::File::create(&path).map_err(|e| e.to_string())?,
+        ))
+        .map_err(|e| e.to_string())?;
+        return Ok(path.to_string_lossy().to_string());
+    }
+
+    Err("Formato no soportado. Use csv, xlsx o pdf.".to_string())
+}
+
+/// Exports cash transactions in a date range.
+#[tauri::command]
+pub async fn export_cashflow_report(
+    app: tauri::AppHandle,
+    format: String,
+    date_from: String,
+    date_to: String,
+) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let conn = db::open_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT date, type, concept, amount_cup, amount_usd, payment_method
+             FROM cash_transactions
+             WHERE date >= ?1 AND date <= ?2
+             ORDER BY date DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![date_from, date_to], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, f64>(3)?,
+                row.get::<_, f64>(4)?,
+                row.get::<_, String>(5)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    let fmt = format.trim().to_lowercase();
+    let dest = app
+        .dialog()
+        .file()
+        .add_filter(
+            if fmt == "xlsx" { "Excel" } else if fmt == "pdf" { "PDF" } else { "CSV" },
+            if fmt == "xlsx" {
+                &["xlsx"][..]
+            } else if fmt == "pdf" {
+                &["pdf"][..]
+            } else {
+                &["csv"][..]
+            },
+        )
+        .set_file_name(format!("caja.{}", if fmt == "xlsx" { "xlsx" } else if fmt == "pdf" { "pdf" } else { "csv" }))
+        .blocking_save_file()
+        .ok_or_else(|| "Exportación cancelada".to_string())?;
+    let path = dest.into_path().map_err(|e| e.to_string())?;
+
+    if fmt == "xlsx" {
+        use rust_xlsxwriter::Workbook;
+        let mut workbook = Workbook::new();
+        let sheet = workbook.add_worksheet();
+        sheet.write_string(0, 0, "Fecha").map_err(|e| e.to_string())?;
+        sheet.write_string(0, 1, "Tipo").map_err(|e| e.to_string())?;
+        sheet.write_string(0, 2, "Concepto").map_err(|e| e.to_string())?;
+        sheet.write_string(0, 3, "CUP").map_err(|e| e.to_string())?;
+        for (i, row) in rows.iter().enumerate() {
+            let r = (i + 1) as u32;
+            sheet.write_string(r, 0, &row.0).map_err(|e| e.to_string())?;
+            sheet.write_string(r, 1, &row.1).map_err(|e| e.to_string())?;
+            sheet.write_string(r, 2, &row.2).map_err(|e| e.to_string())?;
+            sheet.write_number(r, 3, row.3).map_err(|e| e.to_string())?;
+        }
+        workbook.save(&path).map_err(|e| e.to_string())?;
+    } else {
+        let mut wtr = csv::Writer::from_path(&path).map_err(|e| e.to_string())?;
+        wtr.write_record(["fecha", "tipo", "concepto", "cup", "usd", "metodo"])
+            .map_err(|e| e.to_string())?;
+        for row in &rows {
+            wtr.write_record([
+                &row.0,
+                &row.1,
+                &row.2,
+                &row.3.to_string(),
+                &row.4.to_string(),
+                &row.5,
+            ])
+            .map_err(|e| e.to_string())?;
+        }
+        wtr.flush().map_err(|e| e.to_string())?;
+    }
+
     Ok(path.to_string_lossy().to_string())
 }
