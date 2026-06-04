@@ -40,6 +40,14 @@ pub struct TopDebtorDto {
     pub balance: f64,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryIncomeDto {
+    pub category: String,
+    pub label: String,
+    pub total: f64,
+}
+
 fn normalize_range(args: ReportsRangeArgs) -> (Option<String>, Option<String>) {
     let from = args.date_from.and_then(|v| {
         let t = v.trim().to_string();
@@ -174,6 +182,45 @@ pub fn reports_summary(args: ReportsRangeArgs) -> Result<ReportsSummaryDto, Stri
         production_pending,
         production_batches_count,
     })
+}
+
+/// Total facturado por categoría de producto en un rango de fechas (para el gráfico del dashboard).
+#[tauri::command]
+pub fn reports_income_by_category(args: ReportsRangeArgs) -> Result<Vec<CategoryIncomeDto>, String> {
+    let conn = db::open_connection()?;
+    let (from, to) = normalize_range(args);
+
+    let where_clause = if from.is_some() && to.is_some() {
+        "WHERE i.deleted_at IS NULL AND i.date >= ?1 AND i.date <= ?2"
+    } else {
+        "WHERE i.deleted_at IS NULL"
+    };
+    let sql = format!(
+        "SELECT pc.name, COALESCE(pc.label_es, pc.name), COALESCE(SUM(ii.subtotal), 0) AS total
+         FROM invoice_items ii
+         JOIN invoices i ON i.id = ii.invoice_id
+         JOIN product_categories pc ON pc.id = ii.category_id
+         {}
+         GROUP BY pc.id
+         HAVING total > 0
+         ORDER BY total DESC",
+        where_clause
+    );
+
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let map_row = |row: &rusqlite::Row| {
+        Ok(CategoryIncomeDto {
+            category: row.get(0)?,
+            label: row.get(1)?,
+            total: row.get(2)?,
+        })
+    };
+    let rows = if let (Some(f), Some(t)) = (from, to) {
+        stmt.query_map(params![f, t], map_row).map_err(|e| e.to_string())?.collect::<Result<Vec<_>, _>>()
+    } else {
+        stmt.query_map([], map_row).map_err(|e| e.to_string())?.collect::<Result<Vec<_>, _>>()
+    };
+    rows.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

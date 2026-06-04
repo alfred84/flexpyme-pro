@@ -49,6 +49,7 @@ pub fn run() {
             commands::production::production_create,
             commands::reports::reports_summary,
             commands::reports::reports_top_debtors,
+            commands::reports::reports_income_by_category,
             commands::settings::settings_get_company,
             commands::settings::settings_save_company,
             commands::settings::settings_get_all,

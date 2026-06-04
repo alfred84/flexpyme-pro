@@ -31,3 +31,12 @@ export interface TopDebtorDto {
   clientName: string;
   balance: number;
 }
+
+/**
+ * Total facturado por categoría (gráfico del dashboard).
+ */
+export interface CategoryIncomeDto {
+  category: string;
+  label: string;
+  total: number;
+}
