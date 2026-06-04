@@ -207,7 +207,18 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 - **Moneda**: **CUP principal + USD con tasa** almacenada por operación.
   Denominaciones CUP: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 5000.
 
+### v2.1 — Correcciones (2026)
+- **Pago en pedidos**: `payment_method`, `payment_currency`, `exchange_rate_snapshot`, montos USD/CUP al crear.
+- **Roles de empleados**: catálogo `employee_roles` + tab Configuración; `role_snapshot` inmutable.
+- **Estados duales**: `production_status` (en_produccion/listo) y `payment_status` (pendiente/cobrado).
+- **Logo del taller**: subida desde Configuración > General; sidebar dinámico.
+- **Exportes**: CSV nativo con diálogo de guardado; XLSX/PDF siguen vía navegador/impresión.
+- **Formatos / tipos de trabajo**: CRUD en Configuración; snapshots en ítems y lotes históricos.
+- **Tasa USD**: badge del header enlaza a Configuración > Moneda.
+- **Ubicación BD**: `db_location.json`, mover/copiar con verificación.
+
 ### Pendientes / próximos refinamientos
+- Exportes XLSX/PDF nativos completos (Rust) y PDF de pedido con logo.
 - Cobro de pedido con transferencia/USD enlazado a `cash_transactions` (hoy el cobro
   usa `cash_sessions` en efectivo; los movimientos USD/transferencia se registran en Caja).
-- Edición de empleados con reactivación de bajas y backup con selección de carpeta (diálogo nativo).
+- Edición de empleados con reactivación de bajas.
