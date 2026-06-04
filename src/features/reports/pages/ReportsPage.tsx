@@ -69,7 +69,18 @@ export function ReportsPage() {
     );
   };
 
-  const handleExportCsv = () => {
+  const handleExportCsv = async () => {
+    try {
+      const path = await import("@tauri-apps/api/core").then((m) =>
+        m.invoke<string>("export_orders_csv", {
+          args: { dateFrom: dateFrom || null, dateTo: dateTo || null },
+        }),
+      );
+      window.alert(`CSV guardado: ${path}`);
+      return;
+    } catch {
+      /* fallback al exporte en navegador */
+    }
     const sections = buildExportSections();
     if (!sections) return;
     downloadReportsCsv(`${exportBasename}.csv`, buildReportsCsvFromTables(sections));

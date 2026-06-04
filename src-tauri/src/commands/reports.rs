@@ -249,3 +249,95 @@ pub fn reports_top_debtors(limit: Option<i64>) -> Result<Vec<TopDebtorDto>, Stri
 
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
+
+/// Exports invoices in the date range to CSV via native save dialog.
+#[tauri::command]
+pub async fn export_orders_csv(
+    app: tauri::AppHandle,
+    args: ReportsRangeArgs,
+) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let conn = db::open_connection()?;
+    let (from, to) = normalize_range(args);
+    let sql = if from.is_some() && to.is_some() {
+        "SELECT invoice_number, date, total, paid, balance, status, production_status, payment_status
+         FROM invoices WHERE deleted_at IS NULL AND date >= ?1 AND date <= ?2 ORDER BY date DESC"
+    } else {
+        "SELECT invoice_number, date, total, paid, balance, status, production_status, payment_status
+         FROM invoices WHERE deleted_at IS NULL ORDER BY date DESC"
+    };
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let rows: Vec<(String, String, f64, f64, f64, String, String, String)> = if let (Some(f), Some(t)) =
+        (&from, &to)
+    {
+        stmt.query_map(params![f, t], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?
+    } else {
+        stmt.query_map([], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?
+    };
+
+    let dest = app
+        .dialog()
+        .file()
+        .add_filter("CSV", &["csv"])
+        .set_file_name("pedidos.csv")
+        .blocking_save_file()
+        .ok_or_else(|| "Exportación cancelada".to_string())?;
+
+    let path = dest.into_path().map_err(|e| e.to_string())?;
+    let mut wtr = csv::Writer::from_path(&path).map_err(|e| e.to_string())?;
+    wtr.write_record([
+        "numero",
+        "fecha",
+        "total",
+        "pagado",
+        "pendiente",
+        "estado",
+        "produccion",
+        "cobro",
+    ])
+    .map_err(|e| e.to_string())?;
+    for row in rows {
+        wtr.write_record([
+            row.0,
+            row.1,
+            row.2.to_string(),
+            row.3.to_string(),
+            row.4.to_string(),
+            row.5,
+            row.6,
+            row.7,
+        ])
+        .map_err(|e| e.to_string())?;
+    }
+    wtr.flush().map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().to_string())
+}
