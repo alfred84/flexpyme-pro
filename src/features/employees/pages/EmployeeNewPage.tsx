@@ -42,7 +42,7 @@ export function EmployeeNewPage() {
         onSubmit={async (values) => {
           await mutation.mutateAsync({
             name: values.name,
-            role: values.role || null,
+            roleId: values.roleId,
             phone: values.phone || null,
             notes: values.notes || null,
           });

@@ -1,19 +1,21 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Coins, DollarSign, HardDriveDownload, Ruler, Tag } from "lucide-react";
+import { Building2, Coins, DollarSign, HardDriveDownload, Ruler, Tag, Users } from "lucide-react";
+import { EmployeeRolesTab } from "@/features/settings/components/EmployeeRolesTab";
 import { backupDatabase, fetchAllSettings, setSettingValue } from "@/db/queries/settings";
 import { fetchCostList, fetchFormats, updateCost } from "@/db/queries/prices";
 import { PricesListPage } from "@/features/products/pages/PricesListPage";
 import { useTheme } from "@/lib/theme";
 import { WORK_TYPE_LABELS, type WorkType } from "@/types/employee";
 
-type TabKey = "general" | "precios" | "costos" | "moneda" | "formatos" | "backup";
+type TabKey = "general" | "precios" | "costos" | "moneda" | "roles" | "formatos" | "backup";
 
 const TABS: { key: TabKey; label: string; icon: typeof Building2 }[] = [
   { key: "general", label: "General", icon: Building2 },
   { key: "precios", label: "Precios", icon: Tag },
   { key: "costos", label: "Costos", icon: Coins },
   { key: "moneda", label: "Moneda", icon: DollarSign },
+  { key: "roles", label: "Roles", icon: Users },
   { key: "formatos", label: "Formatos", icon: Ruler },
   { key: "backup", label: "Backup", icon: HardDriveDownload },
 ];
@@ -50,6 +52,7 @@ export function SettingsPage() {
       {tab === "precios" && <PricesListPage />}
       {tab === "costos" && <CostsTab />}
       {tab === "moneda" && <CurrencyTab />}
+      {tab === "roles" && <EmployeeRolesTab />}
       {tab === "formatos" && <FormatsTab />}
       {tab === "backup" && <BackupTab />}
     </section>

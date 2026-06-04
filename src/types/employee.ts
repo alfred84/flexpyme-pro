@@ -4,6 +4,7 @@
 export interface EmployeeDto {
   id: number;
   name: string;
+  roleId: number | null;
   role: string | null;
   phone: string | null;
   notes: string | null;
@@ -16,7 +17,7 @@ export interface EmployeeDto {
  */
 export interface CreateEmployeePayload {
   name: string;
-  role: string | null;
+  roleId: number | null;
   phone: string | null;
   notes: string | null;
 }

@@ -122,6 +122,19 @@ async function main() {
       .run(row.workType, formatId, row.unitCost);
   }
 
+  const defaultRoles = [
+    { name: "Laminador", description: "Trabajo de laminado de impresiones" },
+    { name: "Enmarcador", description: "Trabajo de enmarcado de fotos" },
+    { name: "Impresor", description: "Trabajo de impresión" },
+    { name: "Recepcionista", description: "Recepción de pedidos y atención al cliente" },
+    { name: "Otro", description: "Rol no clasificado" },
+  ];
+  for (const role of defaultRoles) {
+    sqlite
+      .prepare("INSERT OR IGNORE INTO employee_roles (name, description) VALUES (?, ?)")
+      .run(role.name, role.description);
+  }
+
   for (const [key, value] of Object.entries(SETTINGS_SEED)) {
     sqlite
       .prepare(

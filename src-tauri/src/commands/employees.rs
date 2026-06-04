@@ -11,6 +11,7 @@ use crate::db;
 pub struct EmployeeDto {
     pub id: i64,
     pub name: String,
+    pub role_id: Option<i64>,
     pub role: Option<String>,
     pub phone: Option<String>,
     pub notes: Option<String>,
@@ -23,7 +24,7 @@ pub struct EmployeeDto {
 #[serde(rename_all = "camelCase")]
 pub struct CreateEmployeePayload {
     pub name: String,
-    pub role: Option<String>,
+    pub role_id: Option<i64>,
     pub phone: Option<String>,
     pub notes: Option<String>,
 }
@@ -34,7 +35,7 @@ pub struct CreateEmployeePayload {
 pub struct UpdateEmployeePayload {
     pub id: i64,
     pub name: String,
-    pub role: Option<String>,
+    pub role_id: Option<i64>,
     pub phone: Option<String>,
     pub notes: Option<String>,
 }
@@ -100,13 +101,21 @@ pub fn employees_list(active_only: Option<bool>) -> Result<Vec<EmployeeDto>, Str
     let conn = db::open_connection()?;
     let only_active = active_only.unwrap_or(false);
     let sql = if only_active {
-        "SELECT id, name, role, phone, notes, is_active, created_at
-         FROM employees WHERE deleted_at IS NULL AND is_active = 1
-         ORDER BY name COLLATE NOCASE"
+        "SELECT e.id, e.name, e.role_id,
+                COALESCE(e.role_snapshot, er.name, e.role) AS role_label,
+                e.phone, e.notes, e.is_active, e.created_at
+         FROM employees e
+         LEFT JOIN employee_roles er ON er.id = e.role_id
+         WHERE e.deleted_at IS NULL AND e.is_active = 1
+         ORDER BY e.name COLLATE NOCASE"
     } else {
-        "SELECT id, name, role, phone, notes, is_active, created_at
-         FROM employees WHERE deleted_at IS NULL
-         ORDER BY is_active DESC, name COLLATE NOCASE"
+        "SELECT e.id, e.name, e.role_id,
+                COALESCE(e.role_snapshot, er.name, e.role) AS role_label,
+                e.phone, e.notes, e.is_active, e.created_at
+         FROM employees e
+         LEFT JOIN employee_roles er ON er.id = e.role_id
+         WHERE e.deleted_at IS NULL
+         ORDER BY e.is_active DESC, e.name COLLATE NOCASE"
     };
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
@@ -114,11 +123,12 @@ pub fn employees_list(active_only: Option<bool>) -> Result<Vec<EmployeeDto>, Str
             Ok(EmployeeDto {
                 id: row.get(0)?,
                 name: row.get(1)?,
-                role: row.get(2)?,
-                phone: row.get(3)?,
-                notes: row.get(4)?,
-                is_active: row.get::<_, i64>(5)? != 0,
-                created_at: row.get(6)?,
+                role_id: row.get(2)?,
+                role: row.get(3)?,
+                phone: row.get(4)?,
+                notes: row.get(5)?,
+                is_active: row.get::<_, i64>(6)? != 0,
+                created_at: row.get(7)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -130,18 +140,23 @@ pub fn employees_list(active_only: Option<bool>) -> Result<Vec<EmployeeDto>, Str
 pub fn employees_get_by_id(id: i64) -> Result<EmployeeDto, String> {
     let conn = db::open_connection()?;
     conn.query_row(
-        "SELECT id, name, role, phone, notes, is_active, created_at
-         FROM employees WHERE id = ?1 AND deleted_at IS NULL",
+        "SELECT e.id, e.name, e.role_id,
+                COALESCE(e.role_snapshot, er.name, e.role) AS role_label,
+                e.phone, e.notes, e.is_active, e.created_at
+         FROM employees e
+         LEFT JOIN employee_roles er ON er.id = e.role_id
+         WHERE e.id = ?1 AND e.deleted_at IS NULL",
         params![id],
         |row| {
             Ok(EmployeeDto {
                 id: row.get(0)?,
                 name: row.get(1)?,
-                role: row.get(2)?,
-                phone: row.get(3)?,
-                notes: row.get(4)?,
-                is_active: row.get::<_, i64>(5)? != 0,
-                created_at: row.get(6)?,
+                role_id: row.get(2)?,
+                role: row.get(3)?,
+                phone: row.get(4)?,
+                notes: row.get(5)?,
+                is_active: row.get::<_, i64>(6)? != 0,
+                created_at: row.get(7)?,
             })
         },
     )
@@ -155,13 +170,22 @@ pub fn employees_create(payload: CreateEmployeePayload) -> Result<i64, String> {
     if name.is_empty() {
         return Err("El nombre es obligatorio".to_string());
     }
+    let role_id = payload.role_id.ok_or_else(|| "Selecciona un rol".to_string())?;
     let conn = db::open_connection()?;
+    let role_name: String = conn
+        .query_row(
+            "SELECT name FROM employee_roles WHERE id = ?1 AND is_active = 1",
+            params![role_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "Rol no válido".to_string())?;
     conn.execute(
-        "INSERT INTO employees (name, role, phone, notes, is_active, updated_at)
-         VALUES (?1, ?2, ?3, ?4, 1, datetime('now'))",
+        "INSERT INTO employees (name, role_id, role_snapshot, phone, notes, is_active, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, 1, datetime('now'))",
         params![
             name,
-            normalize_optional(payload.role),
+            role_id,
+            role_name,
             normalize_optional(payload.phone),
             normalize_optional(payload.notes)
         ],
@@ -178,14 +202,22 @@ pub fn employees_update(payload: UpdateEmployeePayload) -> Result<(), String> {
         return Err("El nombre es obligatorio".to_string());
     }
     let conn = db::open_connection()?;
+    let role_id = payload.role_id.ok_or_else(|| "Selecciona un rol".to_string())?;
+    let _role_exists: String = conn
+        .query_row(
+            "SELECT name FROM employee_roles WHERE id = ?1",
+            params![role_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "Rol no válido".to_string())?;
     let updated = conn
         .execute(
             "UPDATE employees
-             SET name = ?1, role = ?2, phone = ?3, notes = ?4, updated_at = datetime('now')
+             SET name = ?1, role_id = ?2, phone = ?3, notes = ?4, updated_at = datetime('now')
              WHERE id = ?5 AND deleted_at IS NULL",
             params![
                 name,
-                normalize_optional(payload.role),
+                role_id,
                 normalize_optional(payload.phone),
                 normalize_optional(payload.notes),
                 payload.id

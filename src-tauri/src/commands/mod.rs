@@ -1,6 +1,7 @@
 pub mod cashflow;
 pub mod cashier;
 pub mod clients;
+pub mod employee_roles;
 pub mod employees;
 pub mod inventory;
 pub mod invoices;

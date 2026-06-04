@@ -147,11 +147,25 @@ export const costList = sqliteTable("cost_list", {
 });
 
 /**
+ * Roles configurables de empleados (catálogo; solo desactivar, no eliminar).
+ */
+export const employeeRoles = sqliteTable("employee_roles", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  description: text("description"),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+
+/**
  * Empleados del taller. Soft delete con `is_active = false`.
  */
 export const employees = sqliteTable("employees", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
+  roleId: integer("role_id").references(() => employeeRoles.id),
+  roleSnapshot: text("role_snapshot"),
   role: text("role"),
   phone: text("phone"),
   notes: text("notes"),
@@ -234,7 +248,12 @@ export const invoiceItemsRelations = relations(invoiceItems, ({ one }) => ({
   format: one(formats, { fields: [invoiceItems.formatId], references: [formats.id] }),
 }));
 
-export const employeesRelations = relations(employees, ({ many }) => ({
+export const employeeRolesRelations = relations(employeeRoles, ({ many }) => ({
+  employees: many(employees),
+}));
+
+export const employeesRelations = relations(employees, ({ one, many }) => ({
+  role: one(employeeRoles, { fields: [employees.roleId], references: [employeeRoles.id] }),
   batches: many(productionBatches),
 }));
 

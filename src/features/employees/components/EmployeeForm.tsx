@@ -1,6 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { employeeFormSchema, type EmployeeFormValues } from "@/features/employees/employee.schema";
+import { fetchEmployeeRoles } from "@/db/queries/employee-roles";
 
 export interface EmployeeFormProps {
   defaultValues?: Partial<EmployeeFormValues>;
@@ -10,13 +12,6 @@ export interface EmployeeFormProps {
   isSubmitting?: boolean;
 }
 
-const ROLE_OPTIONS = [
-  { value: "laminador", label: "Laminador" },
-  { value: "enmarcador", label: "Enmarcador" },
-  { value: "impresor", label: "Impresor" },
-  { value: "otro", label: "Otro" },
-];
-
 /**
  * Formulario compartido de empleado (alta/edición) con RHF + Zod.
  *
@@ -25,11 +20,16 @@ const ROLE_OPTIONS = [
  */
 export function EmployeeForm(props: EmployeeFormProps) {
   const { defaultValues, onSubmit, onCancel, submitLabel, isSubmitting } = props;
+  const rolesQuery = useQuery({
+    queryKey: ["employee-roles", "active"],
+    queryFn: () => fetchEmployeeRoles(true),
+  });
+
   const form = useForm<EmployeeFormValues>({
     resolver: zodResolver(employeeFormSchema),
     defaultValues: {
       name: defaultValues?.name ?? "",
-      role: defaultValues?.role ?? "",
+      roleId: defaultValues?.roleId ?? 0,
       phone: defaultValues?.phone ?? "",
       notes: defaultValues?.notes ?? "",
     },
@@ -66,16 +66,19 @@ export function EmployeeForm(props: EmployeeFormProps) {
         <select
           id="employee-role"
           className="select select-bordered w-full"
-          disabled={isSubmitting}
-          {...form.register("role")}
+          disabled={isSubmitting || rolesQuery.isLoading}
+          {...form.register("roleId", { valueAsNumber: true })}
         >
-          <option value="">Sin especificar</option>
-          {ROLE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
+          <option value={0}>Selecciona un rol</option>
+          {(rolesQuery.data ?? []).map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {opt.name}
             </option>
           ))}
         </select>
+        {form.formState.errors.roleId && (
+          <span className="label-text-alt text-error">{form.formState.errors.roleId.message}</span>
+        )}
       </div>
 
       <div className="form-control w-full">

@@ -45,7 +45,7 @@ export function EmployeeEditPage() {
           isSubmitting={mutation.isPending}
           defaultValues={{
             name: employeeQuery.data.name,
-            role: employeeQuery.data.role ?? "",
+            roleId: employeeQuery.data.roleId ?? 0,
             phone: employeeQuery.data.phone ?? "",
             notes: employeeQuery.data.notes ?? "",
           }}
@@ -54,7 +54,7 @@ export function EmployeeEditPage() {
             await mutation.mutateAsync({
               id: employeeId,
               name: values.name,
-              role: values.role || null,
+              roleId: values.roleId,
               phone: values.phone || null,
               notes: values.notes || null,
             });
