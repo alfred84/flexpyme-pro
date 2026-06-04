@@ -1,5 +1,5 @@
-import { createRootRoute, createRoute, createRouter, Link, Outlet } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createRootRoute, createRoute, createRouter, Link } from "@tanstack/react-router";
+import { AppShell } from "@/components/layout/AppShell";
 import { useDbStatus } from "@/hooks/use-db-status";
 import { ClientDetailPage } from "@/features/clients/pages/ClientDetailPage";
 import { ClientEditPage } from "@/features/clients/pages/ClientEditPage";
@@ -16,111 +16,9 @@ import { InvoiceDetailPage } from "@/features/invoices/pages/InvoiceDetailPage";
 import { InvoicePrintPage } from "@/features/invoices/pages/InvoicePrintPage";
 import { InvoiceNewPage } from "@/features/invoices/pages/InvoiceNewPage";
 import { InvoicesListPage } from "@/features/invoices/pages/InvoicesListPage";
-
-type ThemeName = "light" | "dark";
-const THEME_STORAGE_KEY = "flexpyme.theme";
-
-const navTabClass = "btn btn-ghost btn-sm";
-const navTabActiveClass = `${navTabClass} bg-base-200 font-medium`;
-
-/**
- * Root layout with navigation and main content outlet.
- *
- * @returns Application shell.
- */
-function AppLayout() {
-  const [theme, setTheme] = useState<ThemeName>(() => {
-    if (typeof window === "undefined") {
-      return "light";
-    }
-    const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return saved === "dark" ? "dark" : "light";
-  });
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-  }, [theme]);
-
-  return (
-    <div data-theme={theme} className="min-h-screen">
-      <div className="navbar bg-base-100 shadow-sm print:hidden">
-        <div className="flex-1 px-4">
-          <Link to="/" className="text-lg font-semibold">
-            FlexPyme Pro
-          </Link>
-        </div>
-        <div className="flex-none gap-2 px-2">
-          <label className="label cursor-pointer gap-2 px-2">
-            <span className="label-text text-xs">{theme === "dark" ? "Oscuro" : "Claro"}</span>
-            <input
-              type="checkbox"
-              className="toggle toggle-sm"
-              checked={theme === "dark"}
-              onChange={(e) => setTheme(e.target.checked ? "dark" : "light")}
-              aria-label="Cambiar entre modo claro y oscuro"
-            />
-          </label>
-          <Link
-            to="/"
-            className={navTabClass}
-            activeProps={{ className: navTabActiveClass }}
-            activeOptions={{ exact: true }}
-          >
-            Inicio
-          </Link>
-          <Link
-            to="/clientes"
-            className={navTabClass}
-            activeProps={{ className: navTabActiveClass }}
-          >
-            Clientes
-          </Link>
-          <Link
-            to="/precios"
-            className={navTabClass}
-            activeProps={{ className: navTabActiveClass }}
-          >
-            Precios
-          </Link>
-          <Link
-            to="/produccion"
-            className={navTabClass}
-            activeProps={{ className: navTabActiveClass }}
-          >
-            Producción
-          </Link>
-          <Link
-            to="/facturas"
-            className={navTabClass}
-            activeProps={{ className: navTabActiveClass }}
-          >
-            Facturas
-          </Link>
-          <Link
-            to="/reportes"
-            className={navTabClass}
-            activeProps={{ className: navTabActiveClass }}
-          >
-            Reportes
-          </Link>
-          <Link
-            to="/configuracion"
-            className={navTabClass}
-            activeProps={{ className: navTabActiveClass }}
-          >
-            Configuración
-          </Link>
-        </div>
-      </div>
-      <main className="mx-auto max-w-7xl p-6 print:max-w-none print:p-4">
-        <Outlet />
-      </main>
-    </div>
-  );
-}
+import { EmployeesListPage } from "@/features/employees/pages/EmployeesListPage";
+import { InventoryListPage } from "@/features/inventory/pages/InventoryListPage";
+import { CashflowPage } from "@/features/cashflow/pages/CashflowPage";
 
 /**
  * Dashboard with database status card.
@@ -180,7 +78,7 @@ function DashboardPage() {
 }
 
 const rootRoute = createRootRoute({
-  component: AppLayout,
+  component: AppShell,
 });
 
 const dashboardRoute = createRoute({
@@ -279,6 +177,24 @@ const invoiceCashierRoute = createRoute({
   component: InvoiceCashierPage,
 });
 
+const employeesListRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "empleados",
+  component: EmployeesListPage,
+});
+
+const inventoryListRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "inventario",
+  component: InventoryListPage,
+});
+
+const cashflowRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "caja",
+  component: CashflowPage,
+});
+
 const routeTree = rootRoute.addChildren([
   dashboardRoute,
   clientsListRoute,
@@ -296,6 +212,9 @@ const routeTree = rootRoute.addChildren([
   invoicePrintRoute,
   invoiceCashierRoute,
   invoiceDetailRoute,
+  employeesListRoute,
+  inventoryListRoute,
+  cashflowRoute,
 ]);
 
 export const appRouter = createRouter({
