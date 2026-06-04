@@ -78,8 +78,8 @@ export function InvoiceNewPage() {
     onSuccess: async (res) => {
       await queryClient.invalidateQueries({ queryKey: ["invoices"] });
       await queryClient.invalidateQueries({ queryKey: ["clients"] });
-      pushFlashMessage({ kind: "success", text: `Factura ${res.invoiceNumber} creada correctamente.` });
-      await navigate({ to: "/facturas/$invoiceId", params: { invoiceId: String(res.id) } });
+      pushFlashMessage({ kind: "success", text: `Pedido ${res.invoiceNumber} creado correctamente.` });
+      await navigate({ to: "/pedidos/$invoiceId", params: { invoiceId: String(res.id) } });
     },
   });
 
@@ -169,10 +169,10 @@ export function InvoiceNewPage() {
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold">Nueva factura</h1>
-          <p className="text-sm text-base-content/70">Líneas de detalle, totales tipo hoja TOTAL (MVP).</p>
+          <h1 className="text-2xl font-bold">Nuevo pedido</h1>
+          <p className="text-sm text-base-content/70">Líneas de detalle del pedido y totales.</p>
         </div>
-        <Link to="/facturas" className="btn btn-ghost btn-sm">
+        <Link to="/pedidos" className="btn btn-ghost btn-sm">
           Cancelar
         </Link>
       </div>

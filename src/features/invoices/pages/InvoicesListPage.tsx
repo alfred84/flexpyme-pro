@@ -58,7 +58,7 @@ export function InvoicesListPage() {
         id: "actions",
         header: "",
         cell: ({ row }) => (
-          <Link className="btn btn-xs btn-outline" to="/facturas/$invoiceId" params={{ invoiceId: String(row.original.id) }}>
+          <Link className="btn btn-xs btn-outline" to="/pedidos/$invoiceId" params={{ invoiceId: String(row.original.id) }}>
             Ver
           </Link>
         ),
@@ -81,16 +81,16 @@ export function InvoicesListPage() {
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold">Facturas</h1>
-        <Link to="/facturas/nueva" className="btn btn-primary btn-sm sm:btn-md">
-          Nueva factura
+        <h1 className="text-2xl font-bold">Pedidos</h1>
+        <Link to="/pedidos/nuevo" className="btn btn-primary btn-sm sm:btn-md">
+          Nuevo pedido
         </Link>
       </div>
 
-      {invoicesQuery.isLoading && <p>Cargando facturas...</p>}
+      {invoicesQuery.isLoading && <p>Cargando pedidos...</p>}
       {invoicesQuery.isError && (
         <div className="alert alert-error">
-          <span>No se pudieron cargar las facturas.</span>
+          <span>No se pudieron cargar los pedidos.</span>
         </div>
       )}
 
@@ -102,7 +102,7 @@ export function InvoicesListPage() {
             placeholder="Buscar número, cliente, fecha..."
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            aria-label="Filtrar facturas"
+            aria-label="Filtrar pedidos"
           />
           <div className="overflow-x-auto rounded-lg border border-base-300 bg-base-100">
             <table className="table table-zebra table-sm">
@@ -121,7 +121,7 @@ export function InvoicesListPage() {
                 {table.getRowModel().rows.length === 0 ? (
                   <tr>
                     <td colSpan={columns.length} className="text-center text-base-content/60">
-                      No hay facturas.
+                      No hay pedidos.
                     </td>
                   </tr>
                 ) : (

@@ -101,16 +101,16 @@ export function InvoiceCashierPage() {
           {inv && <p className="text-lg font-mono">{inv.invoiceNumber}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/facturas/$invoiceId" params={{ invoiceId: String(invoiceId) }} className="btn btn-ghost btn-sm">
-            Volver a factura
+          <Link to="/pedidos/$invoiceId" params={{ invoiceId: String(invoiceId) }} className="btn btn-ghost btn-sm">
+            Volver al pedido
           </Link>
-          <Link to="/facturas" className="btn btn-ghost btn-sm">
+          <Link to="/pedidos" className="btn btn-ghost btn-sm">
             Listado
           </Link>
         </div>
       </div>
 
-      {detailQuery.isLoading && <p>Cargando factura...</p>}
+      {detailQuery.isLoading && <p>Cargando pedido...</p>}
       {detailQuery.isError && (
         <div className="alert alert-error">
           <span>No se pudo cargar la factura.</span>

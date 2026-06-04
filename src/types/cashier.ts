@@ -1,7 +1,7 @@
 /**
- * Bill/coin denominations accepted at register (unidades monetarias locales).
+ * Denominaciones de billetes/monedas CUP aceptadas en caja (REQUIREMENTS §4).
  */
-export const CASH_DENOMINATIONS = [1000, 500, 200, 100, 50, 20, 10, 5] as const;
+export const CASH_DENOMINATIONS = [5000, 1000, 500, 200, 100, 50, 20, 10, 5, 1] as const;
 
 export type CashDenomination = (typeof CASH_DENOMINATIONS)[number];
 

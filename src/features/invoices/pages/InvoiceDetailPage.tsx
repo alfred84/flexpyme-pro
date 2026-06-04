@@ -45,21 +45,21 @@ export function InvoiceDetailPage() {
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold">Factura</h1>
+          <h1 className="text-2xl font-bold">Pedido</h1>
           {inv && <p className="text-lg font-mono">{inv.invoiceNumber}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
           {inv && (
             <>
               <Link
-                to="/facturas/$invoiceId/imprimir"
+                to="/pedidos/$invoiceId/imprimir"
                 params={{ invoiceId: String(inv.id) }}
                 className="btn btn-outline btn-sm"
               >
                 Imprimir
               </Link>
               <Link
-                to="/facturas/$invoiceId/caja"
+                to="/pedidos/$invoiceId/caja"
                 params={{ invoiceId: String(inv.id) }}
                 className={inv.balance > 1e-6 ? "btn btn-primary btn-sm" : "btn btn-outline btn-sm"}
               >
@@ -67,7 +67,7 @@ export function InvoiceDetailPage() {
               </Link>
             </>
           )}
-          <Link to="/facturas" className="btn btn-ghost btn-sm">
+          <Link to="/pedidos" className="btn btn-ghost btn-sm">
             Volver al listado
           </Link>
         </div>
@@ -76,7 +76,7 @@ export function InvoiceDetailPage() {
       {detailQuery.isLoading && <p>Cargando...</p>}
       {detailQuery.isError && (
         <div className="alert alert-error">
-          <span>No se pudo cargar la factura.</span>
+          <span>No se pudo cargar el pedido.</span>
         </div>
       )}
       {flash && (

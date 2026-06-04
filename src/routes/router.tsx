@@ -92,31 +92,31 @@ const settingsRoute = createRoute({
 
 const invoicesListRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "facturas",
+  path: "pedidos",
   component: InvoicesListPage,
 });
 
 const invoicesNewRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "facturas/nueva",
+  path: "pedidos/nuevo",
   component: InvoiceNewPage,
 });
 
 const invoicePrintRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "facturas/$invoiceId/imprimir",
+  path: "pedidos/$invoiceId/imprimir",
   component: InvoicePrintPage,
 });
 
 const invoiceDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "facturas/$invoiceId",
+  path: "pedidos/$invoiceId",
   component: InvoiceDetailPage,
 });
 
 const invoiceCashierRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "facturas/$invoiceId/caja",
+  path: "pedidos/$invoiceId/caja",
   component: InvoiceCashierPage,
 });
 

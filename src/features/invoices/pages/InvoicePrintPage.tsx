@@ -49,7 +49,7 @@ export function InvoicePrintPage() {
   return (
     <div className="invoice-print-root">
       <div className="mb-4 flex flex-wrap gap-2 print:hidden">
-        <Link to="/facturas/$invoiceId" params={{ invoiceId: String(invoiceId) }} className="btn btn-ghost btn-sm">
+        <Link to="/pedidos/$invoiceId" params={{ invoiceId: String(invoiceId) }} className="btn btn-ghost btn-sm">
           Volver a factura
         </Link>
         <button type="button" className="btn btn-primary btn-sm" onClick={() => window.print()} disabled={!inv}>

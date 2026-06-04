@@ -33,7 +33,7 @@ export interface NavItem {
  */
 export const PRIMARY_NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { to: "/facturas", label: "Pedidos", icon: ShoppingCart, badge: "pedidosPendientes" },
+  { to: "/pedidos", label: "Pedidos", icon: ShoppingCart, badge: "pedidosPendientes" },
   { to: "/clientes", label: "Clientes", icon: Users },
   { to: "/empleados", label: "Empleados", icon: UserCog },
   { to: "/inventario", label: "Inventario", icon: Package, badge: "stockBajo" },

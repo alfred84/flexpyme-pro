@@ -158,7 +158,7 @@ export function DashboardPage() {
           <div className="card-body">
             <div className="flex items-center justify-between">
               <h3 className="card-title text-base">Pedidos recientes</h3>
-              <Link to="/facturas" className="btn btn-ghost btn-xs gap-1">
+              <Link to="/pedidos" className="btn btn-ghost btn-xs gap-1">
                 Ver todos <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
@@ -223,7 +223,7 @@ export function DashboardPage() {
                 <span>Control de stock bajo disponible en Inventario</span>
               </li>
             </ul>
-            <Link to="/facturas/nueva" className="btn btn-primary btn-sm mt-2">
+            <Link to="/pedidos/nuevo" className="btn btn-primary btn-sm mt-2">
               Nuevo pedido
             </Link>
           </div>
