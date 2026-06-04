@@ -1,9 +1,12 @@
 //! Key-value settings for company profile (invoices, print header).
 
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager};
 
 use crate::db;
 
@@ -121,4 +124,84 @@ pub fn settings_save_company(payload: CompanySettingsDto) -> Result<(), String> 
         .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+const LOGO_SETTING_KEY: &str = "business_logo_path";
+
+fn allowed_logo_ext(path: &Path) -> Option<String> {
+    let ext = path.extension()?.to_str()?.to_lowercase();
+    match ext.as_str() {
+        "png" | "jpg" | "jpeg" | "webp" | "svg" => Some(ext),
+        _ => None,
+    }
+}
+
+/// Copies the selected image into app data dir and stores the path in settings.
+#[tauri::command]
+pub async fn update_business_logo(app: AppHandle, source_path: String) -> Result<String, String> {
+    let source = Path::new(&source_path);
+    if !source.exists() {
+        return Err("Archivo de imagen no encontrado".to_string());
+    }
+    let ext = allowed_logo_ext(source).ok_or_else(|| {
+        "Formato no válido. Use PNG, JPG, WEBP o SVG.".to_string()
+    })?;
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("No se pudo resolver app_data_dir: {}", e))?;
+    fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    let dest = data_dir.join(format!("logo.{}", ext));
+    fs::copy(source, &dest).map_err(|e| format!("No se pudo copiar el logo: {}", e))?;
+    let dest_str = dest.to_string_lossy().to_string();
+    let conn = db::open_connection()?;
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![LOGO_SETTING_KEY, dest_str],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(dest_str)
+}
+
+/// Removes the stored business logo setting.
+#[tauri::command]
+pub fn remove_business_logo() -> Result<(), String> {
+    let conn = db::open_connection()?;
+    conn.execute("DELETE FROM settings WHERE key = ?1", params![LOGO_SETTING_KEY])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Returns the current SQLite database file path.
+#[tauri::command]
+pub fn get_db_location(app: AppHandle) -> Result<String, String> {
+    Ok(db::get_db_path(&app).to_string_lossy().to_string())
+}
+
+/// Opens the folder containing the database in the system file manager.
+#[tauri::command]
+pub fn open_db_folder(app: AppHandle) -> Result<(), String> {
+    let db_path = db::get_db_path(&app);
+    let folder = db_path
+        .parent()
+        .ok_or_else(|| "Ruta de base de datos inválida".to_string())?;
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(folder)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        return Err("Abrir carpeta solo está implementado en Windows".to_string());
+    }
+    Ok(())
+}
+
+/// Copies the database to a new path and updates `db_location.json`.
+#[tauri::command]
+pub async fn move_database(app: AppHandle, new_path: String) -> Result<String, String> {
+    db::move_database_to(&app, new_path)
 }

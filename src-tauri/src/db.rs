@@ -9,11 +9,14 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use rusqlite::{params, Connection};
+use serde_json::Value;
+use tauri::{AppHandle, Manager};
 
 /// Canonical SQLite database file used by desktop runtime and scripts (solo perfil debug / workspace).
 pub const SQLITE_DB_PATH: &str = ".local/flexpyme.db";
 
 static RELEASE_DB_PATH: OnceLock<PathBuf> = OnceLock::new();
+static CUSTOM_DB_PATH: OnceLock<PathBuf> = OnceLock::new();
 
 /// Solo release: debe llamarse una vez desde `setup` antes de cualquier acceso a la BD.
 pub fn set_release_db_path(path: PathBuf) -> Result<(), String> {
@@ -39,8 +42,57 @@ fn workspace_root_dir() -> Result<PathBuf, String> {
     }
 }
 
+fn read_db_path_from_config_file(config_file: &PathBuf) -> Option<PathBuf> {
+    let content = fs::read_to_string(config_file).ok()?;
+    let json: Value = serde_json::from_str(&content).ok()?;
+    let path_str = json.get("db_path")?.as_str()?;
+    let custom = PathBuf::from(path_str);
+    if custom.exists() {
+        Some(custom)
+    } else {
+        None
+    }
+}
+
+/// Loads custom DB path from `db_location.json` if present (app config or workspace `.local`).
+pub fn init_db_path_from_app(app: &AppHandle) -> Result<(), String> {
+    if CUSTOM_DB_PATH.get().is_some() {
+        return Ok(());
+    }
+    if let Ok(config_dir) = app.path().app_config_dir() {
+        let config_file = config_dir.join("db_location.json");
+        if let Some(path) = read_db_path_from_config_file(&config_file) {
+            let _ = CUSTOM_DB_PATH.set(path);
+            return Ok(());
+        }
+    }
+    #[cfg(debug_assertions)]
+    {
+        let local_config = workspace_root_dir()?.join(".local/db_location.json");
+        if let Some(path) = read_db_path_from_config_file(&local_config) {
+            let _ = CUSTOM_DB_PATH.set(path);
+        }
+    }
+    Ok(())
+}
+
+/// Resolves the database path for Tauri commands that have an app handle.
+pub fn get_db_path(app: &AppHandle) -> PathBuf {
+    if let Some(path) = CUSTOM_DB_PATH.get() {
+        return path.clone();
+    }
+    let _ = init_db_path_from_app(app);
+    if let Some(path) = CUSTOM_DB_PATH.get() {
+        return path.clone();
+    }
+    resolve_db_path().unwrap_or_else(|_| PathBuf::from(SQLITE_DB_PATH))
+}
+
 /// Resolves the canonical SQLite path to an absolute path.
 pub fn resolve_db_path() -> Result<PathBuf, String> {
+    if let Some(path) = CUSTOM_DB_PATH.get() {
+        return Ok(path.clone());
+    }
     #[cfg(not(debug_assertions))]
     {
         return RELEASE_DB_PATH.get().cloned().ok_or_else(|| {
@@ -51,6 +103,48 @@ pub fn resolve_db_path() -> Result<PathBuf, String> {
     {
         Ok(workspace_root_dir()?.join(SQLITE_DB_PATH))
     }
+}
+
+/// Persists a new database location and switches the active connection path.
+pub fn move_database_to(app: &AppHandle, new_path: String) -> Result<String, String> {
+    let source = resolve_db_path()?;
+    let dest = PathBuf::from(new_path.trim());
+    if dest == source {
+        return Ok(dest.to_string_lossy().to_string());
+    }
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::copy(&source, &dest).map_err(|e| format!("No se pudo copiar la base de datos: {}", e))?;
+    let verify = Connection::open(&dest).map_err(|e| format!("Copia inválida: {}", e))?;
+    let _: i64 = verify
+        .query_row("SELECT COUNT(*) FROM sqlite_master", [], |row| row.get(0))
+        .map_err(|e| format!("Copia inválida: {}", e))?;
+    drop(verify);
+
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| e.to_string())?;
+    fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    let config_file = config_dir.join("db_location.json");
+    let json = serde_json::json!({ "db_path": dest.to_string_lossy() });
+    fs::write(&config_file, serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(debug_assertions)]
+    {
+        let local_config = workspace_root_dir()?.join(".local/db_location.json");
+        if let Some(parent) = local_config.parent() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        fs::write(&local_config, serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+    }
+
+    let _ = CUSTOM_DB_PATH.set(dest.clone());
+    fs::remove_file(&source).ok();
+    Ok(dest.to_string_lossy().to_string())
 }
 
 /// Migración inicial embebida (misma semántica que `src/db/migrations/`).

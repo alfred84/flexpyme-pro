@@ -18,11 +18,12 @@ fn configure_release_database_path(app: &tauri::App) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             #[cfg(not(debug_assertions))]
             configure_release_database_path(app)?;
-            #[cfg(debug_assertions)]
-            let _ = app;
+            db::init_db_path_from_app(app.handle())?;
             db::init_database_schema_if_empty()?;
             Ok(())
         })
@@ -52,11 +53,25 @@ pub fn run() {
             commands::reports::reports_summary,
             commands::reports::reports_top_debtors,
             commands::reports::reports_income_by_category,
+            commands::reports::export_orders_csv,
+            commands::formats::get_formats,
+            commands::formats::create_format,
+            commands::formats::update_format,
+            commands::formats::deactivate_format,
+            commands::work_types::get_work_types,
+            commands::work_types::create_work_type,
+            commands::work_types::update_work_type,
+            commands::work_types::deactivate_work_type,
             commands::settings::settings_get_company,
             commands::settings::settings_save_company,
             commands::settings::settings_get_all,
             commands::settings::settings_set_value,
             commands::settings::settings_backup_database,
+            commands::settings::update_business_logo,
+            commands::settings::remove_business_logo,
+            commands::settings::get_db_location,
+            commands::settings::open_db_folder,
+            commands::settings::move_database,
             commands::employee_roles::get_employee_roles,
             commands::employee_roles::create_employee_role,
             commands::employee_roles::update_employee_role,
