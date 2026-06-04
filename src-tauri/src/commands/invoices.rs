@@ -457,13 +457,24 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
         let line_subtotal = (item.quantity as f64) * item.unit_price;
         let finish = trim_optional(&item.finish);
         let service = trim_optional(&item.service);
+        let format_label: Option<String> = if let Some(fid) = item.format_id {
+            tx.query_row(
+                "SELECT label FROM formats WHERE id = ?1",
+                params![fid],
+                |row| row.get(0),
+            )
+            .ok()
+        } else {
+            None
+        };
         tx.execute(
-            "INSERT INTO invoice_items (invoice_id, category_id, format_id, finish, service, quantity, unit_price, subtotal)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO invoice_items (invoice_id, category_id, format_id, format_label_snapshot, finish, service, quantity, unit_price, subtotal)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 invoice_id,
                 item.category_id,
                 item.format_id,
+                format_label,
                 finish,
                 service,
                 item.quantity,

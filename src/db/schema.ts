@@ -32,6 +32,8 @@ export const formats = sqliteTable("formats", {
   widthInches: real("width_inches"),
   heightInches: real("height_inches"),
   isActive: integer("is_active").notNull().default(1),
+  isSystem: integer("is_system").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 });
 
 export const priceList = sqliteTable("price_list", {
@@ -83,6 +85,7 @@ export const invoiceItems = sqliteTable("invoice_items", {
     .notNull()
     .references(() => productCategories.id),
   formatId: integer("format_id").references(() => formats.id),
+  formatLabelSnapshot: text("format_label_snapshot"),
   finish: text("finish"),
   service: text("service"),
   quantity: integer("quantity").notNull().default(0),
@@ -90,8 +93,20 @@ export const invoiceItems = sqliteTable("invoice_items", {
   subtotal: real("subtotal").notNull(),
 });
 
+export const workTypes = sqliteTable("work_types", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  code: text("code").notNull().unique(),
+  description: text("description"),
+  isActive: integer("is_active").notNull().default(1),
+  isSystem: integer("is_system").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
 export const productionBatches = sqliteTable("production_batches", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  workTypeId: integer("work_type_id").references(() => workTypes.id),
+  workTypeSnapshot: text("work_type_snapshot"),
   type: text("type").notNull(),
   date: text("date").notNull(),
   workerName: text("worker_name"),

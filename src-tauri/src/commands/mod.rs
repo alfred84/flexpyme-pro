@@ -3,6 +3,8 @@ pub mod cashier;
 pub mod clients;
 pub mod employee_roles;
 pub mod employees;
+pub mod formats;
+pub mod work_types;
 pub mod inventory;
 pub mod invoices;
 pub mod production;
