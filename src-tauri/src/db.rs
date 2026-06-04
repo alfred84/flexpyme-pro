@@ -56,6 +56,10 @@ pub fn resolve_db_path() -> Result<PathBuf, String> {
 /// Migración inicial embebida (misma semántica que `src/db/migrations/`).
 const EMBEDDED_INITIAL_SCHEMA: &str = include_str!("../migrations/0000_vengeful_cerebro.sql");
 
+/// Migración v2 embebida: empleados, inventario, caja general, costos y columnas nuevas.
+/// Mantener alineada con `src/db/migrations/0001_aberrant_talon.sql`.
+const EMBEDDED_V2_SCHEMA: &str = include_str!("../migrations/0001_aberrant_talon.sql");
+
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
         return Ok(());
@@ -88,21 +92,28 @@ pub fn init_database_schema_if_empty() -> Result<(), String> {
 
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
-    let clients_exists: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
-            params!["clients"],
-            |row| row.get(0),
-        )
-        .unwrap_or(0);
-
-    if clients_exists > 0 {
-        return Ok(());
+    if !table_exists(&conn, "clients") {
+        conn.execute_batch(EMBEDDED_INITIAL_SCHEMA)
+            .map_err(|e| format!("No se pudo aplicar el esquema inicial de SQLite: {}", e))?;
     }
 
-    conn.execute_batch(EMBEDDED_INITIAL_SCHEMA)
-        .map_err(|e| format!("No se pudo aplicar el esquema inicial de SQLite: {}", e))?;
+    // Aplica la migración v2 solo si las tablas nuevas aún no existen (instalación v1 -> v2).
+    if !table_exists(&conn, "employees") {
+        conn.execute_batch(EMBEDDED_V2_SCHEMA)
+            .map_err(|e| format!("No se pudo aplicar el esquema v2 de SQLite: {}", e))?;
+    }
     Ok(())
+}
+
+/// Comprueba si existe una tabla con el nombre dado en la base de datos abierta.
+fn table_exists(conn: &Connection, table_name: &str) -> bool {
+    conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+        params![table_name],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|count| count > 0)
+    .unwrap_or(false)
 }
 
 /// Opens a shared SQLite connection for Tauri commands.
