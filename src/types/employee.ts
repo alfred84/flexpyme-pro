@@ -70,7 +70,7 @@ export interface WorkBatchItemPayload {
  */
 export interface CreateWorkBatchPayload {
   employeeId: number;
-  workType: WorkType;
+  workTypeId: number;
   date: string;
   notes: string | null;
   payNow: boolean;

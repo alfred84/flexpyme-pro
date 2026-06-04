@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { fetchClients } from "@/db/queries/clients";
+import { invoke } from "@tauri-apps/api/core";
 import {
   createWorkBatch,
   fetchCostListForWorkType,
@@ -9,7 +10,12 @@ import {
 } from "@/db/queries/employees";
 import { pushFlashMessage } from "@/lib/flash-message";
 import { formatMoney } from "@/lib/format-money";
-import { WORK_TYPES, WORK_TYPE_LABELS, type WorkType } from "@/types/employee";
+
+interface WorkTypeOption {
+  id: number;
+  name: string;
+  code: string;
+}
 
 /**
  * Registro de un lote de trabajo de un empleado: tipo, fecha, cliente y
@@ -23,7 +29,12 @@ export function EmployeeWorkBatchPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [workType, setWorkType] = useState<WorkType>("laminado");
+  const workTypesQuery = useQuery({
+    queryKey: ["work-types", "active"],
+    queryFn: () => invoke<WorkTypeOption[]>("get_work_types", { activeOnly: true }),
+  });
+  const [workTypeId, setWorkTypeId] = useState(1);
+  const selectedWorkType = workTypesQuery.data?.find((w) => w.id === workTypeId);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [clientId, setClientId] = useState<number | null>(null);
   const [payNow, setPayNow] = useState(false);
@@ -38,8 +49,9 @@ export function EmployeeWorkBatchPage() {
   const clientsQuery = useQuery({ queryKey: ["clients", "list"], queryFn: fetchClients });
 
   const costsQuery = useQuery({
-    queryKey: ["cost-list", workType],
-    queryFn: () => fetchCostListForWorkType(workType),
+    queryKey: ["cost-list", workTypeId],
+    queryFn: () => fetchCostListForWorkType(workTypeId),
+    enabled: workTypeId > 0,
   });
 
   const costs = useMemo(() => costsQuery.data ?? [], [costsQuery.data]);
@@ -75,7 +87,7 @@ export function EmployeeWorkBatchPage() {
       .map((cost) => ({
         clientId,
         formatId: cost.formatId,
-        category: workType,
+        category: selectedWorkType?.code ?? "laminado",
         quantity: Number(quantities[cost.formatId] ?? "0") || 0,
         unitCost: cost.unitCost,
       }))
@@ -88,7 +100,7 @@ export function EmployeeWorkBatchPage() {
 
     await mutation.mutateAsync({
       employeeId,
-      workType,
+      workTypeId,
       date,
       notes: null,
       payNow,
@@ -127,12 +139,12 @@ export function EmployeeWorkBatchPage() {
           <select
             id="batch-type"
             className="select select-bordered"
-            value={workType}
-            onChange={(e) => setWorkType(e.target.value as WorkType)}
+            value={workTypeId}
+            onChange={(e) => setWorkTypeId(Number(e.target.value))}
           >
-            {WORK_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {WORK_TYPE_LABELS[type]}
+            {(workTypesQuery.data ?? []).map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name}
               </option>
             ))}
           </select>

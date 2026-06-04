@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { UserCog, UserPlus } from "lucide-react";
-import { deactivateEmployee, fetchEmployees } from "@/db/queries/employees";
+import { deactivateEmployee, fetchEmployees, reactivateEmployee } from "@/db/queries/employees";
 
 /**
  * Listado de empleados con alta y baja (soft delete).
@@ -17,6 +17,11 @@ export function EmployeesListPage() {
 
   const deactivateMutation = useMutation({
     mutationFn: deactivateEmployee,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employees"] }),
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: reactivateEmployee,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employees"] }),
   });
 
@@ -82,6 +87,16 @@ export function EmployeesListPage() {
                     >
                       Editar
                     </Link>
+                    {!emp.isActive && (
+                      <button
+                        type="button"
+                        className="btn btn-xs btn-success btn-outline"
+                        disabled={reactivateMutation.isPending}
+                        onClick={() => void reactivateMutation.mutateAsync(emp.id)}
+                      >
+                        Reactivar
+                      </button>
+                    )}
                     {emp.isActive && (
                       <button
                         type="button"

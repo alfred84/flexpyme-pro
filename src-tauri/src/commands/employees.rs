@@ -65,7 +65,7 @@ pub struct WorkBatchItemPayload {
 #[serde(rename_all = "camelCase")]
 pub struct CreateWorkBatchPayload {
     pub employee_id: i64,
-    pub work_type: String,
+    pub work_type_id: i64,
     pub date: String,
     pub notes: Option<String>,
     pub pay_now: bool,
@@ -230,6 +230,23 @@ pub fn employees_update(payload: UpdateEmployeePayload) -> Result<(), String> {
     Ok(())
 }
 
+/// Reactivates a previously deactivated employee.
+#[tauri::command]
+pub fn employees_reactivate(id: i64) -> Result<(), String> {
+    let conn = db::open_connection()?;
+    let updated = conn
+        .execute(
+            "UPDATE employees SET is_active = 1, updated_at = datetime('now')
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![id],
+        )
+        .map_err(|e| e.to_string())?;
+    if updated == 0 {
+        return Err("Empleado no encontrado".to_string());
+    }
+    Ok(())
+}
+
 /// Deactivates an employee (soft delete: is_active = 0).
 #[tauri::command]
 pub fn employees_deactivate(id: i64) -> Result<(), String> {
@@ -249,19 +266,26 @@ pub fn employees_deactivate(id: i64) -> Result<(), String> {
 
 /// Returns the active cost rows for a given work type, joined with format labels.
 #[tauri::command]
-pub fn cost_list_for_work_type(work_type: String) -> Result<Vec<WorkCostDto>, String> {
+pub fn cost_list_for_work_type(work_type_id: i64) -> Result<Vec<WorkCostDto>, String> {
     let conn = db::open_connection()?;
+    let code: String = conn
+        .query_row(
+            "SELECT code FROM work_types WHERE id = ?1 AND is_active = 1",
+            params![work_type_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "Tipo de trabajo no válido".to_string())?;
     let mut stmt = conn
         .prepare(
             "SELECT f.id, f.label, cl.unit_cost
              FROM cost_list cl
-             JOIN formats f ON f.id = cl.format_id
+             JOIN formats f ON f.id = cl.format_id AND f.is_active = 1
              WHERE cl.is_active = 1 AND cl.work_type = ?1
              ORDER BY cl.unit_cost",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map(params![work_type.trim()], |row| {
+        .query_map(params![code], |row| {
             Ok(WorkCostDto {
                 format_id: row.get(0)?,
                 format_label: row.get(1)?,
@@ -291,11 +315,21 @@ pub fn work_batch_create(payload: CreateWorkBatchPayload) -> Result<i64, String>
     let paid = if payload.pay_now { total_cost } else { 0.0 };
     let status = if payload.pay_now { "pagado" } else { "pendiente" };
 
+    let (work_code, work_name): (String, String) = tx
+        .query_row(
+            "SELECT code, name FROM work_types WHERE id = ?1",
+            params![payload.work_type_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Tipo de trabajo no válido".to_string())?;
+
     tx.execute(
-        "INSERT INTO production_batches (type, date, employee_id, total_cost, paid, status, notes)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO production_batches (type, work_type_id, work_type_snapshot, date, employee_id, total_cost, paid, status, notes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
-            payload.work_type.trim(),
+            work_code,
+            payload.work_type_id,
+            work_name,
             payload.date.trim(),
             payload.employee_id,
             total_cost,
@@ -332,7 +366,7 @@ pub fn work_batch_create(payload: CreateWorkBatchPayload) -> Result<i64, String>
                 (type, concept, reference_type, reference_id, amount_cup, payment_method, date)
              VALUES ('egreso', ?1, 'salario', ?2, ?3, 'efectivo', datetime('now'))",
             params![
-                format!("Pago lote {} ({})", batch_id, payload.work_type.trim()),
+                format!("Pago lote {} ({})", batch_id, work_name),
                 batch_id,
                 total_cost
             ],

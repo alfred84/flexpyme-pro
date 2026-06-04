@@ -46,8 +46,15 @@ export async function deactivateEmployee(id: number): Promise<void> {
 /**
  * Loads active cost rows for a work type (to build the batch form).
  */
-export async function fetchCostListForWorkType(workType: string): Promise<WorkCostDto[]> {
-  return invoke<WorkCostDto[]>("cost_list_for_work_type", { workType });
+export async function fetchCostListForWorkType(workTypeId: number): Promise<WorkCostDto[]> {
+  return invoke<WorkCostDto[]>("cost_list_for_work_type", { workTypeId });
+}
+
+/**
+ * Reactiva un empleado dado de baja.
+ */
+export async function reactivateEmployee(id: number): Promise<void> {
+  return invoke("employees_reactivate", { id });
 }
 
 /**
