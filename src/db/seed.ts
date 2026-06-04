@@ -6,7 +6,15 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as XLSX from "xlsx";
 import { formats } from "@/db/schema";
-import { buildFallbackClients, FORMAT_LABELS, PRICE_ROWS, PRODUCT_CATEGORIES } from "@/db/seed-data";
+import {
+  buildCostRows,
+  buildFallbackClients,
+  CATEGORY_LABELS,
+  FORMAT_LABELS,
+  PRICE_ROWS,
+  PRODUCT_CATEGORIES,
+  SETTINGS_SEED,
+} from "@/db/seed-data";
 
 function parseExcelClients(excelPath: string): { code: string; name: string }[] {
   const workbook = XLSX.readFile(excelPath);
@@ -54,9 +62,9 @@ async function main() {
     categoryIdByName.set(categoryName, id);
     sqlite
       .prepare(
-        "INSERT INTO product_categories (id, name) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name",
+        "INSERT INTO product_categories (id, name, label_es) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, label_es = excluded.label_es",
       )
-      .run(id, categoryName);
+      .run(id, categoryName, CATEGORY_LABELS[categoryName] ?? categoryName);
   });
 
   FORMAT_LABELS.forEach((formatLabel) => {
@@ -101,6 +109,27 @@ async function main() {
     }
   }
 
+  sqlite.prepare("DELETE FROM cost_list").run();
+  for (const row of buildCostRows()) {
+    const formatId = formatIdByLabel.get(row.format);
+    if (formatId === undefined) {
+      continue;
+    }
+    sqlite
+      .prepare(
+        "INSERT INTO cost_list (work_type, format_id, unit_cost, is_active) VALUES (?, ?, ?, 1)",
+      )
+      .run(row.workType, formatId, row.unitCost);
+  }
+
+  for (const [key, value] of Object.entries(SETTINGS_SEED)) {
+    sqlite
+      .prepare(
+        "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING",
+      )
+      .run(key, value);
+  }
+
   const clientsCount = sqlite.prepare("SELECT COUNT(*) as count FROM clients").get() as {
     count: number;
   };
@@ -110,12 +139,16 @@ async function main() {
   const pricesCount = sqlite.prepare("SELECT COUNT(*) as count FROM price_list").get() as {
     count: number;
   };
+  const costsCount = sqlite.prepare("SELECT COUNT(*) as count FROM cost_list").get() as {
+    count: number;
+  };
 
   console.log("Seed completed", {
     dbPath,
     clientsCount: clientsCount.count,
     categoriesCount: categoriesCount.count,
     pricesCount: pricesCount.count,
+    costsCount: costsCount.count,
     source: fs.existsSync(excelPath) ? "excel" : "fallback",
   });
 

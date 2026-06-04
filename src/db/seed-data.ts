@@ -18,10 +18,88 @@ export const PRODUCT_CATEGORIES = [
   "revista",
   "album",
   "caja",
+  "titulo",
   "book",
   "lona",
   "llavero",
 ] as const;
+
+/**
+ * Etiquetas en español por categoría (columna `label_es` de `product_categories`).
+ */
+export const CATEGORY_LABELS: Record<string, string> = {
+  fotos: "Fotos / Ampliaciones",
+  lienzo: "Lienzo",
+  revista: "Revistas",
+  album: "Álbumes",
+  caja: "Cajas",
+  titulo: "Títulos",
+  book: "Fotobooks / Book Mini",
+  lona: "Lonas",
+  llavero: "Llaveros",
+};
+
+/**
+ * Costo de mano de obra por tipo de trabajo (pago a empleados), en CUP.
+ */
+export interface SeedCostInput {
+  workType: "laminado" | "enmarcado" | "respaldo" | "impresion";
+  format: string;
+  unitCost: number;
+}
+
+const LAMINADO_COSTS: Record<string, number> = {
+  "5x7": 10, "6x8": 10, "8x10": 10,
+  "8x12": 16, "10x12": 16, "10x15": 16,
+  "12x16": 20, "12x18": 20,
+  "16x20": 26, "16x24": 26, "20x24": 26,
+  "24x32": 30, "24x39": 40, "24x60": 50,
+};
+
+const ENMARCADO_COSTS: Record<string, number> = {
+  "5x7": 10, "6x8": 10, "8x10": 10, "8x12": 10, "10x12": 10, "10x15": 10,
+  "12x16": 10, "12x18": 10,
+  "16x20": 20, "16x24": 20, "20x24": 20,
+  "24x32": 25, "24x39": 25, "24x60": 60,
+};
+
+const IMPRESION_COSTS: Record<string, number> = {
+  "5x7": 5, "6x8": 5, "8x10": 5, "8x12": 5, "10x12": 5, "10x15": 5,
+  "12x16": 10, "12x18": 10,
+  "16x20": 15, "16x24": 15, "20x24": 15,
+  "24x32": 20, "24x39": 20, "24x60": 50,
+};
+
+/**
+ * Construye las filas de `cost_list` a partir de las tablas de costo por formato.
+ * `respaldo` comparte la tarifa de `enmarcado` (regla de negocio §3.4).
+ */
+export function buildCostRows(): SeedCostInput[] {
+  const rows: SeedCostInput[] = [];
+  for (const [format, unitCost] of Object.entries(LAMINADO_COSTS)) {
+    rows.push({ workType: "laminado", format, unitCost });
+  }
+  for (const [format, unitCost] of Object.entries(ENMARCADO_COSTS)) {
+    rows.push({ workType: "enmarcado", format, unitCost });
+    rows.push({ workType: "respaldo", format, unitCost });
+  }
+  for (const [format, unitCost] of Object.entries(IMPRESION_COSTS)) {
+    rows.push({ workType: "impresion", format, unitCost });
+  }
+  return rows;
+}
+
+/**
+ * Configuración inicial del sistema (tabla `settings`).
+ */
+export const SETTINGS_SEED: Record<string, string> = {
+  business_name: "Taller Gráfico",
+  business_address: "",
+  business_phone: "",
+  currency: "CUP",
+  usd_exchange_rate: "250",
+  dark_mode: "true",
+};
 
 export const FORMAT_LABELS = [
   "4x6",
