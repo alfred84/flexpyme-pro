@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { UnitSelect } from "@/components/inventory/UnitSelect";
 import { createInventoryItem } from "@/db/queries/inventory";
 import { pushFlashMessage } from "@/lib/flash-message";
 
@@ -14,7 +15,7 @@ export function InventoryNewPage() {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
-  const [unit, setUnit] = useState("unidad");
+  const [unitId, setUnitId] = useState<number | null>(null);
   const [quantity, setQuantity] = useState("0");
   const [minStock, setMinStock] = useState("0");
   const [costPerUnit, setCostPerUnit] = useState("0");
@@ -37,10 +38,14 @@ export function InventoryNewPage() {
       setError("El nombre es obligatorio.");
       return;
     }
+    if (!unitId) {
+      setError("Selecciona una unidad de medida.");
+      return;
+    }
     await mutation.mutateAsync({
       name: name.trim(),
       category: category.trim() || null,
-      unit: unit.trim() || "unidad",
+      unitId,
       quantity: Number(quantity) || 0,
       minStock: Number(minStock) || 0,
       costPerUnit: Number(costPerUnit) || 0,
@@ -86,7 +91,7 @@ export function InventoryNewPage() {
           <label className="label" htmlFor="inv-unit">
             <span className="label-text">Unidad</span>
           </label>
-          <input id="inv-unit" className="input input-bordered" value={unit} onChange={(e) => setUnit(e.target.value)} />
+          <UnitSelect id="inv-unit" value={unitId} onChange={setUnitId} />
         </div>
         <div className="form-control">
           <label className="label" htmlFor="inv-qty">

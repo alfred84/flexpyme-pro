@@ -3,6 +3,7 @@
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
+use crate::commands::units::unit_snapshot_for_id;
 use crate::db;
 
 /// Inventory item with a computed low-stock flag.
@@ -12,6 +13,8 @@ pub struct InventoryItemDto {
     pub id: i64,
     pub name: String,
     pub category: Option<String>,
+    pub unit_id: Option<i64>,
+    pub unit_snapshot: Option<String>,
     pub unit: String,
     pub quantity: f64,
     pub min_stock: f64,
@@ -40,7 +43,8 @@ pub struct InventoryMovementDto {
 pub struct CreateItemPayload {
     pub name: String,
     pub category: Option<String>,
-    pub unit: String,
+    pub unit_id: Option<i64>,
+    pub unit: Option<String>,
     pub quantity: f64,
     pub min_stock: f64,
     pub cost_per_unit: f64,
@@ -55,7 +59,8 @@ pub struct UpdateItemPayload {
     pub id: i64,
     pub name: String,
     pub category: Option<String>,
-    pub unit: String,
+    pub unit_id: Option<i64>,
+    pub unit: Option<String>,
     pub min_stock: f64,
     pub cost_per_unit: f64,
     pub supplier: Option<String>,
@@ -90,25 +95,27 @@ pub fn inventory_items_list() -> Result<Vec<InventoryItemDto>, String> {
     let conn = db::open_connection()?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, name, category, unit, quantity, min_stock, cost_per_unit, supplier, notes
+            "SELECT id, name, category, unit_id, unit_snapshot, unit, quantity, min_stock, cost_per_unit, supplier, notes
              FROM inventory_items
              ORDER BY (quantity <= min_stock) DESC, name COLLATE NOCASE",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |row| {
-            let quantity: f64 = row.get(4)?;
-            let min_stock: f64 = row.get(5)?;
+            let quantity: f64 = row.get(6)?;
+            let min_stock: f64 = row.get(7)?;
             Ok(InventoryItemDto {
                 id: row.get(0)?,
                 name: row.get(1)?,
                 category: row.get(2)?,
-                unit: row.get(3)?,
+                unit_id: row.get(3)?,
+                unit_snapshot: row.get(4)?,
+                unit: row.get(5)?,
                 quantity,
                 min_stock,
-                cost_per_unit: row.get(6)?,
-                supplier: row.get(7)?,
-                notes: row.get(8)?,
+                cost_per_unit: row.get(8)?,
+                supplier: row.get(9)?,
+                notes: row.get(10)?,
                 low_stock: quantity <= min_stock,
             })
         })
@@ -121,27 +128,52 @@ pub fn inventory_items_list() -> Result<Vec<InventoryItemDto>, String> {
 pub fn inventory_item_get(id: i64) -> Result<InventoryItemDto, String> {
     let conn = db::open_connection()?;
     conn.query_row(
-        "SELECT id, name, category, unit, quantity, min_stock, cost_per_unit, supplier, notes
+        "SELECT id, name, category, unit_id, unit_snapshot, unit, quantity, min_stock, cost_per_unit, supplier, notes
          FROM inventory_items WHERE id = ?1",
         params![id],
         |row| {
-            let quantity: f64 = row.get(4)?;
-            let min_stock: f64 = row.get(5)?;
+            let quantity: f64 = row.get(6)?;
+            let min_stock: f64 = row.get(7)?;
             Ok(InventoryItemDto {
                 id: row.get(0)?,
                 name: row.get(1)?,
                 category: row.get(2)?,
-                unit: row.get(3)?,
+                unit_id: row.get(3)?,
+                unit_snapshot: row.get(4)?,
+                unit: row.get(5)?,
                 quantity,
                 min_stock,
-                cost_per_unit: row.get(6)?,
-                supplier: row.get(7)?,
-                notes: row.get(8)?,
+                cost_per_unit: row.get(8)?,
+                supplier: row.get(9)?,
+                notes: row.get(10)?,
                 low_stock: quantity <= min_stock,
             })
         },
     )
     .map_err(|_| "Ítem de inventario no encontrado".to_string())
+}
+
+fn resolve_unit_fields(
+    conn: &rusqlite::Connection,
+    unit_id: Option<i64>,
+    unit_text: Option<String>,
+) -> Result<(Option<i64>, String, String), String> {
+    if let Some(id) = unit_id {
+        let snapshot = unit_snapshot_for_id(conn, id)?;
+        let abbr: String = conn
+            .query_row(
+                "SELECT abbreviation FROM units WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        return Ok((Some(id), snapshot, abbr));
+    }
+    let unit = unit_text
+        .map(|u| u.trim().to_string())
+        .filter(|u| !u.is_empty())
+        .unwrap_or_else(|| "unidad".to_string());
+    Ok((None, unit.clone(), unit))
 }
 
 /// Creates a new inventory item.
@@ -151,23 +183,19 @@ pub fn inventory_item_create(payload: CreateItemPayload) -> Result<i64, String> 
     if name.is_empty() {
         return Err("El nombre es obligatorio".to_string());
     }
-    let unit = {
-        let u = payload.unit.trim().to_string();
-        if u.is_empty() {
-            "unidad".to_string()
-        } else {
-            u
-        }
-    };
     let conn = db::open_connection()?;
+    let (unit_id, unit_snapshot, unit_label) =
+        resolve_unit_fields(&conn, payload.unit_id, payload.unit)?;
     conn.execute(
         "INSERT INTO inventory_items
-            (name, category, unit, quantity, min_stock, cost_per_unit, supplier, notes, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
+            (name, category, unit_id, unit_snapshot, unit, quantity, min_stock, cost_per_unit, supplier, notes, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, datetime('now'))",
         params![
             name,
             normalize_optional(payload.category),
-            unit,
+            unit_id,
+            unit_snapshot,
+            unit_label,
             payload.quantity,
             payload.min_stock,
             payload.cost_per_unit,
@@ -187,16 +215,20 @@ pub fn inventory_item_update(payload: UpdateItemPayload) -> Result<(), String> {
         return Err("El nombre es obligatorio".to_string());
     }
     let conn = db::open_connection()?;
+    let (unit_id, unit_snapshot, unit_label) =
+        resolve_unit_fields(&conn, payload.unit_id, payload.unit)?;
     let updated = conn
         .execute(
             "UPDATE inventory_items
-             SET name = ?1, category = ?2, unit = ?3, min_stock = ?4, cost_per_unit = ?5,
-                 supplier = ?6, notes = ?7, updated_at = datetime('now')
-             WHERE id = ?8",
+             SET name = ?1, category = ?2, unit_id = ?3, unit_snapshot = ?4, unit = ?5,
+                 min_stock = ?6, cost_per_unit = ?7, supplier = ?8, notes = ?9, updated_at = datetime('now')
+             WHERE id = ?10",
             params![
                 name,
                 normalize_optional(payload.category),
-                payload.unit.trim(),
+                unit_id,
+                unit_snapshot,
+                unit_label,
                 payload.min_stock,
                 payload.cost_per_unit,
                 normalize_optional(payload.supplier),
@@ -243,13 +275,22 @@ pub fn inventory_movement_register(payload: MovementPayload) -> Result<(), Strin
         return Err("La salida supera el stock disponible".to_string());
     }
 
+    let unit_snapshot: Option<String> = tx
+        .query_row(
+            "SELECT unit_snapshot FROM inventory_items WHERE id = ?1",
+            params![payload.item_id],
+            |row| row.get(0),
+        )
+        .ok();
+
     tx.execute(
-        "INSERT INTO inventory_movements (item_id, type, quantity, reason, notes)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+        "INSERT INTO inventory_movements (item_id, type, quantity, unit_snapshot, reason, notes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![
             payload.item_id,
             movement_type,
             payload.quantity,
+            unit_snapshot,
             normalize_optional(payload.reason),
             normalize_optional(payload.notes)
         ],

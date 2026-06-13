@@ -5,6 +5,8 @@ export interface InventoryItemDto {
   id: number;
   name: string;
   category: string | null;
+  unitId: number | null;
+  unitSnapshot: string | null;
   unit: string;
   quantity: number;
   minStock: number;
@@ -33,7 +35,8 @@ export interface InventoryMovementDto {
 export interface CreateItemPayload {
   name: string;
   category: string | null;
-  unit: string;
+  unitId?: number | null;
+  unit?: string | null;
   quantity: number;
   minStock: number;
   costPerUnit: number;
@@ -48,7 +51,8 @@ export interface UpdateItemPayload {
   id: number;
   name: string;
   category: string | null;
-  unit: string;
+  unitId?: number | null;
+  unit?: string | null;
   minStock: number;
   costPerUnit: number;
   supplier: string | null;
