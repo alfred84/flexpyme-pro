@@ -106,9 +106,25 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Lista de precios: editar precios de venta por producto/formato/acabado
 - Precios de costo de empleados (configurables, base para cálculo de salarios)
 - Tasa de cambio USD → CUP (actualizable manualmente)
+- **Categorías** de productos (CRUD con `is_system`, snapshot en pedidos)
+- **Unidades** de medida (CRUD con tipo, snapshot en inventario)
 - Formatos disponibles (alta/baja de formatos)
 - Backup y restauración de la base de datos
 - Preferencias de la aplicación
+
+### 3.8 Módulo Stock (v2.2)
+- Vista operativa de pedidos con `production_status = listo` (bandeja de salida)
+- KPIs: listos, cobrados, sin cobrar, tiempo medio de espera
+- Alerta de pedidos listos hace más de 7 días
+- Acceso rápido a cobro si `payment_status = pendiente`
+- Campo `production_completed_at` al marcar listo
+
+### 3.9 Módulo Facturas (v2.2)
+- Vista financiera/contable sobre la misma tabla `invoices` (1 pedido = 1 factura)
+- KPIs por estado: cobrada, parcial, pendiente, anulada
+- Detalle con historial de pagos (`cash_transactions`)
+- Anulación con motivo y reverso en caja (sin borrado físico)
+- Rutas `/facturas`, impresión y registro de pago
 
 ---
 
@@ -126,7 +142,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 
 - **Estilo**: Dashboard profesional, limpio, moderno — inspirado en Odoo/FacturaScript
 - **Modo**: Dark mode por defecto (con opción de light mode en Configuración)
-- **Sidebar**: navegación lateral colapsable con iconos
+- **Sidebar**: Dashboard, Pedidos, Stock, Facturas, Clientes, Empleados, Inventario, Caja, Reportes, Configuración
 - **Iconos**: Lucide React en todos los menús, botones y acciones
 - **Tipografía**: moderna y legible
 - **Colores**: paleta profesional con azul/índigo como color primario, acentos de color para estados
@@ -216,6 +232,24 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 - **Formatos / tipos de trabajo**: CRUD en Configuración; snapshots en ítems y lotes históricos.
 - **Tasa USD**: badge del header enlaza a Configuración > Moneda.
 - **Ubicación BD**: `db_location.json`, mover/copiar con verificación.
+
+### v2.2 — Catálogos, Stock y Facturas (2026)
+- **Categorías**: tabla `product_categories` ampliada (`code`, `icon`, `is_system`, `is_active`); `category_snapshot` en `invoice_items`.
+- **Unidades**: tabla `units`; `unit_id` + `unit_snapshot` en inventario y movimientos.
+- **Stock**: módulo `/stock` sin tablas nuevas; badge = listos sin cobrar.
+- **Facturas**: módulo `/facturas`; anulación con `cancelled_at` / `cancelled_reason`.
+
+### Catálogos del sistema y snapshots (v2.2)
+
+| Catálogo | Tabla | Snapshot en |
+|----------|-------|-------------|
+| Categorías | `product_categories` | `invoice_items.category_snapshot` |
+| Formatos | `formats` | `invoice_items.format_label_snapshot` |
+| Unidades | `units` | `inventory_items.unit_snapshot`, `inventory_movements.unit_snapshot` |
+| Tipos trabajo | `work_types` | `production_batches.work_type_snapshot` |
+| Roles | `employee_roles` | `employees.role_snapshot` |
+
+Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece en formularios nuevos; nunca DELETE en catálogos.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
