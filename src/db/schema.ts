@@ -21,9 +21,31 @@ export const clients = sqliteTable(
 );
 
 export const productCategories = sqliteTable("product_categories", {
-  id: integer("id").primaryKey(),
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  code: text("code").notNull().unique(),
   name: text("name").notNull(),
+  description: text("description"),
+  icon: text("icon"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  isSystem: integer("is_system", { mode: "boolean" }).notNull().default(false),
   labelEs: text("label_es"),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+
+/**
+ * Unidades de medida para inventario (catálogo con protección is_system).
+ */
+export const units = sqliteTable("units", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  abbreviation: text("abbreviation").notNull(),
+  type: text("type").notNull(),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  isSystem: integer("is_system", { mode: "boolean" }).notNull().default(false),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 });
 
 export const formats = sqliteTable("formats", {
@@ -72,6 +94,9 @@ export const invoices = sqliteTable("invoices", {
   amountUsd: real("amount_usd").notNull().default(0),
   amountCup: real("amount_cup").notNull().default(0),
   notes: text("notes"),
+  productionCompletedAt: text("production_completed_at"),
+  cancelledAt: text("cancelled_at"),
+  cancelledReason: text("cancelled_reason"),
   deletedAt: text("deleted_at"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 });
@@ -84,6 +109,7 @@ export const invoiceItems = sqliteTable("invoice_items", {
   categoryId: integer("category_id")
     .notNull()
     .references(() => productCategories.id),
+  categorySnapshot: text("category_snapshot"),
   formatId: integer("format_id").references(() => formats.id),
   formatLabelSnapshot: text("format_label_snapshot"),
   finish: text("finish"),
@@ -199,6 +225,8 @@ export const inventoryItems = sqliteTable("inventory_items", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   category: text("category"),
+  unitId: integer("unit_id").references(() => units.id),
+  unitSnapshot: text("unit_snapshot"),
   unit: text("unit").notNull().default("unidad"),
   quantity: real("quantity").notNull().default(0),
   minStock: real("min_stock").notNull().default(0),
@@ -219,6 +247,7 @@ export const inventoryMovements = sqliteTable("inventory_movements", {
     .references(() => inventoryItems.id, { onDelete: "cascade" }),
   type: text("type").notNull(),
   quantity: real("quantity").notNull(),
+  unitSnapshot: text("unit_snapshot"),
   reason: text("reason"),
   referenceId: integer("reference_id"),
   date: text("date").notNull().default(sql`(datetime('now'))`),

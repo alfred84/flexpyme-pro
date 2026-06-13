@@ -3,7 +3,10 @@
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
+use crate::commands::categories::category_display_name;
 use crate::db;
+
+const EPS: f64 = 1e-6;
 
 /// Row for invoice list screens.
 #[derive(Debug, Serialize, Deserialize)]
@@ -46,6 +49,8 @@ pub struct InvoiceHeaderDto {
     pub amount_usd: f64,
     pub amount_cup: f64,
     pub notes: Option<String>,
+    pub cancelled_at: Option<String>,
+    pub cancelled_reason: Option<String>,
 }
 
 /// Invoice line with joined labels.
@@ -164,6 +169,40 @@ pub fn invoices_list() -> Result<Vec<InvoiceListDto>, String> {
                     i.production_status, i.payment_status
              FROM invoices i
              JOIN clients c ON c.id = i.client_id
+             WHERE i.deleted_at IS NULL AND i.cancelled_at IS NULL
+             ORDER BY i.date DESC, i.id DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(InvoiceListDto {
+                id: row.get(0)?,
+                invoice_number: row.get(1)?,
+                client_id: row.get(2)?,
+                client_name: row.get(3)?,
+                date: row.get(4)?,
+                total: row.get(5)?,
+                paid: row.get(6)?,
+                balance: row.get(7)?,
+                status: row.get(8)?,
+                production_status: row.get(9)?,
+                payment_status: row.get(10)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Lists invoices for the financial module, including cancelled rows.
+#[tauri::command]
+pub fn invoices_financial_list() -> Result<Vec<InvoiceListDto>, String> {
+    let conn = db::open_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT i.id, i.invoice_number, i.client_id, c.name, i.date, i.total, i.paid, i.balance, i.status,
+                    i.production_status, i.payment_status
+             FROM invoices i
+             JOIN clients c ON c.id = i.client_id
              WHERE i.deleted_at IS NULL
              ORDER BY i.date DESC, i.id DESC",
         )
@@ -216,11 +255,21 @@ pub fn invoices_update_production_status(id: i64, status: String) -> Result<Invo
         )
         .map_err(|_| "Pedido no encontrado".to_string())?;
     let legacy = sync_legacy_status(&status, &payment_status, balance, paid);
-    conn.execute(
-        "UPDATE invoices SET production_status = ?1, status = ?2 WHERE id = ?3",
-        params![status, legacy, id],
-    )
-    .map_err(|e| e.to_string())?;
+    if status == "listo" {
+        conn.execute(
+            "UPDATE invoices SET production_status = ?1, status = ?2,
+             production_completed_at = COALESCE(production_completed_at, datetime('now'))
+             WHERE id = ?3",
+            params![status, legacy, id],
+        )
+        .map_err(|e| e.to_string())?;
+    } else {
+        conn.execute(
+            "UPDATE invoices SET production_status = ?1, status = ?2 WHERE id = ?3",
+            params![status, legacy, id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
     invoices_get_detail(id).map(|d| d.invoice)
 }
 
@@ -257,7 +306,8 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
             "SELECT i.id, i.invoice_number, i.client_id, c.name, i.date, i.subtotal, i.advance_payment, i.previous_debt,
                     i.total, i.paid, i.balance, i.status, i.production_status, i.payment_status,
                     i.payment_method, i.payment_currency,
-                    i.exchange_rate_snapshot, i.amount_usd, i.amount_cup, i.notes
+                    i.exchange_rate_snapshot, i.amount_usd, i.amount_cup, i.notes,
+                    i.cancelled_at, i.cancelled_reason
              FROM invoices i
              JOIN clients c ON c.id = i.client_id
              WHERE i.id = ?1 AND i.deleted_at IS NULL",
@@ -284,6 +334,8 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                     amount_usd: row.get(17)?,
                     amount_cup: row.get(18)?,
                     notes: row.get(19)?,
+                    cancelled_at: row.get(20)?,
+                    cancelled_reason: row.get(21)?,
                 })
             },
         )
@@ -291,7 +343,9 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
 
     let mut stmt = conn
         .prepare(
-            "SELECT ii.id, ii.category_id, pc.name, ii.format_id,
+            "SELECT ii.id, ii.category_id,
+                    COALESCE(ii.category_snapshot, NULLIF(trim(pc.label_es), ''), pc.name),
+                    ii.format_id,
                     COALESCE(ii.format_label_snapshot, f.label) AS format_label,
                     ii.finish, ii.service, ii.quantity, ii.unit_price, ii.subtotal
              FROM invoice_items ii
@@ -469,12 +523,14 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
         } else {
             None
         };
+        let category_snapshot = category_display_name(&tx, item.category_id)?;
         tx.execute(
-            "INSERT INTO invoice_items (invoice_id, category_id, format_id, format_label_snapshot, finish, service, quantity, unit_price, subtotal)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO invoice_items (invoice_id, category_id, category_snapshot, format_id, format_label_snapshot, finish, service, quantity, unit_price, subtotal)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 invoice_id,
                 item.category_id,
+                category_snapshot,
                 item.format_id,
                 format_label,
                 finish,
@@ -568,3 +624,213 @@ pub async fn export_invoice_pdf(app: tauri::AppHandle, id: i64) -> Result<String
 
     Ok(path.to_string_lossy().to_string())
 }
+
+/// Payment row for invoice financial detail.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoicePaymentHistoryRow {
+    pub id: i64,
+    pub date: String,
+    pub concept: String,
+    pub amount_cup: f64,
+    pub amount_usd: f64,
+    pub payment_method: String,
+}
+
+/// KPI metrics for the invoices module.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceMetricsDto {
+    pub total_amount: f64,
+    pub total_count: i64,
+    pub cobradas_amount: f64,
+    pub cobradas_count: i64,
+    pub parciales_amount: f64,
+    pub parciales_count: i64,
+    pub pendientes_amount: f64,
+    pub pendientes_count: i64,
+    pub anuladas_count: i64,
+}
+
+fn financial_status(balance: f64, paid: f64, cancelled: bool) -> &'static str {
+    if cancelled {
+        return "anulada";
+    }
+    if balance <= EPS {
+        return "cobrada";
+    }
+    if paid > EPS {
+        return "parcial";
+    }
+    "pendiente"
+}
+
+/// Returns payment history from cash transactions linked to the invoice.
+#[tauri::command]
+pub fn get_invoice_payment_history(invoice_id: i64) -> Result<Vec<InvoicePaymentHistoryRow>, String> {
+    let conn = db::open_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, date, concept, amount_cup, amount_usd, payment_method
+             FROM cash_transactions
+             WHERE reference_type = 'pedido' AND reference_id = ?1 AND type = 'ingreso'
+             ORDER BY date DESC, id DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![invoice_id], |row| {
+            Ok(InvoicePaymentHistoryRow {
+                id: row.get(0)?,
+                date: row.get(1)?,
+                concept: row.get(2)?,
+                amount_cup: row.get(3)?,
+                amount_usd: row.get(4)?,
+                payment_method: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Aggregated financial metrics for invoice list KPI cards.
+#[tauri::command]
+pub fn get_invoice_metrics() -> Result<InvoiceMetricsDto, String> {
+    let conn = db::open_connection()?;
+    conn.query_row(
+        "SELECT
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL THEN total ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND balance <= ?1 THEN total ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND balance <= ?1 THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND balance > ?1 AND paid > ?1 THEN balance ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND balance > ?1 AND paid > ?1 THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND paid <= ?1 AND balance > ?1 THEN balance ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND paid <= ?1 AND balance > ?1 THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN cancelled_at IS NOT NULL THEN 1 ELSE 0 END), 0)
+         FROM invoices WHERE deleted_at IS NULL",
+        params![EPS, EPS, EPS, EPS, EPS, EPS, EPS, EPS],
+        |row| {
+            Ok(InvoiceMetricsDto {
+                total_amount: row.get(0)?,
+                total_count: row.get(1)?,
+                cobradas_amount: row.get(2)?,
+                cobradas_count: row.get(3)?,
+                parciales_amount: row.get(4)?,
+                parciales_count: row.get(5)?,
+                pendientes_amount: row.get(6)?,
+                pendientes_count: row.get(7)?,
+                anuladas_count: row.get(8)?,
+            })
+        },
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// Cancels an invoice with reason and reverses recorded payments in cash.
+#[tauri::command]
+pub fn cancel_invoice(invoice_id: i64, reason: String) -> Result<InvoiceHeaderDto, String> {
+    let reason = reason.trim().to_string();
+    if reason.is_empty() {
+        return Err("El motivo de anulación es obligatorio".to_string());
+    }
+    let mut conn = db::open_connection()?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let (invoice_number, payment_status, balance, _paid, cancelled_at): (
+        String,
+        String,
+        f64,
+        f64,
+        Option<String>,
+    ) = tx
+        .query_row(
+            "SELECT invoice_number, payment_status, balance, paid, cancelled_at
+             FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
+            params![invoice_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+        )
+        .map_err(|_| "Factura no encontrada".to_string())?;
+    if cancelled_at.is_some() {
+        return Err("La factura ya está anulada".to_string());
+    }
+    if payment_status == "cobrado" && balance <= EPS {
+        return Err("No se puede anular una factura totalmente cobrada".to_string());
+    }
+
+    let payments: Vec<(i64, f64, f64, f64, String)> = {
+        let mut stmt = tx
+            .prepare(
+                "SELECT id, amount_cup, amount_usd, exchange_rate, payment_method
+                 FROM cash_transactions
+                 WHERE reference_type = 'pedido' AND reference_id = ?1 AND type = 'ingreso'",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![invoice_id], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, f64>(1)?,
+                    row.get::<_, f64>(2)?,
+                    row.get::<_, f64>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        rows
+    };
+
+    for (_id, amount_cup, amount_usd, exchange_rate, payment_method) in payments {
+        if amount_cup <= EPS && amount_usd <= EPS {
+            continue;
+        }
+        tx.execute(
+            "INSERT INTO cash_transactions
+                (type, concept, reference_type, reference_id, amount_cup, amount_usd, exchange_rate, payment_method, date)
+             VALUES ('egreso', ?1, 'pedido', ?2, ?3, ?4, ?5, ?6, datetime('now'))",
+            params![
+                format!("Reverso anulación {}", invoice_number),
+                invoice_id,
+                amount_cup,
+                amount_usd,
+                exchange_rate,
+                payment_method
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    let client_id: i64 = tx
+        .query_row(
+            "SELECT client_id FROM invoices WHERE id = ?1",
+            params![invoice_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    tx.execute(
+        "UPDATE invoices SET status = 'anulada', payment_status = 'pendiente', paid = 0, balance = 0,
+         cancelled_at = datetime('now'), cancelled_reason = ?1
+         WHERE id = ?2",
+        params![reason, invoice_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let new_client_balance: f64 = tx
+        .query_row(
+            "SELECT COALESCE(SUM(balance), 0) FROM invoices
+             WHERE client_id = ?1 AND deleted_at IS NULL AND cancelled_at IS NULL",
+            params![client_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    tx.execute(
+        "UPDATE clients SET balance = ?1, updated_at = datetime('now') WHERE id = ?2",
+        params![new_client_balance, client_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    tx.commit().map_err(|e| e.to_string())?;
+    invoices_get_detail(invoice_id).map(|d| d.invoice)
+}
+

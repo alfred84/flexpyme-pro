@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { Building2, Coins, DollarSign, HardDriveDownload, Hammer, Ruler, Tag, Trash2, Upload, Users } from "lucide-react";
+import { Building2, Coins, DollarSign, HardDriveDownload, Hammer, Layers, Ruler, Scale, Tag, Trash2, Upload, Users } from "lucide-react";
+import { CategoriesTab } from "@/features/settings/components/CategoriesTab";
+import { UnitsTab } from "@/features/settings/components/UnitsTab";
 import { BusinessLogo } from "@/components/common/BusinessLogo";
 import { EmployeeRolesTab } from "@/features/settings/components/EmployeeRolesTab";
 import { FormatsTab } from "@/features/settings/components/FormatsTab";
@@ -28,6 +30,8 @@ type TabKey =
   | "costos"
   | "moneda"
   | "roles"
+  | "categorias"
+  | "unidades"
   | "formatos"
   | "tipos-trabajo"
   | "backup";
@@ -38,6 +42,8 @@ const TABS: { key: TabKey; label: string; icon: typeof Building2 }[] = [
   { key: "costos", label: "Costos", icon: Coins },
   { key: "moneda", label: "Moneda", icon: DollarSign },
   { key: "roles", label: "Roles", icon: Users },
+  { key: "categorias", label: "Categorías", icon: Layers },
+  { key: "unidades", label: "Unidades", icon: Scale },
   { key: "formatos", label: "Formatos", icon: Ruler },
   { key: "tipos-trabajo", label: "Tipos de Trabajo", icon: Hammer },
   { key: "backup", label: "Backup", icon: HardDriveDownload },
@@ -93,6 +99,8 @@ export function SettingsPage() {
       {tab === "costos" && <CostsTab />}
       {tab === "moneda" && <CurrencyTab />}
       {tab === "roles" && <EmployeeRolesTab />}
+      {tab === "categorias" && <CategoriesTab />}
+      {tab === "unidades" && <UnitsTab />}
       {tab === "formatos" && <FormatsTab />}
       {tab === "tipos-trabajo" && <WorkTypesTab />}
       {tab === "backup" && <BackupTab />}

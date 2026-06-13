@@ -5,6 +5,8 @@ import type {
   InvoiceDetailDto,
   InvoiceHeaderDto,
   InvoiceListDto,
+  InvoiceMetricsDto,
+  InvoicePaymentHistoryRow,
 } from "@/types/invoice";
 
 /**
@@ -12,6 +14,34 @@ import type {
  */
 export async function fetchInvoices(): Promise<InvoiceListDto[]> {
   return invoke<InvoiceListDto[]>("invoices_list");
+}
+
+/**
+ * Lista facturas para el módulo financiero (incluye anuladas).
+ */
+export async function fetchInvoicesFinancial(): Promise<InvoiceListDto[]> {
+  return invoke<InvoiceListDto[]>("invoices_financial_list");
+}
+
+/**
+ * KPIs del módulo Facturas.
+ */
+export async function fetchInvoiceMetrics(): Promise<InvoiceMetricsDto> {
+  return invoke<InvoiceMetricsDto>("get_invoice_metrics");
+}
+
+/**
+ * Historial de pagos de una factura.
+ */
+export async function fetchInvoicePaymentHistory(invoiceId: number): Promise<InvoicePaymentHistoryRow[]> {
+  return invoke<InvoicePaymentHistoryRow[]>("get_invoice_payment_history", { invoiceId });
+}
+
+/**
+ * Anula una factura con motivo obligatorio.
+ */
+export async function cancelInvoice(invoiceId: number, reason: string): Promise<InvoiceHeaderDto> {
+  return invoke<InvoiceHeaderDto>("cancel_invoice", { invoiceId, reason });
 }
 
 /**

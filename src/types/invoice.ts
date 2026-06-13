@@ -39,6 +39,35 @@ export interface InvoiceHeaderDto {
   amountUsd: number;
   amountCup: number;
   notes: string | null;
+  cancelledAt: string | null;
+  cancelledReason: string | null;
+}
+
+/**
+ * Pago registrado en caja vinculado a una factura.
+ */
+export interface InvoicePaymentHistoryRow {
+  id: number;
+  date: string;
+  concept: string;
+  amountCup: number;
+  amountUsd: number;
+  paymentMethod: string;
+}
+
+/**
+ * KPIs del módulo Facturas.
+ */
+export interface InvoiceMetricsDto {
+  totalAmount: number;
+  totalCount: number;
+  cobradasAmount: number;
+  cobradasCount: number;
+  parcialesAmount: number;
+  parcialesCount: number;
+  pendientesAmount: number;
+  pendientesCount: number;
+  anuladasCount: number;
 }
 
 /**

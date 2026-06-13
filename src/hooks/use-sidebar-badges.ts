@@ -29,12 +29,20 @@ export function useSidebarBadges(): SidebarBadges {
   });
 
   const pedidosPendientes = (invoicesQuery.data ?? []).filter(
-    (invoice) => invoice.balance > 0,
+    (invoice) => invoice.productionStatus === "en_produccion",
+  ).length;
+  const stockListo = (invoicesQuery.data ?? []).filter(
+    (invoice) => invoice.productionStatus === "listo" && invoice.paymentStatus === "pendiente",
+  ).length;
+  const facturasPendientes = (invoicesQuery.data ?? []).filter(
+    (invoice) => invoice.balance > 1e-6 && invoice.status !== "anulada",
   ).length;
   const stockBajo = (inventoryQuery.data ?? []).filter((item) => item.lowStock).length;
 
   return {
     pedidosPendientes,
+    stockListo,
+    facturasPendientes,
     stockBajo,
   };
 }

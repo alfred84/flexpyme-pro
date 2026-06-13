@@ -1,10 +1,13 @@
 pub mod cashflow;
 pub mod cashier;
+pub mod categories;
 pub mod clients;
 pub mod employee_roles;
 pub mod employees;
 pub mod formats;
 pub mod work_types;
+pub mod units;
+pub mod stock;
 pub mod inventory;
 pub mod invoices;
 pub mod production;

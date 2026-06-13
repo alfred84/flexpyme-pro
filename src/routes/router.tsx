@@ -16,6 +16,9 @@ import { InvoiceDetailPage } from "@/features/invoices/pages/InvoiceDetailPage";
 import { InvoicePrintPage } from "@/features/invoices/pages/InvoicePrintPage";
 import { InvoiceNewPage } from "@/features/invoices/pages/InvoiceNewPage";
 import { InvoicesListPage } from "@/features/invoices/pages/InvoicesListPage";
+import { FacturaDetailPage } from "@/features/invoices/pages/FacturaDetailPage";
+import { FacturasPage } from "@/features/invoices/pages/FacturasPage";
+import { StockPage } from "@/features/stock/pages/StockPage";
 import { EmployeesListPage } from "@/features/employees/pages/EmployeesListPage";
 import { EmployeeNewPage } from "@/features/employees/pages/EmployeeNewPage";
 import { EmployeeEditPage } from "@/features/employees/pages/EmployeeEditPage";
@@ -99,6 +102,42 @@ const settingsRoute = createRoute({
     tab: typeof search.tab === "string" ? search.tab : "general",
   }),
   component: SettingsPage,
+});
+
+const stockListRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "stock",
+  component: StockPage,
+});
+
+const stockDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "stock/$invoiceId",
+  component: InvoiceDetailPage,
+});
+
+const facturasListRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "facturas",
+  component: FacturasPage,
+});
+
+const facturaDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "facturas/$invoiceId",
+  component: FacturaDetailPage,
+});
+
+const facturaPrintRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "facturas/$invoiceId/imprimir",
+  component: InvoicePrintPage,
+});
+
+const facturaPagoRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "facturas/$invoiceId/pago",
+  component: InvoiceCashierPage,
 });
 
 const invoicesListRoute = createRoute({
@@ -209,6 +248,12 @@ const routeTree = rootRoute.addChildren([
   productionBatchDetailRoute,
   reportsRoute,
   settingsRoute,
+  stockListRoute,
+  stockDetailRoute,
+  facturasListRoute,
+  facturaDetailRoute,
+  facturaPrintRoute,
+  facturaPagoRoute,
   invoicesListRoute,
   invoicesNewRoute,
   invoicePrintRoute,

@@ -1,6 +1,8 @@
 import {
   LayoutDashboard,
   ShoppingCart,
+  PackageCheck,
+  FileText,
   Users,
   UserCog,
   Package,
@@ -12,10 +14,12 @@ import {
 
 /**
  * Tipo de badge que puede mostrar un ítem del sidebar.
- * - `pedidosPendientes`: nº de pedidos en estado pendiente
- * - `stockBajo`: nº de ítems de inventario en o por debajo del stock mínimo
+ * - `pedidosPendientes`: pedidos en producción
+ * - `stockListo`: pedidos listos sin cobrar
+ * - `facturasPendientes`: facturas con saldo pendiente
+ * - `stockBajo`: ítems de inventario bajo mínimo
  */
-export type NavBadgeKey = "pedidosPendientes" | "stockBajo";
+export type NavBadgeKey = "pedidosPendientes" | "stockListo" | "facturasPendientes" | "stockBajo";
 
 /**
  * Definición de un ítem de navegación lateral.
@@ -34,6 +38,8 @@ export interface NavItem {
 export const PRIMARY_NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/pedidos", label: "Pedidos", icon: ShoppingCart, badge: "pedidosPendientes" },
+  { to: "/stock", label: "Stock", icon: PackageCheck, badge: "stockListo" },
+  { to: "/facturas", label: "Facturas", icon: FileText, badge: "facturasPendientes" },
   { to: "/clientes", label: "Clientes", icon: Users },
   { to: "/empleados", label: "Empleados", icon: UserCog },
   { to: "/inventario", label: "Inventario", icon: Package, badge: "stockBajo" },
