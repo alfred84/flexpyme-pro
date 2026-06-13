@@ -60,7 +60,9 @@ pub struct UpdatePricePayload {
 pub fn product_categories_list() -> Result<Vec<CategoryDto>, String> {
     let conn = db::open_connection()?;
     let mut stmt = conn
-        .prepare("SELECT id, name FROM product_categories ORDER BY id")
+        .prepare(
+            "SELECT id, name FROM product_categories WHERE is_active = 1 ORDER BY sort_order, id",
+        )
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |row| {

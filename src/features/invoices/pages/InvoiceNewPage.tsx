@@ -3,7 +3,8 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { fetchClients } from "@/db/queries/clients";
 import { createInvoice } from "@/db/queries/invoices";
-import { fetchFormats, fetchProductCategories, lookupUnitPrice } from "@/db/queries/prices";
+import { fetchCategories } from "@/db/queries/categories";
+import { fetchFormats, lookupUnitPrice } from "@/db/queries/prices";
 import { formatMoney } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 import { OrderPaymentSection, type OrderPaymentState } from "@/features/invoices/components/OrderPaymentSection";
@@ -42,7 +43,7 @@ export function InvoiceNewPage() {
   const queryClient = useQueryClient();
   const appSettings = useAppSettings();
   const clientsQuery = useQuery({ queryKey: ["clients", "list"], queryFn: fetchClients });
-  const categoriesQuery = useQuery({ queryKey: ["categories"], queryFn: fetchProductCategories });
+  const categoriesQuery = useQuery({ queryKey: ["categories", "active"], queryFn: () => fetchCategories(true) });
   const formatsQuery = useQuery({ queryKey: ["formats"], queryFn: fetchFormats });
 
   const [clientId, setClientId] = useState(0);
