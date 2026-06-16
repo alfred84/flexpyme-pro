@@ -652,19 +652,6 @@ pub struct InvoiceMetricsDto {
     pub anuladas_count: i64,
 }
 
-fn financial_status(balance: f64, paid: f64, cancelled: bool) -> &'static str {
-    if cancelled {
-        return "anulada";
-    }
-    if balance <= EPS {
-        return "cobrada";
-    }
-    if paid > EPS {
-        return "parcial";
-    }
-    "pendiente"
-}
-
 /// Returns payment history from cash transactions linked to the invoice.
 #[tauri::command]
 pub fn get_invoice_payment_history(invoice_id: i64) -> Result<Vec<InvoicePaymentHistoryRow>, String> {
