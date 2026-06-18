@@ -82,7 +82,14 @@ git push -u origin main
 
 ## Base de datos (SQLite)
 
-El archivo de trabajo por defecto es `.local/flexpyme.db` (fuera de `src-tauri` para evitar reinicios del watcher en desarrollo).
+En desarrollo, el archivo de trabajo por defecto es `.local/flexpyme.db` (fuera de `src-tauri` para evitar reinicios del watcher).
+
+En release/ejecutable portable, la app usa siempre `flexpyme.db` junto al ejecutable:
+
+- Si `flexpyme.db` existe en el directorio del ejecutable, se carga como BD activa.
+- Si no existe, la app lo crea y aplica el esquema vigente.
+- Los respaldos se guardan en `backups/` junto a `flexpyme.db`.
+- La ubicación de la BD no se mueve desde la UI; se respalda o restaura desde Configuración > Backup.
 
 1. Aplicar migraciones (o usar seed, que las aplica antes de insertar datos):
 
@@ -97,6 +104,15 @@ pnpm db:seed
 ```
 
 Si la migración falla por tablas duplicadas, borra `.local/flexpyme.db` y vuelve a ejecutar `pnpm db:migrate` o `pnpm db:seed`.
+
+### Backups y restauración
+
+En **Configuración > Backup**:
+
+- Crear respaldo manual con nombre `flexpyme-backup-manual-YYYYMMDD-HHMMSS.db`.
+- Configurar backup automático cada N días (por defecto 5).
+- Ver los últimos 5 backups también visibles desde Dashboard.
+- Restaurar/importar una BD `.db` compatible. La app valida integridad y esquema, crea un respaldo previo y reemplaza la BD activa conservando el nombre `flexpyme.db`.
 
 ## Clientes
 
@@ -115,4 +131,4 @@ En **Pedidos** (`/pedidos`): listado, **Nuevo pedido** con líneas (categoría, 
 - **Empleados**: `employees_*` (CRUD + baja), `cost_list_for_work_type`, `work_batch_create`, `work_batches_for_employee`, `work_batch_pay`.
 - **Inventario**: `inventory_items_list`, `inventory_item_get/create/update`, `inventory_movement_register`, `inventory_movements_for_item`.
 - **Caja**: `cash_balance`, `cash_transactions_list`, `cash_daily_series`, `cash_transaction_create`.
-- **Configuración**: `settings_get_all`, `settings_set_value`, `settings_backup_database`, `cost_list_all`, `cost_update`.
+- **Configuración**: `settings_get_all`, `settings_set_value`, `settings_backup_database`, `settings_get_backup_overview`, `settings_restore_database`, `cost_list_all`, `cost_update`.

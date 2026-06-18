@@ -15,11 +15,13 @@ import {
   ArrowRight,
   CircleDollarSign,
   ClipboardList,
+  DatabaseBackup,
   Package,
   Receipt,
 } from "lucide-react";
 import { fetchIncomeByCategory, fetchReportsSummary } from "@/db/queries/reports";
 import { fetchInvoices } from "@/db/queries/invoices";
+import { fetchBackupOverview } from "@/db/queries/settings";
 import { formatMoney } from "@/lib/format-money";
 import { useAppSettings } from "@/hooks/use-app-settings";
 
@@ -85,6 +87,11 @@ export function DashboardPage() {
     queryFn: fetchInvoices,
   });
 
+  const backupOverviewQuery = useQuery({
+    queryKey: ["settings", "backup-overview"],
+    queryFn: fetchBackupOverview,
+  });
+
   const summary = summaryQuery.data;
   const invoices = invoicesQuery.data ?? [];
 
@@ -95,6 +102,7 @@ export function DashboardPage() {
   const unpaidCount = invoices.filter((inv) => inv.balance > 0).length;
   const todayCount = invoices.filter((inv) => inv.date === today).length;
   const chartData = (incomeQuery.data ?? []).map((row) => ({ name: row.label, total: row.total }));
+  const backups = backupOverviewQuery.data?.backups ?? [];
 
   return (
     <section className="space-y-6">
@@ -226,6 +234,41 @@ export function DashboardPage() {
             <Link to="/pedidos/nuevo" className="btn btn-primary btn-sm mt-2">
               Nuevo pedido
             </Link>
+          </div>
+        </div>
+
+        <div className="card bg-base-200 lg:col-span-3">
+          <div className="card-body">
+            <div className="flex items-center justify-between">
+              <h3 className="card-title text-base">
+                <DatabaseBackup className="h-5 w-5" /> Últimos backups
+              </h3>
+              <Link to="/configuracion" search={{ tab: "backup" }} className="btn btn-ghost btn-xs gap-1">
+                Configurar <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            <p className="text-xs text-base-content/60">
+              Backup automático cada {backupOverviewQuery.data?.intervalDays ?? 5} días. Último programado:{" "}
+              {backupOverviewQuery.data?.lastScheduledBackupAt ?? "Sin registro"}
+            </p>
+            {backupOverviewQuery.isLoading ? (
+              <p className="text-sm text-base-content/60">Cargando backups...</p>
+            ) : backups.length === 0 ? (
+              <p className="text-sm text-base-content/60">Todavía no hay backups registrados.</p>
+            ) : (
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+                {backups.map((backup) => (
+                  <div key={backup.path} className="rounded-lg border border-base-300 p-3">
+                    <p className="truncate font-mono text-xs" title={backup.path}>
+                      {backup.fileName}
+                    </p>
+                    <p className="mt-1 text-xs text-base-content/60">
+                      {backup.kind} · {backup.createdAt}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

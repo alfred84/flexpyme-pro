@@ -2,15 +2,15 @@ pub mod commands;
 pub mod db;
 
 #[cfg(not(debug_assertions))]
-use tauri::Manager;
-
-#[cfg(not(debug_assertions))]
-fn configure_release_database_path(app: &tauri::App) -> Result<(), String> {
-    let dir = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| format!("No se pudo resolver app_local_data_dir: {}", e))?;
-    std::fs::create_dir_all(&dir).map_err(|e| format!("No se pudo crear el directorio de datos: {}", e))?;
+fn configure_release_database_path() -> Result<(), String> {
+    let executable = std::env::current_exe()
+        .map_err(|e| format!("No se pudo resolver la ruta del ejecutable: {}", e))?;
+    let dir = executable
+        .parent()
+        .ok_or_else(|| "No se pudo resolver el directorio del ejecutable".to_string())?
+        .to_path_buf();
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("No se pudo crear el directorio de datos: {}", e))?;
     db::set_release_db_path(dir.join("flexpyme.db"))
 }
 
@@ -20,10 +20,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .setup(|app| {
+        .setup(|_app| {
             #[cfg(not(debug_assertions))]
-            configure_release_database_path(app)?;
-            db::init_db_path_from_app(app.handle())?;
+            configure_release_database_path()?;
             db::init_database_schema_if_empty()?;
             Ok(())
         })
@@ -88,11 +87,14 @@ pub fn run() {
             commands::settings::settings_get_all,
             commands::settings::settings_set_value,
             commands::settings::settings_backup_database,
+            commands::settings::settings_get_backup_overview,
+            commands::settings::settings_set_backup_interval_days,
+            commands::settings::settings_run_scheduled_backup_if_due,
+            commands::settings::settings_restore_database,
             commands::settings::update_business_logo,
             commands::settings::remove_business_logo,
             commands::settings::get_db_location,
             commands::settings::open_db_folder,
-            commands::settings::move_database,
             commands::employee_roles::get_employee_roles,
             commands::employee_roles::create_employee_role,
             commands::employee_roles::update_employee_role,

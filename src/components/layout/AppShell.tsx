@@ -27,7 +27,7 @@ export function AppShell() {
       .then((path) => {
         pushFlashMessage({
           kind: "info",
-          text: `Base de datos en: ${path}. Puedes cambiar la ubicación en Configuración > Backup.`,
+          text: `Base de datos activa: ${path}. Los respaldos se gestionan en Configuración > Backup.`,
         });
         window.localStorage.setItem(key, "1");
       })

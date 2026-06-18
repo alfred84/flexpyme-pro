@@ -2,7 +2,8 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,37 @@ pub struct CompanySettingsDto {
     pub company_phone: String,
     pub company_address: String,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupInfoDto {
+    pub file_name: String,
+    pub path: String,
+    pub created_at: String,
+    pub size_bytes: u64,
+    pub kind: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupOverviewDto {
+    pub db_path: String,
+    pub backup_dir: String,
+    pub interval_days: i64,
+    pub last_scheduled_backup_at: Option<String>,
+    pub backups: Vec<BackupInfoDto>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreDatabaseDto {
+    pub restored_path: String,
+    pub safety_backup_path: String,
+}
+
+const BACKUP_INTERVAL_DAYS_KEY: &str = "backup_interval_days";
+const LAST_SCHEDULED_BACKUP_AT_KEY: &str = "last_scheduled_backup_at";
+const DEFAULT_BACKUP_INTERVAL_DAYS: i64 = 5;
 
 fn read_setting(conn: &rusqlite::Connection, key: &str) -> String {
     conn.query_row(
@@ -36,7 +68,9 @@ pub fn settings_get_all() -> Result<HashMap<String, String>, String> {
         .prepare("SELECT key, value FROM settings")
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
         .map_err(|e| e.to_string())?;
 
     let mut map = HashMap::new();
@@ -47,37 +81,233 @@ pub fn settings_get_all() -> Result<HashMap<String, String>, String> {
     Ok(map)
 }
 
-/// Creates a timestamped backup copy of the SQLite database file next to it,
-/// returning the absolute path of the generated backup.
-#[tauri::command]
-pub fn settings_backup_database() -> Result<String, String> {
-    let db_path = db::resolve_db_path()?;
-    let parent = db_path
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
-    let backups_dir = parent.join("backups");
-    std::fs::create_dir_all(&backups_dir).map_err(|e| e.to_string())?;
-
-    let stamp = chrono_like_timestamp();
-    let target = backups_dir.join(format!("flexpyme-{}.db", stamp));
-    std::fs::copy(&db_path, &target).map_err(|e| {
-        format!("No se pudo crear el respaldo: {}", e)
-    })?;
-    Ok(target.to_string_lossy().to_string())
-}
-
-/// Builds a filesystem-safe timestamp (YYYYMMDD-HHMMSS) without extra crates.
-fn chrono_like_timestamp() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
+fn unix_now_secs() -> u64 {
+    SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn unix_secs_from_system_time(value: SystemTime) -> u64 {
+    value
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn civil_from_days(days_since_epoch: i64) -> (i32, u32, u32) {
+    let z = days_since_epoch + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = mp + if mp < 10 { 3 } else { -9 };
+    let year = y + if month <= 2 { 1 } else { 0 };
+    (year as i32, month as u32, day as u32)
+}
+
+fn utc_parts_from_unix_secs(secs: u64) -> (i32, u32, u32, u32, u32, u32) {
+    let days = (secs / 86_400) as i64;
+    let seconds_of_day = secs % 86_400;
+    let (year, month, day) = civil_from_days(days);
+    let hour = (seconds_of_day / 3_600) as u32;
+    let minute = ((seconds_of_day % 3_600) / 60) as u32;
+    let second = (seconds_of_day % 60) as u32;
+    (year, month, day, hour, minute, second)
+}
+
+fn backup_timestamp() -> String {
+    let (year, month, day, hour, minute, second) = utc_parts_from_unix_secs(unix_now_secs());
+    format!(
+        "{:04}{:02}{:02}-{:02}{:02}{:02}",
+        year, month, day, hour, minute, second
+    )
+}
+
+fn iso_utc_from_unix_secs(secs: u64) -> String {
+    let (year, month, day, hour, minute, second) = utc_parts_from_unix_secs(secs);
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC",
+        year, month, day, hour, minute, second
+    )
+}
+
+fn backup_dir_for_db(db_path: &Path) -> PathBuf {
+    db_path
+        .parent()
+        .map(|p| p.join("backups"))
+        .unwrap_or_else(|| PathBuf::from("backups"))
+}
+
+fn normalize_backup_interval(value: i64) -> i64 {
+    value.clamp(1, 365)
+}
+
+fn backup_interval_days(conn: &rusqlite::Connection) -> i64 {
+    let stored = read_setting(conn, BACKUP_INTERVAL_DAYS_KEY);
+    let parsed = stored
+        .parse::<i64>()
+        .unwrap_or(DEFAULT_BACKUP_INTERVAL_DAYS);
+    normalize_backup_interval(parsed)
+}
+
+fn last_scheduled_backup_at(conn: &rusqlite::Connection) -> Option<u64> {
+    read_setting(conn, LAST_SCHEDULED_BACKUP_AT_KEY)
+        .parse::<u64>()
+        .ok()
+}
+
+fn backup_kind_from_name(file_name: &str) -> String {
+    if file_name.contains("scheduled") {
+        "programado".to_string()
+    } else if file_name.contains("pre-restore") {
+        "pre-restauración".to_string()
+    } else {
+        "manual".to_string()
+    }
+}
+
+fn backup_info_from_path(path: PathBuf) -> Option<(BackupInfoDto, u64)> {
+    let metadata = fs::metadata(&path).ok()?;
+    if !metadata.is_file() {
+        return None;
+    }
+    let file_name = path.file_name()?.to_string_lossy().to_string();
+    if !file_name.ends_with(".db") || !file_name.starts_with("flexpyme-backup-") {
+        return None;
+    }
+    let modified = metadata
+        .modified()
+        .ok()
+        .map(unix_secs_from_system_time)
         .unwrap_or(0);
-    // Días desde epoch + hora del día (UTC) en formato compacto.
-    let days = secs / 86_400;
-    let tod = secs % 86_400;
-    format!("{}-{:05}", days, tod)
+    Some((
+        BackupInfoDto {
+            file_name: file_name.clone(),
+            path: path.to_string_lossy().to_string(),
+            created_at: iso_utc_from_unix_secs(modified),
+            size_bytes: metadata.len(),
+            kind: backup_kind_from_name(&file_name),
+        },
+        modified,
+    ))
+}
+
+fn list_recent_backups() -> Result<Vec<BackupInfoDto>, String> {
+    let db_path = db::resolve_db_path()?;
+    let backups_dir = backup_dir_for_db(&db_path);
+    fs::create_dir_all(&backups_dir).map_err(|e| e.to_string())?;
+    let mut entries = fs::read_dir(&backups_dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| backup_info_from_path(entry.path()))
+        .collect::<Vec<_>>();
+    entries.sort_by(|a, b| b.1.cmp(&a.1));
+    Ok(entries.into_iter().take(5).map(|entry| entry.0).collect())
+}
+
+fn create_backup(kind: &str) -> Result<PathBuf, String> {
+    let db_path = db::resolve_db_path()?;
+    if !db_path.exists() {
+        return Err("No existe una base de datos activa para respaldar".to_string());
+    }
+    let backups_dir = backup_dir_for_db(&db_path);
+    fs::create_dir_all(&backups_dir).map_err(|e| e.to_string())?;
+    let target = backups_dir.join(format!(
+        "flexpyme-backup-{}-{}.db",
+        kind,
+        backup_timestamp()
+    ));
+    fs::copy(&db_path, &target).map_err(|e| format!("No se pudo crear el respaldo: {}", e))?;
+    Ok(target)
+}
+
+fn run_scheduled_backup_if_due(
+    conn: &rusqlite::Connection,
+) -> Result<Option<BackupInfoDto>, String> {
+    let interval_days = backup_interval_days(conn);
+    let now = unix_now_secs();
+    let due = last_scheduled_backup_at(conn)
+        .map(|last| now.saturating_sub(last) >= (interval_days as u64) * 86_400)
+        .unwrap_or(true);
+    if !due {
+        return Ok(None);
+    }
+    let path = create_backup("scheduled")?;
+    upsert_setting(conn, LAST_SCHEDULED_BACKUP_AT_KEY, &now.to_string())?;
+    Ok(backup_info_from_path(path).map(|entry| entry.0))
+}
+
+fn backup_overview(conn: &rusqlite::Connection) -> Result<BackupOverviewDto, String> {
+    let db_path = db::resolve_db_path()?;
+    let backups_dir = backup_dir_for_db(&db_path);
+    fs::create_dir_all(&backups_dir).map_err(|e| e.to_string())?;
+    Ok(BackupOverviewDto {
+        db_path: db_path.to_string_lossy().to_string(),
+        backup_dir: backups_dir.to_string_lossy().to_string(),
+        interval_days: backup_interval_days(conn),
+        last_scheduled_backup_at: last_scheduled_backup_at(conn).map(iso_utc_from_unix_secs),
+        backups: list_recent_backups()?,
+    })
+}
+
+/// Creates a timestamped manual backup copy of the SQLite database file.
+#[tauri::command]
+pub fn settings_backup_database() -> Result<String, String> {
+    create_backup("manual").map(|path| path.to_string_lossy().to_string())
+}
+
+/// Returns backup configuration plus the five most recent backups.
+#[tauri::command]
+pub fn settings_get_backup_overview() -> Result<BackupOverviewDto, String> {
+    let conn = db::open_connection()?;
+    let _ = run_scheduled_backup_if_due(&conn)?;
+    backup_overview(&conn)
+}
+
+/// Persists the automatic backup interval in days.
+#[tauri::command]
+pub fn settings_set_backup_interval_days(days: i64) -> Result<BackupOverviewDto, String> {
+    let conn = db::open_connection()?;
+    let normalized = normalize_backup_interval(days);
+    upsert_setting(&conn, BACKUP_INTERVAL_DAYS_KEY, &normalized.to_string())?;
+    backup_overview(&conn)
+}
+
+/// Creates a scheduled backup when the configured interval has elapsed.
+#[tauri::command]
+pub fn settings_run_scheduled_backup_if_due() -> Result<Option<BackupInfoDto>, String> {
+    let conn = db::open_connection()?;
+    run_scheduled_backup_if_due(&conn)
+}
+
+/// Validates and restores a compatible SQLite database over the active `flexpyme.db`.
+#[tauri::command]
+pub fn settings_restore_database(source_path: String) -> Result<RestoreDatabaseDto, String> {
+    let source = PathBuf::from(source_path.trim());
+    db::validate_database_compatibility(&source)?;
+
+    let db_path = db::resolve_db_path()?;
+    if fs::canonicalize(&source).ok() == fs::canonicalize(&db_path).ok() {
+        return Err("La base seleccionada ya es la base de datos activa".to_string());
+    }
+
+    let safety_backup = create_backup("pre-restore")?;
+    let temp_path = db_path.with_extension("restore.tmp");
+    fs::copy(&source, &temp_path)
+        .map_err(|e| format!("No se pudo preparar la restauración: {}", e))?;
+    fs::copy(&temp_path, &db_path)
+        .map_err(|e| format!("No se pudo reemplazar la base de datos activa: {}", e))?;
+    let _ = fs::remove_file(&temp_path);
+    db::validate_database_compatibility(&db_path)?;
+
+    Ok(RestoreDatabaseDto {
+        restored_path: db_path.to_string_lossy().to_string(),
+        safety_backup_path: safety_backup.to_string_lossy().to_string(),
+    })
 }
 
 /// Upserts a single setting key/value pair.
@@ -165,9 +395,8 @@ pub async fn update_business_logo(app: AppHandle, source_path: String) -> Result
     if !source.exists() {
         return Err("Archivo de imagen no encontrado".to_string());
     }
-    let ext = allowed_logo_ext(source).ok_or_else(|| {
-        "Formato no válido. Use PNG, JPG, WEBP o SVG.".to_string()
-    })?;
+    let ext = allowed_logo_ext(source)
+        .ok_or_else(|| "Formato no válido. Use PNG, JPG, WEBP o SVG.".to_string())?;
     let data_dir = app
         .path()
         .app_data_dir()
@@ -197,23 +426,29 @@ pub fn remove_business_logo(app: AppHandle) -> Result<(), String> {
         }
     }
     let conn = db::open_connection()?;
-    conn.execute("DELETE FROM settings WHERE key = ?1", params![LOGO_SETTING_KEY])
-        .map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM settings WHERE key = ?1", params![LOGO_VERSION_KEY])
-        .map_err(|e| e.to_string())?;
+    conn.execute(
+        "DELETE FROM settings WHERE key = ?1",
+        params![LOGO_SETTING_KEY],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "DELETE FROM settings WHERE key = ?1",
+        params![LOGO_VERSION_KEY],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
 /// Returns the current SQLite database file path.
 #[tauri::command]
-pub fn get_db_location(app: AppHandle) -> Result<String, String> {
-    Ok(db::get_db_path(&app).to_string_lossy().to_string())
+pub fn get_db_location() -> Result<String, String> {
+    Ok(db::resolve_db_path()?.to_string_lossy().to_string())
 }
 
 /// Opens the folder containing the database in the system file manager.
 #[tauri::command]
-pub fn open_db_folder(app: AppHandle) -> Result<(), String> {
-    let db_path = db::get_db_path(&app);
+pub fn open_db_folder() -> Result<(), String> {
+    let db_path = db::resolve_db_path()?;
     let folder = db_path
         .parent()
         .ok_or_else(|| "Ruta de base de datos inválida".to_string())?;
@@ -229,10 +464,4 @@ pub fn open_db_folder(app: AppHandle) -> Result<(), String> {
         return Err("Abrir carpeta solo está implementado en Windows".to_string());
     }
     Ok(())
-}
-
-/// Copies the database to a new path and updates `db_location.json`.
-#[tauri::command]
-pub async fn move_database(app: AppHandle, new_path: String) -> Result<String, String> {
-    db::move_database_to(&app, new_path)
 }

@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.0 | Última actualización: 2026-06-04
+### Versión: 2.3 | Última actualización: 2026-06-17
 
 ---
 
@@ -126,6 +126,18 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Anulación con motivo y reverso en caja (sin borrado físico)
 - Rutas `/facturas`, impresión y registro de pago
 
+### 3.10 Base de datos portable y backups (v2.3)
+- En release/ejecutable portable, la BD activa siempre se llama `flexpyme.db`.
+- `flexpyme.db` vive en el mismo directorio donde está el ejecutable; si no existe, la app la crea y aplica el esquema vigente.
+- Si existe `flexpyme.db` junto al ejecutable, la app la carga como BD activa del sistema.
+- En desarrollo (`pnpm tauri dev`) se conserva `.local/flexpyme.db` para scripts, migraciones y evitar reinicios del watcher.
+- La ubicación de BD no se mueve desde la UI; Configuración > Backup solo muestra ruta, abre carpeta, respalda y restaura.
+- Backups manuales y programados se guardan en `backups/` junto a `flexpyme.db`.
+- Nombre de backups: `flexpyme-backup-<tipo>-YYYYMMDD-HHMMSS.db`.
+- Backup programado configurable por usuario; valor por defecto: 5 días.
+- Dashboard y Configuración > Backup muestran el histórico de los 5 últimos backups.
+- La restauración manual permite seleccionar un fichero `.db` compatible, valida integridad/esquema, crea un backup de seguridad previo y reemplaza la BD activa conservando el nombre `flexpyme.db`.
+
 ---
 
 ## 4. Moneda y Pagos
@@ -231,13 +243,20 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 - **Exportes**: CSV nativo con diálogo de guardado; XLSX/PDF siguen vía navegador/impresión.
 - **Formatos / tipos de trabajo**: CRUD en Configuración; snapshots en ítems y lotes históricos.
 - **Tasa USD**: badge del header enlaza a Configuración > Moneda.
-- **Ubicación BD**: `db_location.json`, mover/copiar con verificación.
+- **Ubicación BD**: en v2.3 se reemplaza `db_location.json`; release usa `flexpyme.db` junto al ejecutable.
 
 ### v2.2 — Catálogos, Stock y Facturas (2026)
 - **Categorías**: tabla `product_categories` ampliada (`code`, `icon`, `is_system`, `is_active`); `category_snapshot` en `invoice_items`.
 - **Unidades**: tabla `units`; `unit_id` + `unit_snapshot` en inventario y movimientos.
 - **Stock**: módulo `/stock` sin tablas nuevas; badge = listos sin cobrar.
 - **Facturas**: módulo `/facturas`; anulación con `cancelled_at` / `cancelled_reason`.
+
+### v2.3 — BD portable, backups y restauración (2026)
+- **BD portable**: release crea/carga `flexpyme.db` junto al ejecutable.
+- **Backup manual**: genera copias fechadas en la carpeta `backups`.
+- **Backup programado**: intervalo configurable en días, por defecto 5.
+- **Histórico**: Configuración > Backup y Dashboard muestran los últimos 5 backups.
+- **Restauración**: importa una BD compatible, valida integridad/esquema, crea backup de seguridad y reemplaza `flexpyme.db`.
 
 ### Catálogos del sistema y snapshots (v2.2)
 

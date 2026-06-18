@@ -1,6 +1,27 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { CompanySettingsDto } from "@/types/settings";
 
+export interface BackupInfoDto {
+  fileName: string;
+  path: string;
+  createdAt: string;
+  sizeBytes: number;
+  kind: string;
+}
+
+export interface BackupOverviewDto {
+  dbPath: string;
+  backupDir: string;
+  intervalDays: number;
+  lastScheduledBackupAt: string | null;
+  backups: BackupInfoDto[];
+}
+
+export interface RestoreDatabaseDto {
+  restoredPath: string;
+  safetyBackupPath: string;
+}
+
 export async function fetchCompanySettings(): Promise<CompanySettingsDto> {
   return invoke<CompanySettingsDto>("settings_get_company");
 }
@@ -30,6 +51,26 @@ export async function backupDatabase(): Promise<string> {
   return invoke<string>("settings_backup_database");
 }
 
+/** Returns backup settings and the five most recent backup files. */
+export async function fetchBackupOverview(): Promise<BackupOverviewDto> {
+  return invoke<BackupOverviewDto>("settings_get_backup_overview");
+}
+
+/** Persists the automatic backup interval in days. */
+export async function setBackupIntervalDays(days: number): Promise<BackupOverviewDto> {
+  return invoke<BackupOverviewDto>("settings_set_backup_interval_days", { days });
+}
+
+/** Runs a scheduled backup only when the configured interval has elapsed. */
+export async function runScheduledBackupIfDue(): Promise<BackupInfoDto | null> {
+  return invoke<BackupInfoDto | null>("settings_run_scheduled_backup_if_due");
+}
+
+/** Restores a compatible SQLite database over the active `flexpyme.db`. */
+export async function restoreDatabase(sourcePath: string): Promise<RestoreDatabaseDto> {
+  return invoke<RestoreDatabaseDto>("settings_restore_database", { sourcePath });
+}
+
 /** Copies logo image to app data and stores path in settings. */
 export async function updateBusinessLogo(sourcePath: string): Promise<string> {
   return invoke<string>("update_business_logo", { sourcePath });
@@ -50,7 +91,3 @@ export async function openDbFolder(): Promise<void> {
   return invoke("open_db_folder");
 }
 
-/** Moves the database file to a new path. */
-export async function moveDatabase(newPath: string): Promise<string> {
-  return invoke<string>("move_database", { newPath });
-}

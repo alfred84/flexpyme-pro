@@ -1,22 +1,18 @@
 //! Shared database configuration helpers.
 //!
 //! - **Debug (`tauri dev`)**: la BD sigue en `<repo>/.local/flexpyme.db` para alinear con `pnpm db:migrate`.
-//! - **Release**: la BD vive en el directorio local de datos de la app (p. ej. `%LOCALAPPDATA%\\com.flexpyme.pro\\`
-//!   en Windows), estable sin depender del cwd del proceso.
+//! - **Release**: la BD vive junto al ejecutable portable como `flexpyme.db`.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use rusqlite::{params, Connection};
-use serde_json::Value;
-use tauri::{AppHandle, Manager};
+use rusqlite::{params, Connection, OpenFlags};
 
 /// Canonical SQLite database file used by desktop runtime and scripts (solo perfil debug / workspace).
 pub const SQLITE_DB_PATH: &str = ".local/flexpyme.db";
 
 static RELEASE_DB_PATH: OnceLock<PathBuf> = OnceLock::new();
-static CUSTOM_DB_PATH: OnceLock<PathBuf> = OnceLock::new();
 
 /// Solo release: debe llamarse una vez desde `setup` antes de cualquier acceso a la BD.
 pub fn set_release_db_path(path: PathBuf) -> Result<(), String> {
@@ -42,57 +38,8 @@ fn workspace_root_dir() -> Result<PathBuf, String> {
     }
 }
 
-fn read_db_path_from_config_file(config_file: &PathBuf) -> Option<PathBuf> {
-    let content = fs::read_to_string(config_file).ok()?;
-    let json: Value = serde_json::from_str(&content).ok()?;
-    let path_str = json.get("db_path")?.as_str()?;
-    let custom = PathBuf::from(path_str);
-    if custom.exists() {
-        Some(custom)
-    } else {
-        None
-    }
-}
-
-/// Loads custom DB path from `db_location.json` if present (app config or workspace `.local`).
-pub fn init_db_path_from_app(app: &AppHandle) -> Result<(), String> {
-    if CUSTOM_DB_PATH.get().is_some() {
-        return Ok(());
-    }
-    if let Ok(config_dir) = app.path().app_config_dir() {
-        let config_file = config_dir.join("db_location.json");
-        if let Some(path) = read_db_path_from_config_file(&config_file) {
-            let _ = CUSTOM_DB_PATH.set(path);
-            return Ok(());
-        }
-    }
-    #[cfg(debug_assertions)]
-    {
-        let local_config = workspace_root_dir()?.join(".local/db_location.json");
-        if let Some(path) = read_db_path_from_config_file(&local_config) {
-            let _ = CUSTOM_DB_PATH.set(path);
-        }
-    }
-    Ok(())
-}
-
-/// Resolves the database path for Tauri commands that have an app handle.
-pub fn get_db_path(app: &AppHandle) -> PathBuf {
-    if let Some(path) = CUSTOM_DB_PATH.get() {
-        return path.clone();
-    }
-    let _ = init_db_path_from_app(app);
-    if let Some(path) = CUSTOM_DB_PATH.get() {
-        return path.clone();
-    }
-    resolve_db_path().unwrap_or_else(|_| PathBuf::from(SQLITE_DB_PATH))
-}
-
 /// Resolves the canonical SQLite path to an absolute path.
 pub fn resolve_db_path() -> Result<PathBuf, String> {
-    if let Some(path) = CUSTOM_DB_PATH.get() {
-        return Ok(path.clone());
-    }
     #[cfg(not(debug_assertions))]
     {
         return RELEASE_DB_PATH.get().cloned().ok_or_else(|| {
@@ -105,54 +52,24 @@ pub fn resolve_db_path() -> Result<PathBuf, String> {
     }
 }
 
-/// Persists a new database location and switches the active connection path.
-pub fn move_database_to(app: &AppHandle, new_path: String) -> Result<String, String> {
-    let source = resolve_db_path()?;
-    let dest = PathBuf::from(new_path.trim());
-    if dest == source {
-        return Ok(dest.to_string_lossy().to_string());
-    }
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    fs::copy(&source, &dest).map_err(|e| format!("No se pudo copiar la base de datos: {}", e))?;
-    let verify = Connection::open(&dest).map_err(|e| format!("Copia inválida: {}", e))?;
-    let _: i64 = verify
-        .query_row("SELECT COUNT(*) FROM sqlite_master", [], |row| row.get(0))
-        .map_err(|e| format!("Copia inválida: {}", e))?;
-    drop(verify);
-
-    let config_dir = app
-        .path()
-        .app_config_dir()
-        .map_err(|e| e.to_string())?;
-    fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
-    let config_file = config_dir.join("db_location.json");
-    let json = serde_json::json!({ "db_path": dest.to_string_lossy() });
-    fs::write(&config_file, serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())?;
-
-    #[cfg(debug_assertions)]
-    {
-        let local_config = workspace_root_dir()?.join(".local/db_location.json");
-        if let Some(parent) = local_config.parent() {
-            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-        fs::write(&local_config, serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
-    }
-
-    let _ = CUSTOM_DB_PATH.set(dest.clone());
-    fs::remove_file(&source).ok();
-    Ok(dest.to_string_lossy().to_string())
-}
-
 /// Migración inicial embebida (misma semántica que `src/db/migrations/`).
 const EMBEDDED_INITIAL_SCHEMA: &str = include_str!("../migrations/0000_vengeful_cerebro.sql");
 
 /// Migración v2 embebida: empleados, inventario, caja general, costos y columnas nuevas.
 /// Mantener alineada con `src/db/migrations/0001_aberrant_talon.sql`.
 const EMBEDDED_V2_SCHEMA: &str = include_str!("../migrations/0001_aberrant_talon.sql");
+const EMBEDDED_PAYMENT_SCHEMA: &str = include_str!("../../src/db/migrations/0002_nasty_vermin.sql");
+const EMBEDDED_EMPLOYEE_ROLES_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0003_tough_giant_man.sql");
+const EMBEDDED_DUAL_STATUS_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0004_young_quasimodo.sql");
+const EMBEDDED_WORK_TYPES_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0005_large_cerise.sql");
+const EMBEDDED_CATEGORIES_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0006_product_categories_v22.sql");
+const EMBEDDED_UNITS_SCHEMA: &str = include_str!("../../src/db/migrations/0007_units_v22.sql");
+const EMBEDDED_STOCK_INVOICES_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0008_stock_invoices_v22.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -160,7 +77,10 @@ fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     }
 
     let root = workspace_root_dir()?;
-    let legacy_candidates = [root.join("src-tauri/flexpyme.db"), root.join("src-tauri/src-tauri/flexpyme.db")];
+    let legacy_candidates = [
+        root.join("src-tauri/flexpyme.db"),
+        root.join("src-tauri/src-tauri/flexpyme.db"),
+    ];
     if let Some(source) = legacy_candidates.iter().find(|p| p.exists()) {
         fs::copy(source, db_path).map_err(|err| {
             format!(
@@ -174,7 +94,7 @@ fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     Ok(())
 }
 
-/// Crea el archivo si no existe, copia legacy si aplica y aplica el esquema SQL si la BD está vacía.
+/// Crea el archivo si no existe, copia legacy si aplica y aplica el esquema SQL vigente.
 /// Debe ejecutarse al arrancar la app (desde `setup`), después de `set_release_db_path` en release.
 pub fn init_database_schema_if_empty() -> Result<(), String> {
     let db_path = resolve_db_path()?;
@@ -196,6 +116,8 @@ pub fn init_database_schema_if_empty() -> Result<(), String> {
         conn.execute_batch(EMBEDDED_V2_SCHEMA)
             .map_err(|e| format!("No se pudo aplicar el esquema v2 de SQLite: {}", e))?;
     }
+
+    apply_current_migrations(&conn)?;
     Ok(())
 }
 
@@ -208,6 +130,118 @@ fn table_exists(conn: &Connection, table_name: &str) -> bool {
     )
     .map(|count| count > 0)
     .unwrap_or(false)
+}
+
+fn column_exists(conn: &Connection, table_name: &str, column_name: &str) -> bool {
+    let pragma = format!("PRAGMA table_info({})", table_name);
+    let mut stmt = match conn.prepare(&pragma) {
+        Ok(stmt) => stmt,
+        Err(_) => return false,
+    };
+    let rows = match stmt.query_map([], |row| row.get::<_, String>(1)) {
+        Ok(rows) => rows,
+        Err(_) => return false,
+    };
+    let found = rows.filter_map(Result::ok).any(|name| name == column_name);
+    found
+}
+
+fn execute_migration(conn: &Connection, sql: &str, label: &str) -> Result<(), String> {
+    conn.execute_batch(sql)
+        .map_err(|e| format!("No se pudo aplicar la migración {}: {}", label, e))
+}
+
+fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
+    if !column_exists(conn, "invoices", "payment_currency") {
+        execute_migration(conn, EMBEDDED_PAYMENT_SCHEMA, "0002_nasty_vermin")?;
+    }
+    if !table_exists(conn, "employee_roles") {
+        execute_migration(conn, EMBEDDED_EMPLOYEE_ROLES_SCHEMA, "0003_tough_giant_man")?;
+    }
+    if !column_exists(conn, "invoices", "production_status") {
+        execute_migration(conn, EMBEDDED_DUAL_STATUS_SCHEMA, "0004_young_quasimodo")?;
+    }
+    if !table_exists(conn, "work_types") {
+        execute_migration(conn, EMBEDDED_WORK_TYPES_SCHEMA, "0005_large_cerise")?;
+    }
+    if !column_exists(conn, "product_categories", "code") {
+        execute_migration(
+            conn,
+            EMBEDDED_CATEGORIES_SCHEMA,
+            "0006_product_categories_v22",
+        )?;
+    }
+    if !table_exists(conn, "units") {
+        execute_migration(conn, EMBEDDED_UNITS_SCHEMA, "0007_units_v22")?;
+    }
+    if !column_exists(conn, "invoices", "production_completed_at") {
+        execute_migration(
+            conn,
+            EMBEDDED_STOCK_INVOICES_SCHEMA,
+            "0008_stock_invoices_v22",
+        )?;
+    }
+    Ok(())
+}
+
+/// Validates that a SQLite file is readable and compatible with the current FlexPyme schema.
+pub fn validate_database_compatibility(path: &Path) -> Result<(), String> {
+    if !path.exists() || !path.is_file() {
+        return Err("Archivo de base de datos no encontrado".to_string());
+    }
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| format!("No se pudo abrir la base de datos seleccionada: {}", e))?;
+    let integrity: String = conn
+        .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+        .map_err(|e| {
+            format!(
+                "No se pudo verificar la integridad de la base de datos: {}",
+                e
+            )
+        })?;
+    if integrity != "ok" {
+        return Err(format!(
+            "La base de datos no pasó la verificación de integridad: {}",
+            integrity
+        ));
+    }
+
+    let required_tables = [
+        "settings",
+        "clients",
+        "invoices",
+        "invoice_items",
+        "product_categories",
+        "units",
+        "inventory_items",
+        "cash_transactions",
+    ];
+    for table in required_tables {
+        if !table_exists(&conn, table) {
+            return Err(format!(
+                "Base de datos incompatible: falta la tabla {}",
+                table
+            ));
+        }
+    }
+
+    let required_columns = [
+        ("invoice_items", "category_snapshot"),
+        ("product_categories", "code"),
+        ("inventory_items", "unit_id"),
+        ("inventory_items", "unit_snapshot"),
+        ("invoices", "production_completed_at"),
+        ("invoices", "cancelled_at"),
+    ];
+    for (table, column) in required_columns {
+        if !column_exists(&conn, table, column) {
+            return Err(format!(
+                "Base de datos incompatible: falta la columna {}.{}",
+                table, column
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Opens a shared SQLite connection for Tauri commands.
