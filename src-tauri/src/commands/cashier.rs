@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::db;
 
 /// Bill/coin face values (CUP).
-pub const DENOMINATIONS: &[i64] = &[5000, 1000, 500, 200, 100, 50, 20, 10, 5, 1];
+pub const DENOMINATIONS: &[i64] = &[5000, 2000, 1000, 500, 200, 100, 50, 20, 10, 5, 1];
 
 const EPS: f64 = 1e-6;
 
@@ -35,6 +35,33 @@ pub struct CashSessionDto {
     pub change_given: f64,
     pub date: String,
     pub denomination_breakdown: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct InitialPaymentPayload {
+    /// Map of denomination string (e.g. "1000") to count — solo efectivo CUP con conteo.
+    pub counts: Option<HashMap<String, i64>>,
+    /// Monto directo en CUP (transferencia o efectivo sin desglose).
+    pub amount_cup: Option<f64>,
+    /// Monto en USD si el cobro es en dólares.
+    pub amount_usd: Option<f64>,
+    pub exchange_rate: Option<f64>,
+    pub transfer_concept: Option<String>,
+}
+
+impl InitialPaymentPayload {
+    /// Builds a cashier payload once the invoice id is known.
+    pub fn into_register(self, invoice_id: i64) -> CashierRegisterPayload {
+        CashierRegisterPayload {
+            invoice_id,
+            counts: self.counts,
+            amount_cup: self.amount_cup,
+            amount_usd: self.amount_usd,
+            exchange_rate: self.exchange_rate,
+            transfer_concept: self.transfer_concept,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -122,40 +149,38 @@ fn resolve_amount_received(
     Ok((cup, 0.0, 0.0, "efectivo".to_string()))
 }
 
-/// Lists cash sessions for an invoice, newest first.
-#[tauri::command]
-pub fn cashier_sessions_for_invoice(invoice_id: i64) -> Result<Vec<CashSessionDto>, String> {
-    let conn = db::open_connection()?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, invoice_id, total_amount, amount_received, change_given, date, denomination_breakdown
-             FROM cash_sessions WHERE invoice_id = ?1 ORDER BY id DESC",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map(params![invoice_id], |row| {
-            Ok(CashSessionDto {
-                id: row.get(0)?,
-                invoice_id: row.get(1)?,
-                total_amount: row.get(2)?,
-                amount_received: row.get(3)?,
-                change_given: row.get(4)?,
-                date: row.get(5)?,
-                denomination_breakdown: row.get(6)?,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+/// Records an advance payment as cash income linked to an invoice.
+pub fn record_advance_payment_in_tx(
+    tx: &rusqlite::Transaction<'_>,
+    invoice_id: i64,
+    invoice_number: &str,
+    advance_cup: f64,
+    payment_method: &str,
+) -> Result<(), String> {
+    if advance_cup <= EPS {
+        return Ok(());
+    }
+    tx.execute(
+        "INSERT INTO cash_transactions
+            (type, concept, reference_type, reference_id, amount_cup, amount_usd, exchange_rate,
+             payment_method, denomination_breakdown, date)
+         VALUES ('ingreso', ?1, 'pedido', ?2, ?3, 0, 0, ?4, NULL, datetime('now'))",
+        params![
+            format!("Anticipo pedido {}", invoice_number),
+            invoice_id,
+            advance_cup,
+            payment_method
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
-/// Registers payment: updates invoice, client balance, `cash_transactions` and optional `cash_sessions`.
-#[tauri::command]
-pub fn cashier_register_payment(
-    payload: CashierRegisterPayload,
+/// Applies a payment to an invoice inside an open database transaction.
+pub fn apply_invoice_payment_in_tx(
+    tx: &rusqlite::Transaction<'_>,
+    payload: &CashierRegisterPayload,
 ) -> Result<CashierRegisterResponse, String> {
-    let mut conn = db::open_connection()?;
-    let tx = conn.transaction().map_err(|e| e.to_string())?;
-
     let (
         client_id,
         total,
@@ -204,7 +229,7 @@ pub fn cashier_register_payment(
     };
 
     let (amount_received_cup, amount_usd, exchange_rate, tx_method) =
-        resolve_amount_received(&method, &currency, &payload)?;
+        resolve_amount_received(&method, &currency, payload)?;
 
     let amount_applied = amount_received_cup.min(balance);
     let change_given = (amount_received_cup - balance).max(0.0);
@@ -313,8 +338,6 @@ pub fn cashier_register_payment(
     )
     .map_err(|e| e.to_string())?;
 
-    tx.commit().map_err(|e| e.to_string())?;
-
     Ok(CashierRegisterResponse {
         session_id,
         amount_received: amount_received_cup,
@@ -324,4 +347,42 @@ pub fn cashier_register_payment(
         invoice_status: status,
         payment_status: payment_status.to_string(),
     })
+}
+
+/// Lists cash sessions for an invoice, newest first.
+#[tauri::command]
+pub fn cashier_sessions_for_invoice(invoice_id: i64) -> Result<Vec<CashSessionDto>, String> {
+    let conn = db::open_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, invoice_id, total_amount, amount_received, change_given, date, denomination_breakdown
+             FROM cash_sessions WHERE invoice_id = ?1 ORDER BY id DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![invoice_id], |row| {
+            Ok(CashSessionDto {
+                id: row.get(0)?,
+                invoice_id: row.get(1)?,
+                total_amount: row.get(2)?,
+                amount_received: row.get(3)?,
+                change_given: row.get(4)?,
+                date: row.get(5)?,
+                denomination_breakdown: row.get(6)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Registers payment: updates invoice, client balance, `cash_transactions` and optional `cash_sessions`.
+#[tauri::command]
+pub fn cashier_register_payment(
+    payload: CashierRegisterPayload,
+) -> Result<CashierRegisterResponse, String> {
+    let mut conn = db::open_connection()?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let result = apply_invoice_payment_in_tx(&tx, &payload)?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(result)
 }

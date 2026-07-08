@@ -107,6 +107,17 @@ export interface CreateInvoiceItemPayload {
 }
 
 /**
+ * Cobro inicial al crear un pedido (misma forma que caja, sin invoiceId).
+ */
+export interface InitialPaymentPayload {
+  counts?: Record<string, number> | null;
+  amountCup?: number | null;
+  amountUsd?: number | null;
+  exchangeRate?: number | null;
+  transferConcept?: string | null;
+}
+
+/**
  * Payload for creating an invoice with lines.
  */
 export type PaymentMethod = "efectivo" | "transferencia";
@@ -122,6 +133,7 @@ export interface CreateInvoicePayload {
   paymentCurrency: PaymentCurrency;
   exchangeRateSnapshot: number;
   transferConcept?: string | null;
+  initialPayment?: InitialPaymentPayload | null;
   items: CreateInvoiceItemPayload[];
 }
 

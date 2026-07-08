@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { fetchCashTransactions } from "@/db/queries/cashflow";
+import { CashTransactionReference } from "@/components/cashflow/CashTransactionReference";
 import { formatMoney } from "@/lib/format-money";
 
 /**
@@ -104,7 +105,12 @@ export function CashflowHistoryPage() {
               <tr key={tx.id}>
                 <td className="text-xs">{tx.date.slice(0, 16).replace("T", " ")}</td>
                 <td>{tx.concept}</td>
-                <td className="capitalize">{tx.referenceType ?? "—"}</td>
+                <td>
+                  <CashTransactionReference
+                    referenceType={tx.referenceType}
+                    referenceId={tx.referenceId}
+                  />
+                </td>
                 <td className="capitalize">{tx.paymentMethod}</td>
                 <td
                   className={`text-right font-medium ${tx.transactionType === "ingreso" ? "text-success" : "text-error"}`}

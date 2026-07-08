@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { ArrowDownCircle, ArrowUpCircle, Plus, Wallet } from "lucide-react";
 import { fetchCashBalance, fetchCashDailySeries, fetchCashTransactions } from "@/db/queries/cashflow";
+import { CashTransactionReference } from "@/components/cashflow/CashTransactionReference";
 import { formatMoney } from "@/lib/format-money";
 
 /**
@@ -109,6 +110,7 @@ export function CashflowPage() {
                 <tr>
                   <th>Fecha</th>
                   <th>Concepto</th>
+                  <th>Referencia</th>
                   <th>Método</th>
                   <th className="text-right">Importe CUP</th>
                 </tr>
@@ -118,6 +120,12 @@ export function CashflowPage() {
                   <tr key={tx.id}>
                     <td className="text-xs">{tx.date.slice(0, 16).replace("T", " ")}</td>
                     <td>{tx.concept}</td>
+                    <td>
+                      <CashTransactionReference
+                        referenceType={tx.referenceType}
+                        referenceId={tx.referenceId}
+                      />
+                    </td>
                     <td className="capitalize">{tx.paymentMethod}</td>
                     <td
                       className={`text-right font-medium ${tx.transactionType === "ingreso" ? "text-success" : "text-error"}`}
@@ -129,7 +137,7 @@ export function CashflowPage() {
                 ))}
                 {recent.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-6 text-center text-base-content/60">
+                    <td colSpan={5} className="py-6 text-center text-base-content/60">
                       Sin transacciones.
                     </td>
                   </tr>

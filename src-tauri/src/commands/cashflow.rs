@@ -23,6 +23,7 @@ pub struct CashTransactionDto {
     pub transaction_type: String,
     pub concept: String,
     pub reference_type: Option<String>,
+    pub reference_id: Option<i64>,
     pub amount_cup: f64,
     pub amount_usd: f64,
     pub exchange_rate: f64,
@@ -128,7 +129,7 @@ pub fn cash_transactions_list(filters: Option<CashFilters>) -> Result<Vec<CashTr
         format!("WHERE {}", clauses.join(" AND "))
     };
     let sql = format!(
-        "SELECT id, type, concept, reference_type, amount_cup, amount_usd, exchange_rate, payment_method, date
+        "SELECT id, type, concept, reference_type, reference_id, amount_cup, amount_usd, exchange_rate, payment_method, date
          FROM cash_transactions {}
          ORDER BY date DESC, id DESC",
         where_clause
@@ -143,11 +144,12 @@ pub fn cash_transactions_list(filters: Option<CashFilters>) -> Result<Vec<CashTr
                 transaction_type: row.get(1)?,
                 concept: row.get(2)?,
                 reference_type: row.get(3)?,
-                amount_cup: row.get(4)?,
-                amount_usd: row.get(5)?,
-                exchange_rate: row.get(6)?,
-                payment_method: row.get(7)?,
-                date: row.get(8)?,
+                reference_id: row.get(4)?,
+                amount_cup: row.get(5)?,
+                amount_usd: row.get(6)?,
+                exchange_rate: row.get(7)?,
+                payment_method: row.get(8)?,
+                date: row.get(9)?,
             })
         })
         .map_err(|e| e.to_string())?;

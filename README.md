@@ -6,17 +6,19 @@ La fuente de verdad de requisitos es [`REQUIREMENTS.md`](./REQUIREMENTS.md).
 ## Módulos (v2)
 
 - **Dashboard**: KPIs del mes, ingresos por categoría (Recharts), pedidos recientes y alertas.
-- **Pedidos** (`/pedidos`): alta multi-producto, detalle, impresión y cobro en caja con denominaciones CUP.
+- **Pedidos** (`/pedidos`): alta multi-producto, detalle con registro de trabajo de empleados, impresión, cobro en caja y filtros (en producción, listos, pendiente cobro). `/stock` redirige al filtro listos.
 - **Clientes**: CRUD, balance y ficha con historial.
 - **Empleados**: CRUD con baja (soft delete), registro de lotes de trabajo y pago de salarios desde `cost_list`.
-- **Inventario**: ítems con alertas de stock bajo y movimientos (entrada/salida).
-- **Flujo de Caja**: balance CUP/USD, serie de 30 días, movimientos manuales e historial filtrable.
-- **Configuración**: tabs General, Precios, Costos, Moneda (tasa USD→CUP), Formatos y Backup.
+- **Inventario**: ítems con alertas de stock bajo, movimientos (entrada/salida) y recetas de producción (descuento al marcar pedido listo).
+- **Flujo de Caja**: balance CUP/USD, serie de 30 días, movimientos manuales, historial filtrable y enlaces a pedidos cobrados.
+- **Configuración**: tabs General, Tasa de cambio (histórico USD→CUP), Roles, Categorías, Unidades, Formatos, Tipos de trabajo y Backup.
+- **Precios** y **Costos**: entradas del sidebar (debajo de Flujo de Caja).
 
 ## Moneda
 
 - Principal **CUP**; secundaria **USD** con tasa almacenada por operación.
-- Denominaciones CUP: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 5000.
+- Denominaciones CUP: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000.
+- La tasa USD→CUP se actualiza desde el badge de la cabecera (modal) o desde Configuración > Tasa de cambio; cada cambio queda en el histórico.
 
 ## Stack Tecnologico
 
@@ -120,11 +122,11 @@ En la app (`pnpm tauri dev`), abre **Clientes** en la barra superior: listado co
 
 ## Precios
 
-En **Precios** puedes ver la lista de precios (activos por defecto; opción para incluir inactivos), filtrar en tabla y **editar precio, costo y estado activo** en un modal. Comandos Tauri: `prices_list`, `prices_update`, más catálogo `product_categories_list` y `formats_list` en el backend para uso futuro.
+En **Precios** (`/precios`) puedes ver la lista de precios (activos por defecto; opción para incluir inactivos), filtrar en tabla y **editar precio, costo y estado activo** en un modal. En **Costos** (`/costos`) se editan los precios de mano de obra para empleados.
 
 ## Pedidos
 
-En **Pedidos** (`/pedidos`): listado, **Nuevo pedido** con líneas (categoría, formato, servicio, acabado, cantidad, precio), botón **Aplicar precio de lista** (`prices_lookup`), anticipo y pagado. Totales: `total = subtotal + deuda_anterior - anticipo`, `pendiente = total - pagado`. Al guardar se actualiza el **balance del cliente**. El cobro en caja usa denominaciones CUP. Comandos: `invoices_list`, `invoices_get_detail`, `invoices_create` (internamente la tabla sigue siendo `invoices`).
+En **Pedidos** (`/pedidos`): listado, **Nuevo pedido** con encabezado compacto, líneas en tabla (alta/edición en modal con precio automático desde lista), método de pago y **cobro integrado** al completar los datos. El resumen muestra solo totales del pedido (sin deuda anterior del cliente). Totales del pedido: `total = subtotal - anticipo`. Al guardar se actualiza el balance del cliente. Comandos: `invoices_list`, `invoices_get_detail`, `invoices_create`, `cashier_register_payment`.
 
 ## Empleados, Inventario y Caja
 

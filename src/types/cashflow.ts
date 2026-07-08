@@ -16,6 +16,7 @@ export interface CashTransactionDto {
   transactionType: string;
   concept: string;
   referenceType: string | null;
+  referenceId: number | null;
   amountCup: number;
   amountUsd: number;
   exchangeRate: number;
