@@ -274,6 +274,79 @@ export const cashTransactions = sqliteTable("cash_transactions", {
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 });
 
+export const exchangeRateHistory = sqliteTable("exchange_rate_history", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  rate: real("rate").notNull(),
+  effectiveAt: text("effective_at").notNull().default(sql`(datetime('now'))`),
+  source: text("source").notNull().default("config"),
+  previousRate: real("previous_rate"),
+});
+
+/**
+ * Precios de COSTO para el cálculo del salario de empleados.
+ * Separado de `price_list` (precios de VENTA). Importes en CUP.
+ */
+export const costList = sqliteTable("cost_list", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  workType: text("work_type").notNull(),
+  formatId: integer("format_id").references(() => formats.id),
+  unitCost: real("unit_cost").notNull(),
+  validFrom: text("valid_from").notNull().default(sql`(date('now'))`),
+  isActive: integer("is_active").notNull().default(1),
+});
+
+/**
+ * Roles configurables de empleados (catálogo; solo desactivar, no eliminar).
+ */
+export const employeeRoles = sqliteTable("employee_roles", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  description: text("description"),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+
+/**
+ * Empleados del taller. Soft delete con `is_active = false`.
+ */
+export const employees = sqliteTable("employees", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  roleId: integer("role_id").references(() => employeeRoles.id),
+  roleSnapshot: text("role_snapshot"),
+  role: text("role"),
+  phone: text("phone"),
+  notes: text("notes"),
+  isActive: integer("is_active").notNull().default(1),
+  deletedAt: text("deleted_at"),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+
+/**
+ * Materiales/insumos del taller con control de stock mínimo.
+ */
+export const inventoryItems = sqliteTable("inventory_items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  category: text("category"),
+  unitId: integer("unit_id").references(() => units.id),
+  unitSnapshot: text("unit_snapshot"),
+  unit: text("unit").notNull().default("unidad"),
+  quantity: real("quantity").notNull().default(0),
+  minStock: real("min_stock").notNull().default(0),
+  costPerUnit: real("cost_per_unit").notNull().default(0),
+  supplier: text("supplier"),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+
+/**
+ * Recetas de consumo de inventario por categoría/servicio de producto vendido.
+ */
+
 export const clientsRelations = relations(clients, ({ many }) => ({
   invoices: many(invoices),
   productionItems: many(productionBatchItems),

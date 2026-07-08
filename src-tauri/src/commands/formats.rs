@@ -126,3 +126,26 @@ pub fn deactivate_format(id: i64) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     Ok(())
 }
+
+/// Reactivates a deactivated non-system format.
+#[tauri::command]
+pub fn reactivate_format(id: i64) -> Result<FormatDto, String> {
+    let conn = db::open_connection()?;
+    conn.execute("UPDATE formats SET is_active = 1 WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    conn.query_row(
+        "SELECT id, label, width_inches, height_inches, is_active, is_system FROM formats WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(FormatDto {
+                id: row.get(0)?,
+                label: row.get(1)?,
+                width_inches: row.get(2)?,
+                height_inches: row.get(3)?,
+                is_active: row.get::<_, i64>(4)? != 0,
+                is_system: row.get::<_, i64>(5)? != 0,
+            })
+        },
+    )
+    .map_err(|_| "Formato no encontrado".to_string())
+}

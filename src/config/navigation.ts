@@ -7,6 +7,8 @@ import {
   UserCog,
   Package,
   Wallet,
+  Tag,
+  Coins,
   BarChart3,
   Settings,
   type LucideIcon,
@@ -43,7 +45,10 @@ export const PRIMARY_NAV: NavItem[] = [
   { to: "/clientes", label: "Clientes", icon: Users },
   { to: "/empleados", label: "Empleados", icon: UserCog },
   { to: "/inventario", label: "Inventario", icon: Package, badge: "stockBajo" },
-  { to: "/caja", label: "Flujo de Caja", icon: Wallet },
+  { to: "/caja", label: "Flujo de Caja", 
+  { to: "/precios", label: "Precios", icon: Tag },
+  { to: "/costos", label: "Costos", icon: Coins },
+icon: Wallet },
   { to: "/reportes", label: "Reportes", icon: BarChart3 },
 ];
 

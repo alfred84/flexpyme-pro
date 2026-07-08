@@ -153,3 +153,31 @@ pub fn deactivate_employee_role(id: i64) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Reactivates a deactivated employee role.
+#[tauri::command]
+pub fn reactivate_employee_role(id: i64) -> Result<EmployeeRoleDto, String> {
+    let conn = db::open_connection()?;
+    let updated = conn
+        .execute(
+            "UPDATE employee_roles SET is_active = 1, updated_at = datetime('now') WHERE id = ?1",
+            params![id],
+        )
+        .map_err(|e| e.to_string())?;
+    if updated == 0 {
+        return Err("Rol no encontrado".to_string());
+    }
+    conn.query_row(
+        "SELECT id, name, description, is_active FROM employee_roles WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(EmployeeRoleDto {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                is_active: row.get::<_, i64>(3)? != 0,
+            })
+        },
+    )
+    .map_err(|e| e.to_string())
+}

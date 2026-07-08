@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
-import { useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Building2, Coins, DatabaseBackup, DollarSign, HardDriveDownload, Hammer, Layers, Ruler, RotateCcw, Scale, Tag, Trash2, Upload, Users } from "lucide-react";
+import { Building2, DatabaseBackup, DollarSign, HardDriveDownload, Hammer, Layers, RotateCcw, Ruler, Scale, Trash2, Upload, Users } from "lucide-react";
 import { CategoriesTab } from "@/features/settings/components/CategoriesTab";
 import { UnitsTab } from "@/features/settings/components/UnitsTab";
 import { BusinessLogo } from "@/components/common/BusinessLogo";
 import { EmployeeRolesTab } from "@/features/settings/components/EmployeeRolesTab";
 import { FormatsTab } from "@/features/settings/components/FormatsTab";
 import { WorkTypesTab } from "@/features/settings/components/WorkTypesTab";
+import { ExchangeRateTab } from "@/features/settings/components/ExchangeRateTab";
 import {
   backupDatabase,
   fetchBackupOverview,
@@ -20,16 +21,11 @@ import {
   setSettingValue,
   updateBusinessLogo,
 } from "@/db/queries/settings";
-import { fetchCostList, updateCost } from "@/db/queries/prices";
-import { PricesListPage } from "@/features/products/pages/PricesListPage";
 import { useTheme } from "@/lib/theme";
-import { WORK_TYPE_LABELS, type WorkType } from "@/types/employee";
 
 type TabKey =
   | "general"
-  | "precios"
-  | "costos"
-  | "moneda"
+  | "tasa-de-cambio"
   | "roles"
   | "categorias"
   | "unidades"
@@ -39,9 +35,7 @@ type TabKey =
 
 const TABS: { key: TabKey; label: string; icon: typeof Building2 }[] = [
   { key: "general", label: "General", icon: Building2 },
-  { key: "precios", label: "Precios", icon: Tag },
-  { key: "costos", label: "Costos", icon: Coins },
-  { key: "moneda", label: "Moneda", icon: DollarSign },
+  { key: "tasa-de-cambio", label: "Tasa de cambio", icon: DollarSign },
   { key: "roles", label: "Roles", icon: Users },
   { key: "categorias", label: "Categorías", icon: Layers },
   { key: "unidades", label: "Unidades", icon: Scale },
@@ -50,23 +44,52 @@ const TABS: { key: TabKey; label: string; icon: typeof Building2 }[] = [
   { key: "backup", label: "Backup", icon: HardDriveDownload },
 ];
 
+function resolveSettingsTab(tab: string | undefined): TabKey {
+  if (tab === "moneda" || tab === "tasa-de-cambio") {
+    return "tasa-de-cambio";
+  }
+  const valid: TabKey[] = [
+    "general",
+    "tasa-de-cambio",
+    "roles",
+    "categorias",
+    "unidades",
+    "formatos",
+    "tipos-trabajo",
+    "backup",
+  ];
+  if (tab && valid.includes(tab as TabKey)) {
+    return tab as TabKey;
+  }
+  return "general";
+}
+
 /**
  * Página de Configuración con tabs internos (REQUIREMENTS §3.7).
  *
  * @returns Página de configuración.
  */
 export function SettingsPage() {
+  const navigate = useNavigate();
   const { tab: initialTab } = useSearch({ from: "/configuracion" });
-  const [tab, setTab] = useState<TabKey>((initialTab as TabKey) ?? "general");
+  const [tab, setTab] = useState<TabKey>(() => resolveSettingsTab(initialTab));
 
   useEffect(() => {
-    if (initialTab) {
-      setTab(initialTab as TabKey);
+    if (initialTab === "precios") {
+      void navigate({ to: "/precios" });
+      return;
     }
-  }, [initialTab]);
+    if (initialTab === "costos") {
+      void navigate({ to: "/costos" });
+      return;
+    }
+    if (initialTab) {
+      setTab(resolveSettingsTab(initialTab));
+    }
+  }, [initialTab, navigate]);
 
   useEffect(() => {
-    if (tab === "moneda") {
+    if (tab === "tasa-de-cambio") {
       const timer = window.setTimeout(() => {
         document.getElementById("exchange-rate-input")?.focus();
       }, 300);
@@ -96,9 +119,7 @@ export function SettingsPage() {
       </div>
 
       {tab === "general" && <GeneralTab />}
-      {tab === "precios" && <PricesListPage />}
-      {tab === "costos" && <CostsTab />}
-      {tab === "moneda" && <CurrencyTab />}
+      {tab === "tasa-de-cambio" && <ExchangeRateTab />}
       {tab === "roles" && <EmployeeRolesTab />}
       {tab === "categorias" && <CategoriesTab />}
       {tab === "unidades" && <UnitsTab />}
@@ -224,104 +245,6 @@ function GeneralTab() {
           <button className="btn btn-primary" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
             {mutation.isPending ? <span className="loading loading-spinner loading-sm" /> : "Guardar"}
           </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Tab Moneda: tasa de cambio USD → CUP.
- */
-function CurrencyTab() {
-  const queryClient = useQueryClient();
-  const settingsQuery = useQuery({ queryKey: ["settings", "all"], queryFn: fetchAllSettings });
-  const [rate, setRate] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  const current = settingsQuery.data?.usd_exchange_rate ?? "";
-
-  const mutation = useMutation({
-    mutationFn: () => setSettingValue("usd_exchange_rate", rate ?? current),
-    onSuccess: async () => {
-      setSaved(true);
-      await queryClient.invalidateQueries({ queryKey: ["settings"] });
-    },
-  });
-
-  return (
-    <div className="card max-w-md bg-base-200">
-      <div className="card-body space-y-3">
-        <h2 className="card-title text-base">Tasa USD → CUP</h2>
-        {saved && <div className="alert alert-success py-2 text-sm">Tasa actualizada.</div>}
-        <label className="form-control">
-          <span className="label-text">Cuántos CUP equivale 1 USD</span>
-          <input
-            id="exchange-rate-input"
-            type="number"
-            className="input input-bordered"
-            defaultValue={current}
-            onChange={(e) => setRate(e.target.value)}
-          />
-        </label>
-        <div>
-          <button className="btn btn-primary" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
-            Guardar tasa
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Tab Costos: edición de precios de costo de empleados por tipo de trabajo.
- */
-function CostsTab() {
-  const queryClient = useQueryClient();
-  const costsQuery = useQuery({ queryKey: ["costs", "all"], queryFn: fetchCostList });
-  const mutation = useMutation({
-    mutationFn: updateCost,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["costs"] }),
-  });
-
-  const rows = costsQuery.data ?? [];
-
-  return (
-    <div className="card bg-base-200">
-      <div className="card-body">
-        <h2 className="card-title text-base">Precios de costo (pago a empleados)</h2>
-        {costsQuery.isLoading && <p>Cargando...</p>}
-        <div className="overflow-x-auto">
-          <table className="table table-sm">
-            <thead>
-              <tr>
-                <th>Tipo de trabajo</th>
-                <th>Formato</th>
-                <th className="text-right">Costo unitario (CUP)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td>{WORK_TYPE_LABELS[row.workType as WorkType] ?? row.workType}</td>
-                  <td>{row.formatLabel ?? "—"}</td>
-                  <td className="text-right">
-                    <input
-                      type="number"
-                      className="input input-bordered input-sm w-28 text-right"
-                      defaultValue={row.unitCost}
-                      onBlur={(e) => {
-                        const value = Number(e.target.value);
-                        if (value !== row.unitCost && value >= 0) {
-                          mutation.mutate({ id: row.id, unitCost: value, isActive: row.isActive });
-                        }
-                      }}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

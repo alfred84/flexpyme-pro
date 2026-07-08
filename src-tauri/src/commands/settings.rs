@@ -49,7 +49,18 @@ pub struct RestoreDatabaseDto {
 
 const BACKUP_INTERVAL_DAYS_KEY: &str = "backup_interval_days";
 const LAST_SCHEDULED_BACKUP_AT_KEY: &str = "last_scheduled_backup_at";
+const USD_EXCHANGE_RATE_KEY: &str = "usd_exchange_rate";
 const DEFAULT_BACKUP_INTERVAL_DAYS: i64 = 5;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExchangeRateHistoryDto {
+    pub id: i64,
+    pub rate: f64,
+    pub effective_at: String,
+    pub source: String,
+    pub previous_rate: Option<f64>,
+}
 
 fn read_setting(conn: &rusqlite::Connection, key: &str) -> String {
     conn.query_row(
@@ -321,6 +332,70 @@ pub fn settings_set_value(key: String, value: String) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Updates the USD→CUP exchange rate and records the change in history when it differs.
+#[tauri::command]
+pub fn settings_set_exchange_rate(rate: f64, source: Option<String>) -> Result<f64, String> {
+    if rate <= 0.0 {
+        return Err("La tasa debe ser mayor que cero".to_string());
+    }
+    let source = source.unwrap_or_else(|| "config".to_string());
+    let source = source.trim().to_lowercase();
+    if source != "header" && source != "config" {
+        return Err("Origen de tasa inválido".to_string());
+    }
+
+    let conn = db::open_connection()?;
+    let previous_str = read_setting(&conn, USD_EXCHANGE_RATE_KEY);
+    let previous_rate = previous_str
+        .parse::<f64>()
+        .ok()
+        .filter(|value| *value > 0.0);
+    let changed = previous_rate
+        .map(|previous| (previous - rate).abs() > 1e-9)
+        .unwrap_or(true);
+
+    if changed {
+        conn.execute(
+            "INSERT INTO exchange_rate_history (rate, effective_at, source, previous_rate)
+             VALUES (?1, datetime('now'), ?2, ?3)",
+            params![rate, source, previous_rate],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    upsert_setting(&conn, USD_EXCHANGE_RATE_KEY, &rate.to_string())?;
+    Ok(rate)
+}
+
+/// Lists recent exchange-rate changes (newest first).
+#[tauri::command]
+pub fn settings_get_exchange_rate_history(
+    limit: Option<i64>,
+) -> Result<Vec<ExchangeRateHistoryDto>, String> {
+    let conn = db::open_connection()?;
+    let limit = limit.unwrap_or(50).clamp(1, 200);
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, rate, effective_at, source, previous_rate
+             FROM exchange_rate_history
+             ORDER BY effective_at DESC, id DESC
+             LIMIT ?1",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![limit], |row| {
+            Ok(ExchangeRateHistoryDto {
+                id: row.get(0)?,
+                rate: row.get(1)?,
+                effective_at: row.get(2)?,
+                source: row.get(3)?,
+                previous_rate: row.get(4)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
 /// Loads company block used on printed invoices.

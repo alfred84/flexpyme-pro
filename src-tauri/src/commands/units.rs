@@ -168,6 +168,20 @@ pub fn deactivate_unit(id: i64) -> Result<(), String> {
     Ok(())
 }
 
+/// Reactivates a deactivated non-system unit.
+#[tauri::command]
+pub fn reactivate_unit(id: i64) -> Result<UnitDto, String> {
+    let conn = db::open_connection()?;
+    conn.execute("UPDATE units SET is_active = 1 WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    conn.query_row(
+        "SELECT id, code, name, abbreviation, type, is_active, is_system FROM units WHERE id = ?1",
+        params![id],
+        map_unit,
+    )
+    .map_err(|_| "Unidad no encontrada".to_string())
+}
+
 /// Resolves unit snapshot text for inventory operations.
 pub fn unit_snapshot_for_id(conn: &rusqlite::Connection, unit_id: i64) -> Result<String, String> {
     conn.query_row(

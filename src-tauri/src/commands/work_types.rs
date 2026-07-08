@@ -128,3 +128,26 @@ pub fn deactivate_work_type(id: i64) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     Ok(())
 }
+
+/// Reactivates a deactivated non-system work type.
+#[tauri::command]
+pub fn reactivate_work_type(id: i64) -> Result<WorkTypeDto, String> {
+    let conn = db::open_connection()?;
+    conn.execute("UPDATE work_types SET is_active = 1 WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    conn.query_row(
+        "SELECT id, name, code, description, is_active, is_system FROM work_types WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(WorkTypeDto {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                code: row.get(2)?,
+                description: row.get(3)?,
+                is_active: row.get::<_, i64>(4)? != 0,
+                is_system: row.get::<_, i64>(5)? != 0,
+            })
+        },
+    )
+    .map_err(|_| "Tipo no encontrado".to_string())
+}

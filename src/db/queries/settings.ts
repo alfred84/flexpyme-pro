@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { CompanySettingsDto } from "@/types/settings";
+import type { CompanySettingsDto, ExchangeRateHistoryDto, ExchangeRateSource } from "@/types/settings";
 
 export interface BackupInfoDto {
   fileName: string;
@@ -42,6 +42,26 @@ export async function fetchAllSettings(): Promise<Record<string, string>> {
  */
 export async function setSettingValue(key: string, value: string): Promise<void> {
   return invoke<void>("settings_set_value", { key, value });
+}
+
+/**
+ * Actualiza la tasa USD→CUP y registra el cambio en el histórico si difiere.
+ *
+ * @param rate - Nueva tasa (CUP por 1 USD).
+ * @param source - Origen del cambio (`header` o `config`).
+ * @returns Tasa guardada.
+ */
+export async function setExchangeRate(rate: number, source: ExchangeRateSource): Promise<number> {
+  return invoke<number>("settings_set_exchange_rate", { rate, source });
+}
+
+/**
+ * Lista cambios recientes de la tasa de cambio.
+ *
+ * @param limit - Máximo de filas (por defecto 50 en backend).
+ */
+export async function fetchExchangeRateHistory(limit?: number): Promise<ExchangeRateHistoryDto[]> {
+  return invoke<ExchangeRateHistoryDto[]>("settings_get_exchange_rate_history", { limit: limit ?? null });
 }
 
 /**

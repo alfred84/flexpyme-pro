@@ -30,7 +30,7 @@ alwaysApply: true
 
 ## Moneda
 - CUP como moneda principal en TODA la UI
-- Denominaciones: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 5000 CUP
+- Denominaciones: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000 CUP
 - USD siempre con tasa de cambio almacenada en la operación
 
 ## Estados de pedido

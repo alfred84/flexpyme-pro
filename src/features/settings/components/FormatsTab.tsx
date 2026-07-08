@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
-import { Plus, Power } from "lucide-react";
+import { Plus, Power, RotateCcw } from "lucide-react";
 
 interface FormatDto {
   id: number;
@@ -44,6 +44,13 @@ export function FormatsTab() {
 
   const deactivateMutation = useMutation({
     mutationFn: (id: number) => invoke("deactivate_format", { id }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["formats"] });
+    },
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: (id: number) => invoke<FormatDto>("reactivate_format", { id }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["formats"] });
     },
@@ -98,6 +105,16 @@ export function FormatsTab() {
                   {!f.isSystem && f.isActive && (
                     <button type="button" className="btn btn-ghost btn-xs" onClick={() => void deactivateMutation.mutateAsync(f.id)}>
                       <Power size={14} />
+                    </button>
+                  )}
+                  {!f.isSystem && !f.isActive && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs text-success"
+                      title="Activar"
+                      onClick={() => void reactivateMutation.mutateAsync(f.id)}
+                    >
+                      <RotateCcw size={14} />
                     </button>
                   )}
                 </td>

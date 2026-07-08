@@ -70,6 +70,9 @@ const EMBEDDED_CATEGORIES_SCHEMA: &str =
 const EMBEDDED_UNITS_SCHEMA: &str = include_str!("../../src/db/migrations/0007_units_v22.sql");
 const EMBEDDED_STOCK_INVOICES_SCHEMA: &str =
     include_str!("../../src/db/migrations/0008_stock_invoices_v22.sql");
+const EMBEDDED_EXCHANGE_RATE_HISTORY_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0009_exchange_rate_history.sql");
+
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -181,7 +184,14 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             "0008_stock_invoices_v22",
         )?;
     }
-    Ok(())
+if !table_exists(conn, "exchange_rate_history") {
+        execute_migration(
+            conn,
+            EMBEDDED_EXCHANGE_RATE_HISTORY_SCHEMA,
+            "0009_exchange_rate_history",
+        )?;
+    }
+        Ok(())
 }
 
 /// Validates that a SQLite file is readable and compatible with the current FlexPyme schema.

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Power } from "lucide-react";
-import { createUnit, deactivateUnit, fetchUnits, updateUnit } from "@/db/queries/units";
+import { Pencil, Plus, Power, RotateCcw } from "lucide-react";
+import { createUnit, deactivateUnit, fetchUnits, reactivateUnit, updateUnit } from "@/db/queries/units";
 import type { UnitDto, UnitType } from "@/types/unit";
 
 const UNIT_TYPES: { value: UnitType | "todas"; label: string }[] = [
@@ -56,6 +56,13 @@ export function UnitsTab() {
 
   const deactivateMutation = useMutation({
     mutationFn: deactivateUnit,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["units"] });
+    },
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: reactivateUnit,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["units"] });
     },
@@ -138,6 +145,16 @@ export function UnitsTab() {
                         <Power className="h-3 w-3" />
                       </button>
                     </div>
+                  )}
+                  {!row.isSystem && !row.isActive && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs text-success"
+                      title="Activar"
+                      onClick={() => void reactivateMutation.mutateAsync(row.id)}
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                    </button>
                   )}
                 </td>
               </tr>

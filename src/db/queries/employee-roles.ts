@@ -56,3 +56,12 @@ export async function updateEmployeeRole(id: number, payload: UpdateRolePayload)
 export async function deactivateEmployeeRole(id: number): Promise<void> {
   return invoke("deactivate_employee_role", { id });
 }
+
+/**
+ * Reactiva un rol desactivado.
+ *
+ * @param id - Id del rol.
+ */
+export async function reactivateEmployeeRole(id: number): Promise<EmployeeRoleDto> {
+  return invoke<EmployeeRoleDto>("reactivate_employee_role", { id });
+}

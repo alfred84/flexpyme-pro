@@ -28,3 +28,10 @@ export async function updateUnit(id: number, data: UpdateUnitPayload): Promise<U
 export async function deactivateUnit(id: number): Promise<void> {
   return invoke<void>("deactivate_unit", { id });
 }
+
+/**
+ * Reactiva una unidad desactivada.
+ */
+export async function reactivateUnit(id: number): Promise<UnitDto> {
+  return invoke<UnitDto>("reactivate_unit", { id });
+}

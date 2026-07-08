@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Pencil, Plus, Power } from "lucide-react";
+import { Pencil, Plus, Power, RotateCcw } from "lucide-react";
 import {
   createEmployeeRole,
   deactivateEmployeeRole,
   fetchEmployeeRoles,
+  reactivateEmployeeRole,
   updateEmployeeRole,
 } from "@/db/queries/employee-roles";
 import { pushFlashMessage } from "@/lib/flash-message";
@@ -17,6 +18,7 @@ import { pushFlashMessage } from "@/lib/flash-message";
 export function EmployeeRolesTab() {
   const queryClient = useQueryClient();
   const rolesQuery = useQuery({ queryKey: ["employee-roles"], queryFn: () => fetchEmployeeRoles(false) });
+  const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -30,6 +32,7 @@ export function EmployeeRolesTab() {
       return createEmployeeRole({ name, description: description || null });
     },
     onSuccess: async () => {
+      setShowModal(false);
       setEditingId(null);
       setName("");
       setDescription("");
@@ -48,14 +51,32 @@ export function EmployeeRolesTab() {
     onError: (e: Error) => setError(e.message),
   });
 
-  const startEdit = (id: number, roleName: string, desc: string | null) => {
+  const reactivateMutation = useMutation({
+    mutationFn: reactivateEmployeeRole,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["employee-roles"] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  const openCreate = () => {
+    setEditingId(null);
+    setName("");
+    setDescription("");
+    setError(null);
+    setShowModal(true);
+  };
+
+  const openEdit = (id: number, roleName: string, desc: string | null) => {
     setEditingId(id);
     setName(roleName);
     setDescription(desc ?? "");
     setError(null);
+    setShowModal(true);
   };
 
-  const startNew = () => {
+  const closeModal = () => {
+    setShowModal(false);
     setEditingId(null);
     setName("");
     setDescription("");
@@ -66,44 +87,12 @@ export function EmployeeRolesTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Roles de empleados</h2>
-        <button type="button" className="btn btn-primary btn-sm gap-2" onClick={startNew}>
+        <button type="button" className="btn btn-primary btn-sm gap-2" onClick={openCreate}>
           <Plus size={14} /> Nuevo rol
         </button>
       </div>
 
-      {(editingId !== null || name.length > 0) && (
-        <div className="card bg-base-200 max-w-lg">
-          <div className="card-body gap-2">
-            <h3 className="font-medium">{editingId ? "Editar rol" : "Nuevo rol"}</h3>
-            <input
-              className="input input-bordered input-sm"
-              placeholder="Nombre"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <input
-              className="input input-bordered input-sm"
-              placeholder="Descripción"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-            {error && <p className="text-error text-sm">{error}</p>}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="btn btn-sm btn-primary"
-                disabled={saveMutation.isPending}
-                onClick={() => void saveMutation.mutateAsync()}
-              >
-                Guardar
-              </button>
-              <button type="button" className="btn btn-sm btn-ghost" onClick={startNew}>
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {error && !showModal && <p className="text-error text-sm">{error}</p>}
 
       <div className="overflow-x-auto rounded-lg border border-base-300">
         <table className="table table-sm">
@@ -134,11 +123,11 @@ export function EmployeeRolesTab() {
                       type="button"
                       className="btn btn-ghost btn-xs"
                       title="Editar"
-                      onClick={() => startEdit(role.id, role.name, role.description)}
+                      onClick={() => openEdit(role.id, role.name, role.description)}
                     >
                       <Pencil size={14} />
                     </button>
-                    {role.isActive && (
+                    {role.isActive ? (
                       <button
                         type="button"
                         className="btn btn-ghost btn-xs text-warning"
@@ -146,6 +135,15 @@ export function EmployeeRolesTab() {
                         onClick={() => void deactivateMutation.mutateAsync(role.id)}
                       >
                         <Power size={14} />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-success"
+                        title="Activar"
+                        onClick={() => void reactivateMutation.mutateAsync(role.id)}
+                      >
+                        <RotateCcw size={14} />
                       </button>
                     )}
                   </div>
@@ -155,6 +153,43 @@ export function EmployeeRolesTab() {
           </tbody>
         </table>
       </div>
+
+      {showModal && (
+        <dialog className="modal modal-open">
+          <div className="modal-box">
+            <h3 className="font-bold text-lg">{editingId ? "Editar rol" : "Nuevo rol"}</h3>
+            <div className="mt-4 space-y-3">
+              <input
+                className="input input-bordered input-sm w-full"
+                placeholder="Nombre"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <input
+                className="input input-bordered input-sm w-full"
+                placeholder="Descripción"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+              {error && <p className="text-error text-sm">{error}</p>}
+            </div>
+            <div className="modal-action">
+              <button type="button" className="btn" onClick={closeModal}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={saveMutation.isPending || name.trim().length === 0}
+                onClick={() => void saveMutation.mutateAsync()}
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+          <button type="button" className="modal-backdrop bg-transparent" aria-label="Cerrar" onClick={closeModal} />
+        </dialog>
+      )}
     </div>
   );
 }

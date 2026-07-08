@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
-import { Plus, Power } from "lucide-react";
+import { Plus, Power, RotateCcw } from "lucide-react";
 
 interface WorkTypeDto {
   id: number;
@@ -38,6 +38,13 @@ export function WorkTypesTab() {
 
   const deactivateMutation = useMutation({
     mutationFn: (id: number) => invoke("deactivate_work_type", { id }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["work-types"] });
+    },
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: (id: number) => invoke<WorkTypeDto>("reactivate_work_type", { id }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["work-types"] });
     },
@@ -82,6 +89,16 @@ export function WorkTypesTab() {
                   {!wt.isSystem && wt.isActive && (
                     <button type="button" className="btn btn-ghost btn-xs" onClick={() => void deactivateMutation.mutateAsync(wt.id)}>
                       <Power size={14} />
+                    </button>
+                  )}
+                  {!wt.isSystem && !wt.isActive && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs text-success"
+                      title="Activar"
+                      onClick={() => void reactivateMutation.mutateAsync(wt.id)}
+                    >
+                      <RotateCcw size={14} />
                     </button>
                   )}
                 </td>
