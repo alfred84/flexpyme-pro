@@ -23,6 +23,7 @@ import { fetchIncomeByCategory, fetchReportsSummary } from "@/db/queries/reports
 import { fetchInvoices } from "@/db/queries/invoices";
 import { fetchBackupOverview } from "@/db/queries/settings";
 import { formatMoney } from "@/lib/format-money";
+import { pedidosListSearch } from "@/lib/pedidos-search";
 import { useAppSettings } from "@/hooks/use-app-settings";
 
 /**
@@ -166,7 +167,7 @@ export function DashboardPage() {
           <div className="card-body">
             <div className="flex items-center justify-between">
               <h3 className="card-title text-base">Pedidos recientes</h3>
-              <Link to="/pedidos" className="btn btn-ghost btn-xs gap-1">
+              <Link to="/pedidos" search={pedidosListSearch} className="btn btn-ghost btn-xs gap-1">
                 Ver todos <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>

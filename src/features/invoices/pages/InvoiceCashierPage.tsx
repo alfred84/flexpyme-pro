@@ -5,6 +5,7 @@ import { fetchCashSessionsForInvoice, registerCashPayment } from "@/db/queries/c
 import { fetchInvoiceDetail } from "@/db/queries/invoices";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { formatMoney } from "@/lib/format-money";
+import { pedidosListSearch } from "@/lib/pedidos-search";
 import { CASH_DENOMINATIONS } from "@/types/cashier";
 
 function emptyCounts(): Record<string, number> {
@@ -146,7 +147,7 @@ export function InvoiceCashierPage() {
           <Link to="/pedidos/$invoiceId" params={{ invoiceId: String(invoiceId) }} className="btn btn-ghost btn-sm">
             Volver al pedido
           </Link>
-          <Link to="/pedidos" className="btn btn-ghost btn-sm">
+          <Link to="/pedidos" search={pedidosListSearch} className="btn btn-ghost btn-sm">
             Listado
           </Link>
         </div>

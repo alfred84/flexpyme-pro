@@ -2,11 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
-import { registerCashPayment } from "@/db/queries/cashier";
 import { fetchClients } from "@/db/queries/clients";
 import { createInvoice } from "@/db/queries/invoices";
 import { fetchCategories } from "@/db/queries/categories";
 import { fetchFormats, fetchPrices } from "@/db/queries/prices";
+import { pedidosListSearch } from "@/lib/pedidos-search";
 import {
   OrderCashierSection,
   buildCountsPayload,
@@ -139,23 +139,22 @@ export function InvoiceNewPage() {
         paymentCurrency: payment.paymentMethod === "transferencia" ? "CUP" : payment.paymentCurrency,
         exchangeRateSnapshot: exchangeRate,
         transferConcept: (cashier.transferConcept || payment.transferConcept).trim() || null,
+        initialPayment:
+          collectPayment && received > 1e-6
+            ? {
+                counts,
+                amountCup: cashier.amountCup.trim()
+                  ? Number.parseFloat(cashier.amountCup.replace(",", "."))
+                  : null,
+                amountUsd: cashier.amountUsd.trim()
+                  ? Number.parseFloat(cashier.amountUsd.replace(",", "."))
+                  : null,
+                exchangeRate: isUsd ? exchangeRate : null,
+                transferConcept: (cashier.transferConcept || payment.transferConcept).trim() || null,
+              }
+            : null,
         items,
       });
-
-      if (collectPayment && received > 1e-6) {
-        await registerCashPayment({
-          invoiceId: res.id,
-          counts,
-          amountCup: cashier.amountCup.trim()
-            ? Number.parseFloat(cashier.amountCup.replace(",", "."))
-            : null,
-          amountUsd: cashier.amountUsd.trim()
-            ? Number.parseFloat(cashier.amountUsd.replace(",", "."))
-            : null,
-          exchangeRate: isUsd ? exchangeRate : null,
-          transferConcept: (cashier.transferConcept || payment.transferConcept).trim() || null,
-        });
-      }
 
       return res;
     },
@@ -230,7 +229,7 @@ export function InvoiceNewPage() {
           <h1 className="text-2xl font-bold">Nuevo pedido</h1>
           <p className="text-sm text-base-content/70">Recepción de pedido y cobro en un solo flujo.</p>
         </div>
-        <Link to="/pedidos" className="btn btn-ghost btn-sm">
+        <Link to="/pedidos" search={pedidosListSearch} className="btn btn-ghost btn-sm">
           Cancelar
         </Link>
       </div>

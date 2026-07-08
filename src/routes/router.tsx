@@ -1,4 +1,4 @@
-import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, redirect } from "@tanstack/react-router";
 import { AppShell } from "@/components/layout/AppShell";
 import { DashboardPage } from "@/features/dashboard/pages/DashboardPage";
 import { ClientDetailPage } from "@/features/clients/pages/ClientDetailPage";
@@ -19,7 +19,6 @@ import { InvoiceNewPage } from "@/features/invoices/pages/InvoiceNewPage";
 import { InvoicesListPage } from "@/features/invoices/pages/InvoicesListPage";
 import { FacturaDetailPage } from "@/features/invoices/pages/FacturaDetailPage";
 import { FacturasPage } from "@/features/invoices/pages/FacturasPage";
-import { StockPage } from "@/features/stock/pages/StockPage";
 import { EmployeesListPage } from "@/features/employees/pages/EmployeesListPage";
 import { EmployeeNewPage } from "@/features/employees/pages/EmployeeNewPage";
 import { EmployeeEditPage } from "@/features/employees/pages/EmployeeEditPage";
@@ -111,16 +110,34 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 });
 
+const PEDIDOS_FILTERS = [
+  "todos",
+  "en_produccion",
+  "listos",
+  "pendiente_cobro",
+  "cobrados",
+  "completados",
+] as const;
+
+type PedidosSearchFilter = (typeof PEDIDOS_FILTERS)[number];
+
 const stockListRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "stock",
-  component: StockPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/pedidos", search: { filter: "listos" } });
+  },
 });
 
 const stockDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "stock/$invoiceId",
-  component: InvoiceDetailPage,
+  beforeLoad: ({ params }) => {
+    throw redirect({
+      to: "/pedidos/$invoiceId",
+      params: { invoiceId: params.invoiceId },
+    });
+  },
 });
 
 const facturasListRoute = createRoute({
@@ -150,6 +167,13 @@ const facturaPagoRoute = createRoute({
 const invoicesListRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "pedidos",
+  validateSearch: (search: Record<string, unknown>) => {
+    const raw = typeof search.filter === "string" ? search.filter : undefined;
+    const filter = PEDIDOS_FILTERS.includes(raw as PedidosSearchFilter)
+      ? (raw as PedidosSearchFilter)
+      : undefined;
+    return { filter };
+  },
   component: InvoicesListPage,
 });
 

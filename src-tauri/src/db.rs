@@ -72,7 +72,10 @@ const EMBEDDED_STOCK_INVOICES_SCHEMA: &str =
     include_str!("../../src/db/migrations/0008_stock_invoices_v22.sql");
 const EMBEDDED_EXCHANGE_RATE_HISTORY_SCHEMA: &str =
     include_str!("../../src/db/migrations/0009_exchange_rate_history.sql");
-
+const EMBEDDED_INVENTORY_RECIPES_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0010_inventory_recipes.sql");
+const EMBEDDED_INVOICE_WORK_BATCHES_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0011_invoice_work_batches.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -184,14 +187,34 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             "0008_stock_invoices_v22",
         )?;
     }
-if !table_exists(conn, "exchange_rate_history") {
+    if !table_exists(conn, "exchange_rate_history") {
         execute_migration(
             conn,
             EMBEDDED_EXCHANGE_RATE_HISTORY_SCHEMA,
             "0009_exchange_rate_history",
         )?;
     }
-        Ok(())
+    if !table_exists(conn, "inventory_recipes") {
+        execute_migration(
+            conn,
+            EMBEDDED_INVENTORY_RECIPES_SCHEMA,
+            "0010_inventory_recipes",
+        )?;
+    } else if !column_exists(conn, "invoices", "inventory_deducted_at") {
+        conn.execute(
+            "ALTER TABLE invoices ADD COLUMN inventory_deducted_at TEXT",
+            [],
+        )
+        .map_err(|e| format!("No se pudo aplicar inventory_deducted_at: {}", e))?;
+    }
+    if !column_exists(conn, "production_batch_items", "invoice_id") {
+        execute_migration(
+            conn,
+            EMBEDDED_INVOICE_WORK_BATCHES_SCHEMA,
+            "0011_invoice_work_batches",
+        )?;
+    }
+    Ok(())
 }
 
 /// Validates that a SQLite file is readable and compatible with the current FlexPyme schema.

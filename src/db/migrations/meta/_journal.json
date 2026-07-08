@@ -71,6 +71,20 @@
       "when": 1780800000001,
       "tag": "0009_exchange_rate_history",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1780800000002,
+      "tag": "0010_inventory_recipes",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1780800000003,
+      "tag": "0011_invoice_work_batches",
+      "breakpoints": true
     }
   ]
 }

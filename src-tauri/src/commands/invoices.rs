@@ -4,6 +4,8 @@ use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
 use crate::commands::categories::category_display_name;
+use crate::commands::cashier::{apply_invoice_payment_in_tx, record_advance_payment_in_tx, InitialPaymentPayload};
+use crate::commands::inventory::deduct_inventory_for_invoice;
 use crate::db;
 
 const EPS: f64 = 1e-6;
@@ -100,6 +102,7 @@ pub struct CreateInvoicePayload {
     pub payment_currency: String,
     pub exchange_rate_snapshot: f64,
     pub transfer_concept: Option<String>,
+    pub initial_payment: Option<InitialPaymentPayload>,
     pub items: Vec<CreateInvoiceItemPayload>,
 }
 
@@ -246,17 +249,21 @@ pub fn invoices_update_production_status(id: i64, status: String) -> Result<Invo
     if status != "en_produccion" && status != "listo" {
         return Err("Estado de producción inválido".to_string());
     }
-    let conn = db::open_connection()?;
-    let (balance, paid, payment_status): (f64, f64, String) = conn
+    let mut conn = db::open_connection()?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let (balance, paid, payment_status, invoice_number): (f64, f64, String, String) = tx
         .query_row(
-            "SELECT balance, paid, payment_status FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
+            "SELECT balance, paid, payment_status, invoice_number FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
             params![id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .map_err(|_| "Pedido no encontrado".to_string())?;
     let legacy = sync_legacy_status(&status, &payment_status, balance, paid);
+
     if status == "listo" {
-        conn.execute(
+        deduct_inventory_for_invoice(&tx, id, &invoice_number)?;
+        tx.execute(
             "UPDATE invoices SET production_status = ?1, status = ?2,
              production_completed_at = COALESCE(production_completed_at, datetime('now'))
              WHERE id = ?3",
@@ -264,12 +271,14 @@ pub fn invoices_update_production_status(id: i64, status: String) -> Result<Invo
         )
         .map_err(|e| e.to_string())?;
     } else {
-        conn.execute(
+        tx.execute(
             "UPDATE invoices SET production_status = ?1, status = ?2 WHERE id = ?3",
             params![status, legacy, id],
         )
         .map_err(|e| e.to_string())?;
     }
+
+    tx.commit().map_err(|e| e.to_string())?;
     invoices_get_detail(id).map(|d| d.invoice)
 }
 
@@ -405,6 +414,10 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
         }
     }
 
+    if payload.paid > EPS && payload.initial_payment.is_none() {
+        return Err("Para registrar cobro en caja use initial_payment".to_string());
+    }
+
     let mut conn = db::open_connection()?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
@@ -423,12 +436,12 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
     }
 
     let total = subtotal - payload.advance_payment;
-    let balance = total - payload.paid;
+    let balance = total;
     if total < -1e-6 {
         return Err("El total calculado no puede ser negativo".to_string());
     }
-    if payload.paid - total > 1e-6 {
-        return Err("El pagado no puede ser mayor que el total".to_string());
+    if payload.initial_payment.is_some() && total <= EPS {
+        return Err("No hay saldo pendiente para cobrar en este pedido".to_string());
     }
 
     let payment_method = payload.payment_method.trim().to_lowercase();
@@ -458,9 +471,9 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
     };
 
     let invoice_number = next_invoice_number(&tx, &year)?;
-    let status = compute_invoice_status(balance, payload.paid);
+    let status = compute_invoice_status(balance, 0.0);
     let production_status = "en_produccion";
-    let payment_status = if balance <= 1e-6 { "cobrado" } else { "pendiente" };
+    let payment_status = if balance <= EPS { "cobrado" } else { "pendiente" };
     let mut notes = trim_notes(payload.notes);
     if payment_method == "transferencia" {
         if let Some(concept) = trim_notes(payload.transfer_concept) {
@@ -472,12 +485,12 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
         }
     }
 
-    let new_balance = previous_debt + subtotal - payload.advance_payment - payload.paid;
+    let new_balance = previous_debt + subtotal - payload.advance_payment;
 
     tx.execute(
         "INSERT INTO invoices (invoice_number, client_id, date, subtotal, advance_payment, previous_debt, total, paid, balance, status,
          production_status, payment_status, payment_method, payment_currency, exchange_rate_snapshot, amount_usd, amount_cup, notes)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
         params![
             invoice_number,
             payload.client_id,
@@ -486,7 +499,6 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
             payload.advance_payment,
             previous_debt,
             total,
-            payload.paid,
             balance,
             status,
             production_status,
@@ -548,6 +560,18 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
         params![new_balance, payload.client_id],
     )
     .map_err(|e| e.to_string())?;
+
+    record_advance_payment_in_tx(
+        &tx,
+        invoice_id,
+        &invoice_number,
+        payload.advance_payment,
+        &payment_method,
+    )?;
+
+    if let Some(initial_payment) = payload.initial_payment {
+        apply_invoice_payment_in_tx(&tx, &initial_payment.into_register(invoice_id))?;
+    }
 
     tx.commit().map_err(|e| e.to_string())?;
 

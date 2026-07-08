@@ -1,7 +1,6 @@
 import {
   LayoutDashboard,
   ShoppingCart,
-  PackageCheck,
   FileText,
   Users,
   UserCog,
@@ -16,12 +15,11 @@ import {
 
 /**
  * Tipo de badge que puede mostrar un ítem del sidebar.
- * - `pedidosPendientes`: pedidos en producción
- * - `stockListo`: pedidos listos sin cobrar
+ * - `pedidosAtencion`: en producción + listos sin cobrar
  * - `facturasPendientes`: facturas con saldo pendiente
  * - `stockBajo`: ítems de inventario bajo mínimo
  */
-export type NavBadgeKey = "pedidosPendientes" | "stockListo" | "facturasPendientes" | "stockBajo";
+export type NavBadgeKey = "pedidosAtencion" | "facturasPendientes" | "stockBajo";
 
 /**
  * Definición de un ítem de navegación lateral.
@@ -39,16 +37,14 @@ export interface NavItem {
  */
 export const PRIMARY_NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { to: "/pedidos", label: "Pedidos", icon: ShoppingCart, badge: "pedidosPendientes" },
-  { to: "/stock", label: "Stock", icon: PackageCheck, badge: "stockListo" },
+  { to: "/pedidos", label: "Pedidos", icon: ShoppingCart, badge: "pedidosAtencion" },
   { to: "/facturas", label: "Facturas", icon: FileText, badge: "facturasPendientes" },
   { to: "/clientes", label: "Clientes", icon: Users },
   { to: "/empleados", label: "Empleados", icon: UserCog },
   { to: "/inventario", label: "Inventario", icon: Package, badge: "stockBajo" },
-  { to: "/caja", label: "Flujo de Caja", 
+  { to: "/caja", label: "Flujo de Caja", icon: Wallet },
   { to: "/precios", label: "Precios", icon: Tag },
   { to: "/costos", label: "Costos", icon: Coins },
-icon: Wallet },
   { to: "/reportes", label: "Reportes", icon: BarChart3 },
 ];
 

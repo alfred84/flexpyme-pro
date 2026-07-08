@@ -2,10 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Package, Plus } from "lucide-react";
 import { fetchInventoryItems } from "@/db/queries/inventory";
+import { InventoryRecipesPanel } from "@/features/inventory/components/InventoryRecipesPanel";
 import { formatMoney } from "@/lib/format-money";
 
 /**
- * Listado de inventario con alertas visuales de stock bajo.
+ * Listado de inventario con alertas de stock bajo y recetas de producción.
  *
  * @returns Página de inventario.
  */
@@ -98,6 +99,8 @@ export function InventoryListPage() {
           </table>
         </div>
       )}
+
+      <InventoryRecipesPanel />
     </section>
   );
 }

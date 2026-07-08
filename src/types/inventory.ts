@@ -69,3 +69,27 @@ export interface MovementPayload {
   reason: string | null;
   notes: string | null;
 }
+
+/**
+ * Receta de consumo de inventario al completar un pedido.
+ */
+export interface InventoryRecipeDto {
+  id: number;
+  categoryId: number;
+  categoryName: string;
+  service: string | null;
+  inventoryItemId: number;
+  inventoryItemName: string;
+  quantityPerUnit: number;
+  isActive: boolean;
+}
+
+/**
+ * Payload de creación de receta de consumo.
+ */
+export interface CreateRecipePayload {
+  categoryId: number;
+  service: string | null;
+  inventoryItemId: number;
+  quantityPerUnit: number;
+}

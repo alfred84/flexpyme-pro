@@ -9,9 +9,9 @@ import type { NavBadgeKey } from "@/config/navigation";
 export type SidebarBadges = Record<NavBadgeKey, number>;
 
 /**
- * Calcula los contadores de los badges del sidebar (pedidos pendientes de cobro,
- * ítems en stock bajo). Tolerante a fallos: si una fuente no está disponible
- * devuelve 0 para ese badge.
+ * Calcula los contadores de los badges del sidebar (pedidos que requieren atención,
+ * facturas pendientes, ítems en stock bajo). Tolerante a fallos: si una fuente no
+ * está disponible devuelve 0 para ese badge.
  *
  * @returns Mapa de contadores por clave de badge.
  */
@@ -28,20 +28,19 @@ export function useSidebarBadges(): SidebarBadges {
     staleTime: 30_000,
   });
 
-  const pedidosPendientes = (invoicesQuery.data ?? []).filter(
-    (invoice) => invoice.productionStatus === "en_produccion",
-  ).length;
-  const stockListo = (invoicesQuery.data ?? []).filter(
-    (invoice) => invoice.productionStatus === "listo" && invoice.paymentStatus === "pendiente",
-  ).length;
-  const facturasPendientes = (invoicesQuery.data ?? []).filter(
+  const invoices = invoicesQuery.data ?? [];
+  const pedidosAtencion =
+    invoices.filter((invoice) => invoice.productionStatus === "en_produccion").length +
+    invoices.filter(
+      (invoice) => invoice.productionStatus === "listo" && invoice.paymentStatus === "pendiente",
+    ).length;
+  const facturasPendientes = invoices.filter(
     (invoice) => invoice.balance > 1e-6 && invoice.status !== "anulada",
   ).length;
   const stockBajo = (inventoryQuery.data ?? []).filter((item) => item.lowStock).length;
 
   return {
-    pedidosPendientes,
-    stockListo,
+    pedidosAtencion,
     facturasPendientes,
     stockBajo,
   };

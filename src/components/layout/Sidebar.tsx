@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
 import { BusinessLogo } from "@/components/common/BusinessLogo";
 import { PRIMARY_NAV, SECONDARY_NAV, type NavItem } from "@/config/navigation";
 import { useSidebarBadges } from "@/hooks/use-sidebar-badges";
+import { pedidosListSearch } from "@/lib/pedidos-search";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -81,6 +82,7 @@ function SidebarLink(props: SidebarLinkProps) {
   return (
     <Link
       to={item.to}
+      search={item.to === "/pedidos" ? pedidosListSearch : undefined}
       activeOptions={{ exact: item.exact ?? false }}
       className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-base-content/80 transition-colors hover:bg-base-300"
       activeProps={{ className: "bg-primary/15 text-primary font-medium" }}

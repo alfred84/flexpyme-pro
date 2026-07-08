@@ -5,14 +5,31 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { fetchInvoices, updateInvoiceProductionStatus } from "@/db/queries/invoices";
 import { formatMoney } from "@/lib/format-money";
+import { pushFlashMessage } from "@/lib/flash-message";
 import { PaymentStatusBadge, ProductionStatusBadge } from "@/components/invoices/InvoiceStatusBadges";
 import type { InvoiceListDto } from "@/types/invoice";
 
 type ListFilter = "todos" | "en_produccion" | "listos" | "pendiente_cobro" | "cobrados" | "completados";
+
+const VALID_FILTERS: ListFilter[] = [
+  "todos",
+  "en_produccion",
+  "listos",
+  "pendiente_cobro",
+  "cobrados",
+  "completados",
+];
+
+function parseFilter(value: string | undefined): ListFilter {
+  if (value && VALID_FILTERS.includes(value as ListFilter)) {
+    return value as ListFilter;
+  }
+  return "todos";
+}
 
 function matchesFilter(row: InvoiceListDto, filter: ListFilter): boolean {
   if (filter === "todos") return true;
@@ -30,7 +47,9 @@ function matchesFilter(row: InvoiceListDto, filter: ListFilter): boolean {
  */
 export function InvoicesListPage() {
   const queryClient = useQueryClient();
-  const [filter, setFilter] = useState<ListFilter>("todos");
+  const navigate = useNavigate();
+  const { filter: searchFilter } = useSearch({ from: "/pedidos" });
+  const filter = parseFilter(searchFilter);
   const [search, setSearch] = useState("");
   const invoicesQuery = useQuery({
     queryKey: ["invoices", "list"],
@@ -40,7 +59,14 @@ export function InvoicesListPage() {
   const markReadyMutation = useMutation({
     mutationFn: (id: number) => updateInvoiceProductionStatus(id, "listo"),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+        queryClient.invalidateQueries({ queryKey: ["inventory"] }),
+      ]);
+      pushFlashMessage({ kind: "success", text: "Pedido marcado como listo." });
+    },
+    onError: (e: Error) => {
+      pushFlashMessage({ kind: "error", text: e.message });
     },
   });
 
@@ -129,6 +155,13 @@ export function InvoicesListPage() {
     { key: "completados", label: "Completados" },
   ];
 
+  const setListFilter = (next: ListFilter) => {
+    void navigate({
+      to: "/pedidos",
+      search: next === "todos" ? { filter: undefined } : { filter: next },
+    });
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -153,7 +186,7 @@ export function InvoicesListPage() {
                 key={f.key}
                 type="button"
                 className={`btn btn-xs ${filter === f.key ? "btn-primary" : "btn-ghost"}`}
-                onClick={() => setFilter(f.key)}
+                onClick={() => setListFilter(f.key)}
               >
                 {f.label}
               </button>

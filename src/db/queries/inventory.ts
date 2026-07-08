@@ -1,8 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   CreateItemPayload,
+  CreateRecipePayload,
   InventoryItemDto,
   InventoryMovementDto,
+  InventoryRecipeDto,
   MovementPayload,
   UpdateItemPayload,
 } from "@/types/inventory";
@@ -47,4 +49,25 @@ export async function registerInventoryMovement(payload: MovementPayload): Promi
  */
 export async function fetchInventoryMovements(itemId: number): Promise<InventoryMovementDto[]> {
   return invoke<InventoryMovementDto[]>("inventory_movements_for_item", { itemId });
+}
+
+/**
+ * Lists production consumption recipes.
+ */
+export async function fetchInventoryRecipes(activeOnly = true): Promise<InventoryRecipeDto[]> {
+  return invoke<InventoryRecipeDto[]>("inventory_recipes_list", { activeOnly });
+}
+
+/**
+ * Creates a production consumption recipe.
+ */
+export async function createInventoryRecipe(payload: CreateRecipePayload): Promise<InventoryRecipeDto> {
+  return invoke<InventoryRecipeDto>("inventory_recipe_create", { payload });
+}
+
+/**
+ * Deactivates a production consumption recipe.
+ */
+export async function deactivateInventoryRecipe(id: number): Promise<void> {
+  return invoke<void>("inventory_recipe_deactivate", { id });
 }

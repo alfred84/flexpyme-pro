@@ -95,6 +95,7 @@ export const invoices = sqliteTable("invoices", {
   amountCup: real("amount_cup").notNull().default(0),
   notes: text("notes"),
   productionCompletedAt: text("production_completed_at"),
+  inventoryDeductedAt: text("inventory_deducted_at"),
   cancelledAt: text("cancelled_at"),
   cancelledReason: text("cancelled_reason"),
   deletedAt: text("deleted_at"),
@@ -157,6 +158,7 @@ export const productionBatchItems = sqliteTable("production_batch_items", {
   quantity: integer("quantity").notNull(),
   unitCost: real("unit_cost").notNull(),
   subtotal: real("subtotal").notNull(),
+  invoiceId: integer("invoice_id").references(() => invoices.id),
 });
 
 export const cashSessions = sqliteTable("cash_sessions", {
@@ -177,103 +179,8 @@ export const settings = sqliteTable("settings", {
 });
 
 /**
- * Precios de COSTO para el cálculo del salario de empleados.
- * Separado de `price_list` (precios de VENTA). Importes en CUP.
+ * Histórico de cambios de la tasa USD → CUP (auditoría).
  */
-export const costList = sqliteTable("cost_list", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  workType: text("work_type").notNull(),
-  formatId: integer("format_id").references(() => formats.id),
-  unitCost: real("unit_cost").notNull(),
-  validFrom: text("valid_from").notNull().default(sql`(date('now'))`),
-  isActive: integer("is_active").notNull().default(1),
-});
-
-/**
- * Roles configurables de empleados (catálogo; solo desactivar, no eliminar).
- */
-export const employeeRoles = sqliteTable("employee_roles", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
-  description: text("description"),
-  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-});
-
-/**
- * Empleados del taller. Soft delete con `is_active = false`.
- */
-export const employees = sqliteTable("employees", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
-  roleId: integer("role_id").references(() => employeeRoles.id),
-  roleSnapshot: text("role_snapshot"),
-  role: text("role"),
-  phone: text("phone"),
-  notes: text("notes"),
-  isActive: integer("is_active").notNull().default(1),
-  deletedAt: text("deleted_at"),
-  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-});
-
-/**
- * Materiales/insumos del taller con control de stock mínimo.
- */
-export const inventoryItems = sqliteTable("inventory_items", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
-  category: text("category"),
-  unitId: integer("unit_id").references(() => units.id),
-  unitSnapshot: text("unit_snapshot"),
-  unit: text("unit").notNull().default("unidad"),
-  quantity: real("quantity").notNull().default(0),
-  minStock: real("min_stock").notNull().default(0),
-  costPerUnit: real("cost_per_unit").notNull().default(0),
-  supplier: text("supplier"),
-  notes: text("notes"),
-  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-});
-
-/**
- * Movimientos de inventario: entradas (compra) y salidas (uso/producción).
- */
-export const inventoryMovements = sqliteTable("inventory_movements", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  itemId: integer("item_id")
-    .notNull()
-    .references(() => inventoryItems.id, { onDelete: "cascade" }),
-  type: text("type").notNull(),
-  quantity: real("quantity").notNull(),
-  unitSnapshot: text("unit_snapshot"),
-  reason: text("reason"),
-  referenceId: integer("reference_id"),
-  date: text("date").notNull().default(sql`(datetime('now'))`),
-  notes: text("notes"),
-});
-
-/**
- * Flujo de caja general. Toda operación de dinero del taller.
- * Importes principales en CUP; USD opcional con tasa almacenada por operación.
- */
-export const cashTransactions = sqliteTable("cash_transactions", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  type: text("type").notNull(),
-  concept: text("concept").notNull(),
-  referenceType: text("reference_type"),
-  referenceId: integer("reference_id"),
-  amountCup: real("amount_cup").notNull().default(0),
-  amountUsd: real("amount_usd").notNull().default(0),
-  exchangeRate: real("exchange_rate").notNull().default(0),
-  paymentMethod: text("payment_method").notNull().default("efectivo"),
-  denominationBreakdown: text("denomination_breakdown"),
-  date: text("date").notNull().default(sql`(datetime('now'))`),
-  notes: text("notes"),
-  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-});
-
 export const exchangeRateHistory = sqliteTable("exchange_rate_history", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   rate: real("rate").notNull(),
@@ -346,6 +253,56 @@ export const inventoryItems = sqliteTable("inventory_items", {
 /**
  * Recetas de consumo de inventario por categoría/servicio de producto vendido.
  */
+export const inventoryRecipes = sqliteTable("inventory_recipes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  categoryId: integer("category_id")
+    .notNull()
+    .references(() => productCategories.id),
+  service: text("service"),
+  inventoryItemId: integer("inventory_item_id")
+    .notNull()
+    .references(() => inventoryItems.id),
+  quantityPerUnit: real("quantity_per_unit").notNull().default(1),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
+/**
+ * Movimientos de inventario: entradas (compra) y salidas (uso/producción).
+ */
+export const inventoryMovements = sqliteTable("inventory_movements", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  itemId: integer("item_id")
+    .notNull()
+    .references(() => inventoryItems.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  quantity: real("quantity").notNull(),
+  unitSnapshot: text("unit_snapshot"),
+  reason: text("reason"),
+  referenceId: integer("reference_id"),
+  date: text("date").notNull().default(sql`(datetime('now'))`),
+  notes: text("notes"),
+});
+
+/**
+ * Flujo de caja general. Toda operación de dinero del taller.
+ * Importes principales en CUP; USD opcional con tasa almacenada por operación.
+ */
+export const cashTransactions = sqliteTable("cash_transactions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  type: text("type").notNull(),
+  concept: text("concept").notNull(),
+  referenceType: text("reference_type"),
+  referenceId: integer("reference_id"),
+  amountCup: real("amount_cup").notNull().default(0),
+  amountUsd: real("amount_usd").notNull().default(0),
+  exchangeRate: real("exchange_rate").notNull().default(0),
+  paymentMethod: text("payment_method").notNull().default("efectivo"),
+  denominationBreakdown: text("denomination_breakdown"),
+  date: text("date").notNull().default(sql`(datetime('now'))`),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
 
 export const clientsRelations = relations(clients, ({ many }) => ({
   invoices: many(invoices),
