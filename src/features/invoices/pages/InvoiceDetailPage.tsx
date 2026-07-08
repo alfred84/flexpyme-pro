@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { useState } from "react";
-import { fetchInvoiceDetail } from "@/db/queries/invoices";
+import { fetchInvoiceDetail, fetchInvoicePaymentHistory } from "@/db/queries/invoices";
 import { formatMoney } from "@/lib/format-money";
+import { pedidosListSearch } from "@/lib/pedidos-search";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
+import { InvoiceWorkPanel } from "@/features/invoices/components/InvoiceWorkPanel";
 
 function statusLabel(status: string): string {
   if (status === "paid") {
@@ -28,6 +30,11 @@ export function InvoiceDetailPage() {
   const detailQuery = useQuery({
     queryKey: ["invoices", "detail", invoiceId],
     queryFn: () => fetchInvoiceDetail(invoiceId),
+    enabled: Number.isFinite(invoiceId) && invoiceId > 0,
+  });
+  const paymentsQuery = useQuery({
+    queryKey: ["invoices", "payments", invoiceId],
+    queryFn: () => fetchInvoicePaymentHistory(invoiceId),
     enabled: Number.isFinite(invoiceId) && invoiceId > 0,
   });
 
@@ -67,7 +74,7 @@ export function InvoiceDetailPage() {
               </Link>
             </>
           )}
-          <Link to="/pedidos" className="btn btn-ghost btn-sm">
+          <Link to="/pedidos" search={pedidosListSearch} className="btn btn-ghost btn-sm">
             Volver al listado
           </Link>
         </div>
@@ -211,6 +218,45 @@ export function InvoiceDetailPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <InvoiceWorkPanel
+            invoiceId={inv.id}
+            clientId={inv.clientId}
+            items={detailQuery.data?.items ?? []}
+          />
+
+          <div className="card bg-base-100 shadow">
+            <div className="card-body">
+              <h2 className="card-title text-base">Historial de cobros</h2>
+              {paymentsQuery.isLoading && <p className="text-sm">Cargando cobros...</p>}
+              {(paymentsQuery.data ?? []).length === 0 ? (
+                <p className="text-sm text-base-content/60">No hay cobros registrados en caja para este pedido.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Concepto</th>
+                        <th>Método</th>
+                        <th className="text-right">CUP</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paymentsQuery.data?.map((payment) => (
+                        <tr key={payment.id}>
+                          <td className="text-xs">{payment.date.slice(0, 16).replace("T", " ")}</td>
+                          <td>{payment.concept}</td>
+                          <td className="capitalize">{payment.paymentMethod}</td>
+                          <td className="text-right">{formatMoney(payment.amountCup)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}

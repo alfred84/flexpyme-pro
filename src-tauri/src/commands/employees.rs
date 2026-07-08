@@ -69,7 +69,21 @@ pub struct CreateWorkBatchPayload {
     pub date: String,
     pub notes: Option<String>,
     pub pay_now: bool,
+    pub invoice_id: Option<i64>,
     pub items: Vec<WorkBatchItemPayload>,
+}
+
+/// Work batch linked to an invoice (summary for pedido detail).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceWorkBatchDto {
+    pub id: i64,
+    pub employee_name: String,
+    pub work_type: String,
+    pub date: String,
+    pub total_cost: f64,
+    pub paid: f64,
+    pub status: String,
 }
 
 /// Work batch summary row for an employee history.
@@ -310,6 +324,19 @@ pub fn work_batch_create(payload: CreateWorkBatchPayload) -> Result<i64, String>
         .sum();
 
     let mut conn = db::open_connection()?;
+    if let Some(invoice_id) = payload.invoice_id {
+        let exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
+                params![invoice_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if exists == 0 {
+            return Err("Pedido no encontrado".to_string());
+        }
+    }
+
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
     let paid = if payload.pay_now { total_cost } else { 0.0 };
@@ -345,8 +372,8 @@ pub fn work_batch_create(payload: CreateWorkBatchPayload) -> Result<i64, String>
         let subtotal = item.unit_cost * item.quantity as f64;
         tx.execute(
             "INSERT INTO production_batch_items
-                (batch_id, client_id, format_id, category, quantity, unit_cost, subtotal)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                (batch_id, client_id, format_id, category, quantity, unit_cost, subtotal, invoice_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 batch_id,
                 item.client_id,
@@ -354,7 +381,8 @@ pub fn work_batch_create(payload: CreateWorkBatchPayload) -> Result<i64, String>
                 item.category.trim(),
                 item.quantity,
                 item.unit_cost,
-                subtotal
+                subtotal,
+                payload.invoice_id
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -440,4 +468,40 @@ pub fn work_batch_pay(batch_id: i64) -> Result<(), String> {
 
     tx.commit().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Lists work batches linked to an invoice (via batch items).
+#[tauri::command]
+pub fn work_batches_for_invoice(invoice_id: i64) -> Result<Vec<InvoiceWorkBatchDto>, String> {
+    let conn = db::open_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT DISTINCT pb.id,
+                    e.name,
+                    COALESCE(pb.work_type_snapshot, pb.type),
+                    pb.date,
+                    pb.total_cost,
+                    pb.paid,
+                    pb.status
+             FROM production_batches pb
+             JOIN production_batch_items pbi ON pbi.batch_id = pb.id
+             JOIN employees e ON e.id = pb.employee_id
+             WHERE pbi.invoice_id = ?1
+             ORDER BY pb.date DESC, pb.id DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![invoice_id], |row| {
+            Ok(InvoiceWorkBatchDto {
+                id: row.get(0)?,
+                employee_name: row.get(1)?,
+                work_type: row.get(2)?,
+                date: row.get(3)?,
+                total_cost: row.get(4)?,
+                paid: row.get(5)?,
+                status: row.get(6)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }

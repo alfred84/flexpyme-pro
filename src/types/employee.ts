@@ -74,7 +74,21 @@ export interface CreateWorkBatchPayload {
   date: string;
   notes: string | null;
   payNow: boolean;
+  invoiceId?: number | null;
   items: WorkBatchItemPayload[];
+}
+
+/**
+ * Lote de trabajo vinculado a un pedido.
+ */
+export interface InvoiceWorkBatchDto {
+  id: number;
+  employeeName: string;
+  workType: string;
+  date: string;
+  totalCost: number;
+  paid: number;
+  status: string;
 }
 
 /**

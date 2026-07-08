@@ -3,6 +3,7 @@ import type {
   CreateEmployeePayload,
   CreateWorkBatchPayload,
   EmployeeDto,
+  InvoiceWorkBatchDto,
   UpdateEmployeePayload,
   WorkBatchDto,
   WorkCostDto,
@@ -69,6 +70,13 @@ export async function createWorkBatch(payload: CreateWorkBatchPayload): Promise<
  */
 export async function fetchWorkBatches(employeeId: number): Promise<WorkBatchDto[]> {
   return invoke<WorkBatchDto[]>("work_batches_for_employee", { employeeId });
+}
+
+/**
+ * Lists work batches linked to an invoice.
+ */
+export async function fetchWorkBatchesForInvoice(invoiceId: number): Promise<InvoiceWorkBatchDto[]> {
+  return invoke<InvoiceWorkBatchDto[]>("work_batches_for_invoice", { invoiceId });
 }
 
 /**
