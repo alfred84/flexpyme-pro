@@ -422,7 +422,7 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
         subtotal += line;
     }
 
-    let total = subtotal + previous_debt - payload.advance_payment;
+    let total = subtotal - payload.advance_payment;
     let balance = total - payload.paid;
     if total < -1e-6 {
         return Err("El total calculado no puede ser negativo".to_string());
