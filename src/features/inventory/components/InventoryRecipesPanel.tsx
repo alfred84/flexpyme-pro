@@ -11,9 +11,9 @@ import {
 import { pushFlashMessage } from "@/lib/flash-message";
 
 /**
- * Panel de recetas de consumo: vincula categorías/servicios de pedido con materiales de inventario.
+ * Panel de normas de consumo: vincula categorías/servicios de pedido con materiales de inventario.
  *
- * @returns Sección de gestión de recetas de producción.
+ * @returns Sección de gestión de normas de producción.
  */
 export function InventoryRecipesPanel() {
   const queryClient = useQueryClient();
@@ -59,7 +59,7 @@ export function InventoryRecipesPanel() {
       setShowModal(false);
       resetForm();
       await queryClient.invalidateQueries({ queryKey: ["inventory", "recipes"] });
-      pushFlashMessage({ kind: "success", text: "Receta guardada." });
+      pushFlashMessage({ kind: "success", text: "Norma guardada." });
     },
     onError: (e: Error) => setError(e.message),
   });
@@ -68,7 +68,7 @@ export function InventoryRecipesPanel() {
     mutationFn: deactivateInventoryRecipe,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["inventory", "recipes"] });
-      pushFlashMessage({ kind: "success", text: "Receta desactivada." });
+      pushFlashMessage({ kind: "success", text: "Norma desactivada." });
     },
     onError: (e: Error) => pushFlashMessage({ kind: "error", text: e.message }),
   });
@@ -99,19 +99,19 @@ export function InventoryRecipesPanel() {
     <div className="space-y-4 rounded-lg border border-base-300 bg-base-100 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-lg font-semibold">Recetas de producción</h2>
+          <h2 className="text-lg font-semibold">Normas de producción</h2>
           <p className="text-sm text-base-content/70">
             Al marcar un pedido como listo se descuentan los materiales según estas reglas.
           </p>
         </div>
         <button type="button" className="btn btn-primary btn-sm gap-2" onClick={openCreate}>
-          <Plus size={14} /> Nueva receta
+          <Plus size={14} /> Nueva norma
         </button>
       </div>
 
-      {recipesQuery.isLoading && <p className="text-sm">Cargando recetas...</p>}
+      {recipesQuery.isLoading && <p className="text-sm">Cargando normas...</p>}
       {recipesQuery.isError && (
-        <p className="text-error text-sm">No se pudieron cargar las recetas.</p>
+        <p className="text-error text-sm">No se pudieron cargar las normas.</p>
       )}
 
       {recipesQuery.data && (
@@ -158,7 +158,7 @@ export function InventoryRecipesPanel() {
               {recipes.length === 0 && (
                 <tr>
                   <td colSpan={6} className="py-4 text-center text-base-content/60">
-                    No hay recetas configuradas. El inventario no se descontará automáticamente.
+                    No hay normas configuradas. El inventario no se descontará automáticamente.
                   </td>
                 </tr>
               )}
@@ -170,7 +170,7 @@ export function InventoryRecipesPanel() {
       {showModal && (
         <dialog className="modal modal-open">
           <div className="modal-box max-w-lg">
-            <h3 className="text-lg font-bold">Nueva receta de consumo</h3>
+            <h3 className="text-lg font-bold">Nueva norma de consumo</h3>
             <div className="mt-4 space-y-3">
               <label className="form-control w-full">
                 <span className="label-text">Categoría del pedido</span>

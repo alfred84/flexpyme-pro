@@ -6,7 +6,7 @@ import { InventoryRecipesPanel } from "@/features/inventory/components/Inventory
 import { formatMoney } from "@/lib/format-money";
 
 /**
- * Listado de inventario con alertas de stock bajo y recetas de producción.
+ * Listado de inventario con alertas de stock bajo y normas de producción.
  *
  * @returns Página de inventario.
  */

@@ -71,7 +71,7 @@ export interface MovementPayload {
 }
 
 /**
- * Receta de consumo de inventario al completar un pedido.
+ * Norma de consumo de inventario al completar un pedido.
  */
 export interface InventoryRecipeDto {
   id: number;
@@ -85,7 +85,7 @@ export interface InventoryRecipeDto {
 }
 
 /**
- * Payload de creación de receta de consumo.
+ * Payload de creación de norma de consumo.
  */
 export interface CreateRecipePayload {
   categoryId: number;

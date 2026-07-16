@@ -52,21 +52,21 @@ export async function fetchInventoryMovements(itemId: number): Promise<Inventory
 }
 
 /**
- * Lists production consumption recipes.
+ * Lists production consumption norms (normas de consumo).
  */
 export async function fetchInventoryRecipes(activeOnly = true): Promise<InventoryRecipeDto[]> {
   return invoke<InventoryRecipeDto[]>("inventory_recipes_list", { activeOnly });
 }
 
 /**
- * Creates a production consumption recipe.
+ * Creates a production consumption norm.
  */
 export async function createInventoryRecipe(payload: CreateRecipePayload): Promise<InventoryRecipeDto> {
   return invoke<InventoryRecipeDto>("inventory_recipe_create", { payload });
 }
 
 /**
- * Deactivates a production consumption recipe.
+ * Deactivates a production consumption norm.
  */
 export async function deactivateInventoryRecipe(id: number): Promise<void> {
   return invoke<void>("inventory_recipe_deactivate", { id });

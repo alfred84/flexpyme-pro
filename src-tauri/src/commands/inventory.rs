@@ -605,7 +605,7 @@ pub fn inventory_recipe_deactivate(id: i64) -> Result<(), String> {
         )
         .map_err(|e| e.to_string())?;
     if updated == 0 {
-        return Err("Receta no encontrada".to_string());
+        return Err("Norma no encontrada".to_string());
     }
     Ok(())
 }
