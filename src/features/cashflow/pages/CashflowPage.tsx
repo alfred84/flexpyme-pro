@@ -70,15 +70,15 @@ export function CashflowPage() {
         </div>
         <div className="card border border-secondary/20 bg-base-100 shadow-sm">
           <div className="card-body p-4">
-            <p className="text-xs uppercase text-base-content/60">Flujo neto (mes en curso)</p>
+            <p className="text-xs uppercase text-base-content/60">Flujo neto (últimos 30 días)</p>
             <p
-              className={`text-2xl font-semibold ${(net?.netMonthCup ?? 0) >= 0 ? "text-success" : "text-error"}`}
+              className={`text-2xl font-semibold ${(net?.net30DaysCup ?? 0) >= 0 ? "text-success" : "text-error"}`}
             >
-              {(net?.netMonthCup ?? 0) >= 0 ? "+" : "−"}
-              {formatMoney(Math.abs(net?.netMonthCup ?? 0))}
+              {(net?.net30DaysCup ?? 0) >= 0 ? "+" : "−"}
+              {formatMoney(Math.abs(net?.net30DaysCup ?? 0))}
             </p>
-            {Math.abs(net?.netMonthUsd ?? 0) > 0.001 && (
-              <p className="text-xs text-base-content/60">USD neto: {(net?.netMonthUsd ?? 0).toFixed(2)}</p>
+            {Math.abs(net?.net30DaysUsd ?? 0) > 0.001 && (
+              <p className="text-xs text-base-content/60">USD neto: {(net?.net30DaysUsd ?? 0).toFixed(2)}</p>
             )}
           </div>
         </div>
