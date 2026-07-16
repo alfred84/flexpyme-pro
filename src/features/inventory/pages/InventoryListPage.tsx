@@ -18,6 +18,7 @@ export function InventoryListPage() {
 
   const items = itemsQuery.data ?? [];
   const lowStockCount = items.filter((item) => item.lowStock).length;
+  const deficitCount = items.filter((item) => item.deficit).length;
 
   return (
     <section className="space-y-4">
@@ -29,6 +30,16 @@ export function InventoryListPage() {
           <Plus className="h-4 w-4" /> Nuevo ítem
         </Link>
       </div>
+
+      {deficitCount > 0 && (
+        <div className="alert alert-error">
+          <AlertTriangle className="h-5 w-5" />
+          <span>
+            <strong>{deficitCount}</strong> ítem(s) en déficit (existencia negativa). Repón material
+            para cubrir las líneas concluidas.
+          </span>
+        </div>
+      )}
 
       {lowStockCount > 0 && (
         <div className="alert alert-warning">
@@ -63,16 +74,20 @@ export function InventoryListPage() {
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id} className={item.lowStock ? "bg-error/10" : ""}>
+                <tr key={item.id} className={item.deficit || item.lowStock ? "bg-error/10" : ""}>
                   <td className="font-medium">{item.name}</td>
                   <td>{item.category ?? "—"}</td>
-                  <td className="text-right">{item.quantity}</td>
+                  <td className={`text-right ${item.deficit ? "font-semibold text-error" : ""}`}>
+                    {item.quantity}
+                  </td>
                   <td>{item.unit}</td>
                   <td className="text-right">{item.minStock}</td>
                   <td className="text-right">{formatMoney(item.costPerUnit)}</td>
                   <td>
-                    {item.lowStock ? (
-                      <span className="badge badge-sm badge-error">Bajo</span>
+                    {item.deficit ? (
+                      <span className="badge badge-sm badge-error">Déficit</span>
+                    ) : item.lowStock ? (
+                      <span className="badge badge-sm badge-warning">Bajo</span>
                     ) : (
                       <span className="badge badge-sm badge-success">OK</span>
                     )}

@@ -39,6 +39,7 @@ export interface InvoiceHeaderDto {
   amountUsd: number;
   amountCup: number;
   notes: string | null;
+  resourceMissing: boolean;
   cancelledAt: string | null;
   cancelledReason: string | null;
 }
@@ -85,6 +86,8 @@ export interface InvoiceItemDto {
   unitPrice: number;
   subtotal: number;
   completedQuantity: number;
+  resourceMissing: boolean;
+  resourceNote: string | null;
 }
 
 /**

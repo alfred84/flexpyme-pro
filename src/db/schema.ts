@@ -126,6 +126,7 @@ export const invoices = sqliteTable("invoices", {
   notes: text("notes"),
   productionCompletedAt: text("production_completed_at"),
   inventoryDeductedAt: text("inventory_deducted_at"),
+  resourceMissing: integer("resource_missing").notNull().default(0),
   cancelledAt: text("cancelled_at"),
   cancelledReason: text("cancelled_reason"),
   deletedAt: text("deleted_at"),
@@ -150,6 +151,8 @@ export const invoiceItems = sqliteTable("invoice_items", {
   subtotal: real("subtotal").notNull(),
   completedQuantity: integer("completed_quantity").notNull().default(0),
   completedAt: text("completed_at"),
+  resourceMissing: integer("resource_missing").notNull().default(0),
+  resourceNote: text("resource_note"),
 });
 
 export const workTypes = sqliteTable("work_types", {

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
+import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { fetchInvoiceDetail, fetchInvoicePaymentHistory } from "@/db/queries/invoices";
 import { formatDate } from "@/lib/format-date";
@@ -192,6 +193,16 @@ export function InvoiceDetailPage() {
             </div>
           </div>
 
+          {inv.resourceMissing && (
+            <div role="alert" className="alert alert-warning">
+              <AlertTriangle className="h-5 w-5" />
+              <span>
+                Este pedido tiene líneas con recursos de inventario insuficientes. Revisa las líneas
+                marcadas y repón el material faltante.
+              </span>
+            </div>
+          )}
+
           <div className="overflow-x-auto rounded-lg border border-base-300 bg-base-100">
             <table className="table table-sm">
               <thead>
@@ -201,22 +212,44 @@ export function InvoiceDetailPage() {
                   <th>Servicio</th>
                   <th>Acabado</th>
                   <th className="text-right">Cant.</th>
+                  <th className="text-right">Realizado</th>
                   <th className="text-right">P. unit.</th>
                   <th className="text-right">Subtotal</th>
                 </tr>
               </thead>
               <tbody>
-                {detailQuery.data?.items.map((line) => (
-                  <tr key={line.id}>
-                    <td>{line.categoryName}</td>
-                    <td>{line.formatLabel ?? "—"}</td>
-                    <td>{line.service ?? "—"}</td>
-                    <td>{line.finish ?? "—"}</td>
-                    <td className="text-right">{line.quantity}</td>
-                    <td className="text-right">{formatMoney(line.unitPrice)}</td>
-                    <td className="text-right">{formatMoney(line.subtotal)}</td>
-                  </tr>
-                ))}
+                {detailQuery.data?.items.map((line) => {
+                  const pending = Math.max(0, line.quantity - line.completedQuantity);
+                  return (
+                    <tr key={line.id} className={line.resourceMissing ? "bg-error/10" : undefined}>
+                      <td>{line.categoryName}</td>
+                      <td>{line.formatLabel ?? "—"}</td>
+                      <td>
+                        {line.service ?? "—"}
+                        {line.resourceMissing && (
+                          <span
+                            className="badge badge-error badge-sm ml-2 gap-1"
+                            title={line.resourceNote ?? "Recurso insuficiente"}
+                          >
+                            <AlertTriangle className="h-3 w-3" /> Falta recurso
+                          </span>
+                        )}
+                      </td>
+                      <td>{line.finish ?? "—"}</td>
+                      <td className="text-right">{line.quantity}</td>
+                      <td className="text-right">
+                        <span className={pending === 0 ? "text-success" : "text-warning"}>
+                          {line.completedQuantity}
+                        </span>
+                        {pending > 0 && (
+                          <span className="text-xs text-base-content/50"> (faltan {pending})</span>
+                        )}
+                      </td>
+                      <td className="text-right">{formatMoney(line.unitPrice)}</td>
+                      <td className="text-right">{formatMoney(line.subtotal)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::commands::categories::category_display_name;
 use crate::commands::cashier::{apply_invoice_payment_in_tx, record_advance_payment_in_tx, InitialPaymentPayload};
-use crate::commands::inventory::deduct_inventory_for_invoice;
 use crate::db;
 
 const EPS: f64 = 1e-6;
@@ -51,6 +50,7 @@ pub struct InvoiceHeaderDto {
     pub amount_usd: f64,
     pub amount_cup: f64,
     pub notes: Option<String>,
+    pub resource_missing: bool,
     pub cancelled_at: Option<String>,
     pub cancelled_reason: Option<String>,
 }
@@ -70,6 +70,8 @@ pub struct InvoiceItemDto {
     pub unit_price: f64,
     pub subtotal: f64,
     pub completed_quantity: i64,
+    pub resource_missing: bool,
+    pub resource_note: Option<String>,
 }
 
 /// Full invoice payload returned to the UI.
@@ -253,17 +255,18 @@ pub fn invoices_update_production_status(id: i64, status: String) -> Result<Invo
     let mut conn = db::open_connection()?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
-    let (balance, paid, payment_status, invoice_number): (f64, f64, String, String) = tx
+    let (balance, paid, payment_status): (f64, f64, String) = tx
         .query_row(
-            "SELECT balance, paid, payment_status, invoice_number FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
+            "SELECT balance, paid, payment_status FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
             params![id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .map_err(|_| "Pedido no encontrado".to_string())?;
     let legacy = sync_legacy_status(&status, &payment_status, balance, paid);
 
     if status == "listo" {
-        deduct_inventory_for_invoice(&tx, id, &invoice_number)?;
+        // El inventario se descuenta por línea concluida (vía lotes de trabajo),
+        // no al marcar todo el pedido listo. Ver `deduct_inventory_for_line`.
         tx.execute(
             "UPDATE invoices SET production_status = ?1, status = ?2,
              production_completed_at = COALESCE(production_completed_at, datetime('now'))
@@ -317,7 +320,7 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                     i.total, i.paid, i.balance, i.status, i.production_status, i.payment_status,
                     i.payment_method, i.payment_currency,
                     i.exchange_rate_snapshot, i.amount_usd, i.amount_cup, i.notes,
-                    i.cancelled_at, i.cancelled_reason
+                    i.resource_missing, i.cancelled_at, i.cancelled_reason
              FROM invoices i
              JOIN clients c ON c.id = i.client_id
              WHERE i.id = ?1 AND i.deleted_at IS NULL",
@@ -344,8 +347,9 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                     amount_usd: row.get(17)?,
                     amount_cup: row.get(18)?,
                     notes: row.get(19)?,
-                    cancelled_at: row.get(20)?,
-                    cancelled_reason: row.get(21)?,
+                    resource_missing: row.get::<_, i64>(20)? != 0,
+                    cancelled_at: row.get(21)?,
+                    cancelled_reason: row.get(22)?,
                 })
             },
         )
@@ -357,7 +361,8 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                     COALESCE(ii.category_snapshot, NULLIF(trim(pc.label_es), ''), pc.name),
                     ii.format_id,
                     COALESCE(ii.format_label_snapshot, f.label) AS format_label,
-                    ii.finish, ii.service, ii.quantity, ii.unit_price, ii.subtotal, ii.completed_quantity
+                    ii.finish, ii.service, ii.quantity, ii.unit_price, ii.subtotal, ii.completed_quantity,
+                    ii.resource_missing, ii.resource_note
              FROM invoice_items ii
              JOIN product_categories pc ON pc.id = ii.category_id
              LEFT JOIN formats f ON f.id = ii.format_id
@@ -379,6 +384,8 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                 unit_price: row.get(8)?,
                 subtotal: row.get(9)?,
                 completed_quantity: row.get(10)?,
+                resource_missing: row.get::<_, i64>(11)? != 0,
+                resource_note: row.get(12)?,
             })
         })
         .map_err(|e| e.to_string())?

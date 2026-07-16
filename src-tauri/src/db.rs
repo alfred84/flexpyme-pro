@@ -82,6 +82,8 @@ const EMBEDDED_CASH_CHANGE_SCHEMA: &str =
     include_str!("../../src/db/migrations/0013_cash_change_breakdown.sql");
 const EMBEDDED_ITEM_COMPLETION_SCHEMA: &str =
     include_str!("../../src/db/migrations/0014_invoice_item_completion.sql");
+const EMBEDDED_INVENTORY_DEFICIT_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0015_inventory_deficit.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -235,6 +237,13 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             conn,
             EMBEDDED_ITEM_COMPLETION_SCHEMA,
             "0014_invoice_item_completion",
+        )?;
+    }
+    if !column_exists(conn, "invoice_items", "resource_missing") {
+        execute_migration(
+            conn,
+            EMBEDDED_INVENTORY_DEFICIT_SCHEMA,
+            "0015_inventory_deficit",
         )?;
     }
     Ok(())

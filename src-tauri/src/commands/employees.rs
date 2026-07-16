@@ -324,15 +324,16 @@ pub fn work_batch_create(payload: CreateWorkBatchPayload) -> Result<i64, String>
         .sum();
 
     let mut conn = db::open_connection()?;
+    let mut invoice_number: Option<String> = None;
     if let Some(invoice_id) = payload.invoice_id {
-        let exists: i64 = conn
+        invoice_number = conn
             .query_row(
-                "SELECT COUNT(*) FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
+                "SELECT invoice_number FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
                 params![invoice_id],
-                |row| row.get(0),
+                |row| row.get::<_, String>(0),
             )
-            .map_err(|e| e.to_string())?;
-        if exists == 0 {
+            .ok();
+        if invoice_number.is_none() {
             return Err("Pedido no encontrado".to_string());
         }
     }
@@ -387,10 +388,26 @@ pub fn work_batch_create(payload: CreateWorkBatchPayload) -> Result<i64, String>
         )
         .map_err(|e| e.to_string())?;
 
-        // Marca la conclusión en la línea del pedido correspondiente (Área+formato).
+        // Marca la conclusión en la línea del pedido correspondiente (Área+formato)
+        // y descuenta el inventario por la cantidad concluida.
         if let Some(invoice_id) = payload.invoice_id {
-            mark_invoice_item_completed(&tx, invoice_id, item)?;
+            let number = invoice_number.as_deref().unwrap_or("");
+            mark_invoice_item_completed(&tx, invoice_id, number, item)?;
         }
+    }
+
+    // Actualiza la bandera agregada de recurso faltante en el pedido.
+    if let Some(invoice_id) = payload.invoice_id {
+        tx.execute(
+            "UPDATE invoices SET resource_missing = (
+                 SELECT CASE WHEN EXISTS (
+                     SELECT 1 FROM invoice_items
+                     WHERE invoice_id = ?1 AND resource_missing = 1
+                 ) THEN 1 ELSE 0 END
+             ) WHERE id = ?1",
+            params![invoice_id],
+        )
+        .map_err(|e| e.to_string())?;
     }
 
     if payload.pay_now {
@@ -419,11 +436,12 @@ pub fn work_batch_create(payload: CreateWorkBatchPayload) -> Result<i64, String>
 fn mark_invoice_item_completed(
     tx: &rusqlite::Transaction<'_>,
     invoice_id: i64,
+    invoice_number: &str,
     item: &WorkBatchItemPayload,
 ) -> Result<(), String> {
     let mut stmt = tx
         .prepare(
-            "SELECT id, service, quantity, completed_quantity
+            "SELECT id, category_id, service, quantity, completed_quantity
              FROM invoice_items
              WHERE invoice_id = ?1 AND (format_id = ?2 OR (?2 IS NULL AND format_id IS NULL))
              ORDER BY id",
@@ -433,17 +451,19 @@ fn mark_invoice_item_completed(
         .query_map(params![invoice_id, item.format_id], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
-                row.get::<_, Option<String>>(1)?,
-                row.get::<_, i64>(2)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, Option<String>>(2)?,
                 row.get::<_, i64>(3)?,
+                row.get::<_, i64>(4)?,
             ))
         })
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
+    drop(stmt);
 
     let mut remaining = item.quantity;
-    for (id, service, quantity, completed) in candidates {
+    for (id, category_id, service, quantity, completed) in candidates {
         if remaining <= 0 {
             break;
         }
@@ -464,6 +484,29 @@ fn mark_invoice_item_completed(
         )
         .map_err(|e| e.to_string())?;
         remaining -= add;
+
+        // Descuenta el inventario por la cantidad concluida en esta línea.
+        let service_filter = if service.trim().is_empty() {
+            None
+        } else {
+            Some(service.as_str())
+        };
+        let deficit = crate::commands::inventory::deduct_inventory_for_line(
+            tx,
+            invoice_id,
+            invoice_number,
+            category_id,
+            service_filter,
+            add,
+        )?;
+        if !deficit.is_empty() {
+            let note = format!("Recurso insuficiente: {}", deficit.join(", "));
+            tx.execute(
+                "UPDATE invoice_items SET resource_missing = 1, resource_note = ?1 WHERE id = ?2",
+                params![note, id],
+            )
+            .map_err(|e| e.to_string())?;
+        }
     }
     Ok(())
 }

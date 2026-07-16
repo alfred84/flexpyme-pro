@@ -22,6 +22,7 @@ pub struct InventoryItemDto {
     pub supplier: Option<String>,
     pub notes: Option<String>,
     pub low_stock: bool,
+    pub deficit: bool,
 }
 
 /// Stock movement row.
@@ -297,6 +298,132 @@ pub fn deduct_inventory_for_invoice(
     Ok(())
 }
 
+/// Aplica una salida de inventario permitiendo dejar déficit (stock negativo).
+///
+/// A diferencia de `apply_inventory_movement`, no falla cuando el stock resulta
+/// insuficiente: registra el movimiento igualmente y devuelve `true` si el
+/// material quedó en déficit (cantidad resultante < 0), para señalizarlo.
+fn apply_deduction_allow_deficit(
+    tx: &rusqlite::Transaction<'_>,
+    item_id: i64,
+    quantity: f64,
+    reason: Option<&str>,
+    reference_id: Option<i64>,
+    notes: Option<&str>,
+) -> Result<bool, String> {
+    if quantity <= 0.0 {
+        return Ok(false);
+    }
+    let current: f64 = tx
+        .query_row(
+            "SELECT quantity FROM inventory_items WHERE id = ?1",
+            params![item_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "Ítem de inventario no encontrado".to_string())?;
+    let new_quantity = current - quantity;
+
+    let unit_snapshot: Option<String> = tx
+        .query_row(
+            "SELECT unit_snapshot FROM inventory_items WHERE id = ?1",
+            params![item_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    tx.execute(
+        "INSERT INTO inventory_movements (item_id, type, quantity, unit_snapshot, reason, reference_id, notes)
+         VALUES (?1, 'salida', ?2, ?3, ?4, ?5, ?6)",
+        params![item_id, quantity, unit_snapshot, reason, reference_id, notes],
+    )
+    .map_err(|e| e.to_string())?;
+
+    tx.execute(
+        "UPDATE inventory_items SET quantity = ?1, updated_at = datetime('now') WHERE id = ?2",
+        params![new_quantity, item_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(new_quantity < 0.0)
+}
+
+/// Descuenta inventario por una línea/servicio concluido (cantidad `quantity`).
+///
+/// Recorre las normas activas de la categoría (opcionalmente filtradas por
+/// servicio) y descuenta el material proporcional. Permite dejar déficit y
+/// devuelve los nombres de los materiales que quedaron por debajo de cero, para
+/// marcar la línea/pedido como recurso faltante.
+pub fn deduct_inventory_for_line(
+    tx: &rusqlite::Transaction<'_>,
+    invoice_id: i64,
+    invoice_number: &str,
+    category_id: i64,
+    service: Option<&str>,
+    quantity: i64,
+) -> Result<Vec<String>, String> {
+    if quantity <= 0 {
+        return Ok(Vec::new());
+    }
+    let line_service = normalize_token(service);
+
+    let mut recipe_stmt = tx
+        .prepare(
+            "SELECT service, inventory_item_id, quantity_per_unit
+             FROM inventory_recipes
+             WHERE is_active = 1 AND category_id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+    let recipes = recipe_stmt
+        .query_map(params![category_id], |row| {
+            Ok((
+                row.get::<_, Option<String>>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, f64>(2)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    let mut totals: std::collections::HashMap<i64, f64> = std::collections::HashMap::new();
+    for (recipe_service, item_id, per_unit) in &recipes {
+        let recipe_svc = normalize_token(recipe_service.as_deref());
+        if let Some(ref want) = recipe_svc {
+            if line_service.as_ref() != Some(want) {
+                continue;
+            }
+        }
+        let amount = (*per_unit) * (quantity as f64);
+        if amount > 0.0 {
+            *totals.entry(*item_id).or_insert(0.0) += amount;
+        }
+    }
+
+    let reason = format!("Pedido {} (línea concluida)", invoice_number);
+    let mut deficit_items = Vec::new();
+    for (item_id, amount) in totals {
+        let deficit = apply_deduction_allow_deficit(
+            tx,
+            item_id,
+            amount,
+            Some(&reason),
+            Some(invoice_id),
+            Some("Consumo por línea concluida"),
+        )?;
+        if deficit {
+            let name: String = tx
+                .query_row(
+                    "SELECT name FROM inventory_items WHERE id = ?1",
+                    params![item_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or_else(|_| "material".to_string());
+            deficit_items.push(name);
+        }
+    }
+    Ok(deficit_items)
+}
+
 fn normalize_optional(value: Option<String>) -> Option<String> {
     value.and_then(|v| {
         let t = v.trim().to_string();
@@ -336,6 +463,7 @@ pub fn inventory_items_list() -> Result<Vec<InventoryItemDto>, String> {
                 supplier: row.get(9)?,
                 notes: row.get(10)?,
                 low_stock: quantity <= min_stock,
+                deficit: quantity < 0.0,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -366,6 +494,7 @@ pub fn inventory_item_get(id: i64) -> Result<InventoryItemDto, String> {
                 supplier: row.get(9)?,
                 notes: row.get(10)?,
                 low_stock: quantity <= min_stock,
+                deficit: quantity < 0.0,
             })
         },
     )

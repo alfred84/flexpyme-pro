@@ -14,6 +14,7 @@ export interface InventoryItemDto {
   supplier: string | null;
   notes: string | null;
   lowStock: boolean;
+  deficit: boolean;
 }
 
 /**
