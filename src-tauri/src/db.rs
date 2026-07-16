@@ -86,6 +86,8 @@ const EMBEDDED_INVENTORY_DEFICIT_SCHEMA: &str =
     include_str!("../../src/db/migrations/0015_inventory_deficit.sql");
 const EMBEDDED_EMPLOYEE_EXTRA_ROLES_SCHEMA: &str =
     include_str!("../../src/db/migrations/0016_employee_extra_roles.sql");
+const EMBEDDED_OTHER_EXPENSES_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0017_other_expenses.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -254,6 +256,9 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             EMBEDDED_EMPLOYEE_EXTRA_ROLES_SCHEMA,
             "0016_employee_extra_roles",
         )?;
+    }
+    if !table_exists(conn, "other_expenses") {
+        execute_migration(conn, EMBEDDED_OTHER_EXPENSES_SCHEMA, "0017_other_expenses")?;
     }
     Ok(())
 }

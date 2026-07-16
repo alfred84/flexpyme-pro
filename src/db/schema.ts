@@ -356,6 +356,25 @@ export const cashTransactions = sqliteTable("cash_transactions", {
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 });
 
+/**
+ * Otros gastos operativos (almuerzo, transporte, etc.). Cada gasto genera un
+ * `cash_transactions` (egreso) y afecta el flujo de caja diario/mensual.
+ */
+export const otherExpenses = sqliteTable("other_expenses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  date: text("date").notNull(),
+  concept: text("concept").notNull(),
+  expenseType: text("expense_type").notNull().default("otros"),
+  employeeId: integer("employee_id").references(() => employees.id, { onDelete: "set null" }),
+  amountCup: real("amount_cup").notNull().default(0),
+  amountUsd: real("amount_usd").notNull().default(0),
+  paymentMethod: text("payment_method").notNull().default("efectivo"),
+  denominationBreakdown: text("denomination_breakdown"),
+  notes: text("notes"),
+  cashTransactionId: integer("cash_transaction_id"),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
 export const clientsRelations = relations(clients, ({ many }) => ({
   invoices: many(invoices),
   productionItems: many(productionBatchItems),

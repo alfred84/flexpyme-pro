@@ -8,6 +8,7 @@ import {
   Wallet,
   Tag,
   Coins,
+  Receipt,
   BarChart3,
   Factory,
   Settings,
@@ -47,6 +48,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { to: "/caja", label: "Flujo de Caja", icon: Wallet },
   { to: "/precios", label: "Precios", icon: Tag },
   { to: "/costos", label: "Costos", icon: Coins },
+  { to: "/otros-gastos", label: "Otros gastos", icon: Receipt },
   { to: "/reportes", label: "Reportes", icon: BarChart3 },
 ];
 
