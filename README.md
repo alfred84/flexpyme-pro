@@ -14,7 +14,7 @@ La fuente de verdad de requisitos es [`REQUIREMENTS.md`](./REQUIREMENTS.md) (**v
 - **Inventario**: ítems, movimientos, recetas de producción; descuento al **concluir cada línea/servicio**; déficit permitido con bandera en línea y pedido.
 - **Flujo de Caja**: balance CUP/USD, neto del día + neto de 30 días, serie diaria, movimientos con denominaciones, historial filtrable y enlaces a pedidos.
 - **Precios** y **Costos**: entradas del sidebar (debajo de Flujo de Caja).
-- **Otros gastos** (`/otros-gastos`): almuerzo y similares; cada gasto genera egreso en caja (vista diaria/mensual).
+- **Otros gastos** (`/otros-gastos`): almuerzo y similares; tipos de gasto configurables; cada gasto genera egreso en caja (vista diaria/mensual).
 - **Reportes**: exportes y resúmenes generales.
 - **Configuración**: tabs General, Tasa de cambio, Roles, Categorías (servicios/acabados), Unidades, Formatos, Tipos de trabajo y Backup.
 
@@ -139,6 +139,6 @@ En **Pedidos** (`/pedidos`): listado, **Nuevo pedido** con encabezado compacto, 
 - **Empleados**: `employees_*` (CRUD + baja + roles extra), `payroll_daily`, `cost_list_for_work_type`, `work_batch_create`, `work_batches_for_employee`, `work_batch_pay`.
 - **Inventario**: `inventory_items_list`, `inventory_item_get/create/update`, `inventory_movement_register`, `inventory_movements_for_item`; descuento por línea concluida con déficit permitido.
 - **Caja**: `cash_balance`, `cash_transactions_list`, `cash_daily_series`, `cash_net_summary`, `cash_transaction_create`.
-- **Otros gastos**: `other_expenses_*` (registro y listado; egreso en caja).
+- **Otros gastos**: `other_expenses_*` (registro y listado; egreso en caja); `expense_types_*` (catálogo de tipos para el select).
 - **Producción**: `production_report_monthly`.
 - **Configuración**: `settings_get_all`, `settings_set_value`, `settings_backup_database`, `settings_get_backup_overview`, `settings_restore_database`, `cost_list_all`, `cost_update`.

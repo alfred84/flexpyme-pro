@@ -153,6 +153,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Tabla `other_expenses` (fecha, concepto, tipo, empleado opcional, montos CUP/USD, método, desglose de denominaciones)
 - Cada gasto genera un `cash_transactions` (egreso) que afecta el balance de caja
 - Vistas diaria y mensual
+- **Tipos de gasto configurables**: catálogo `expense_types` (Almuerzo, Transporte, etc.) gestionable desde el botón «Configurar tipos de gasto»; el select «Tipo» lista solo tipos activos; el nombre se guarda como snapshot en el gasto
 
 ### 3.12 Base de datos portable y backups (v2.3)
 - En release/ejecutable portable, la BD activa siempre se llama `flexpyme.db`.
@@ -321,6 +322,7 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - **Inventario**: descuento por línea concluida; déficit permitido con bandera `resource_missing`.
 - **Empleados**: multi-rol (`employee_extra_roles`) y nómina diaria.
 - **Otros gastos**: `/otros-gastos` con egreso automático en `cash_transactions`.
+- **Tipos de gasto (Otros gastos)**: catálogo `expense_types` con alta/renombre/activar-desactivar desde la UI; el select del formulario usa tipos activos.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
