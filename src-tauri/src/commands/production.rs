@@ -130,6 +130,7 @@ pub struct ProductionFormatRowDto {
     pub realizado_qty: i64,
     pub pendiente_qty: i64,
     pub pedido_amount: f64,
+    pub salario_amount: f64,
 }
 
 /// Aggregated report for one area (Impresión, Laminado, Enmarcado...).
@@ -142,6 +143,8 @@ pub struct ProductionAreaReportDto {
     pub realizado_qty: i64,
     pub pendiente_qty: i64,
     pub pedido_amount: f64,
+    pub salario_amount: f64,
+    pub diferencia: f64,
 }
 
 /// Realizado quantity for one day and area (daily production control).
@@ -167,6 +170,7 @@ struct FormatAgg {
     pedido_qty: i64,
     realizado_qty: i64,
     pedido_amount: f64,
+    salario_amount: f64,
 }
 
 #[derive(Default)]
@@ -236,7 +240,8 @@ pub fn production_report_monthly(month: String) -> Result<ProductionReportDto, S
             .prepare(
                 "SELECT pbi.category,
                         COALESCE(f.label, '(sin formato)') AS fmt,
-                        COALESCE(SUM(pbi.quantity), 0)
+                        COALESCE(SUM(pbi.quantity), 0),
+                        COALESCE(SUM(pbi.subtotal), 0)
                  FROM production_batch_items pbi
                  JOIN production_batches pb ON pb.id = pbi.batch_id
                  LEFT JOIN formats f ON f.id = pbi.format_id
@@ -251,12 +256,13 @@ pub fn production_report_monthly(month: String) -> Result<ProductionReportDto, S
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
                     row.get::<_, i64>(2)?,
+                    row.get::<_, f64>(3)?,
                 ))
             })
             .map_err(|e| e.to_string())?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?;
-        for (category, fmt, qty) in rows {
+        for (category, fmt, qty, salario) in rows {
             let key = normalize_token(&category);
             let area = areas.entry(key).or_default();
             if area.display.is_empty() {
@@ -264,6 +270,7 @@ pub fn production_report_monthly(month: String) -> Result<ProductionReportDto, S
             }
             let f = area.formats.entry(fmt).or_default();
             f.realizado_qty += qty;
+            f.salario_amount += salario;
         }
     }
 
@@ -274,17 +281,20 @@ pub fn production_report_monthly(month: String) -> Result<ProductionReportDto, S
             let mut a_pedido = 0;
             let mut a_realizado = 0;
             let mut a_amount = 0.0;
+            let mut a_salario = 0.0;
             for (fmt, f) in agg.formats {
                 let pendiente = (f.pedido_qty - f.realizado_qty).max(0);
                 a_pedido += f.pedido_qty;
                 a_realizado += f.realizado_qty;
                 a_amount += f.pedido_amount;
+                a_salario += f.salario_amount;
                 rows.push(ProductionFormatRowDto {
                     format_label: fmt,
                     pedido_qty: f.pedido_qty,
                     realizado_qty: f.realizado_qty,
                     pendiente_qty: pendiente,
                     pedido_amount: f.pedido_amount,
+                    salario_amount: f.salario_amount,
                 });
             }
             ProductionAreaReportDto {
@@ -294,6 +304,8 @@ pub fn production_report_monthly(month: String) -> Result<ProductionReportDto, S
                 realizado_qty: a_realizado,
                 pendiente_qty: (a_pedido - a_realizado).max(0),
                 pedido_amount: a_amount,
+                salario_amount: a_salario,
+                diferencia: a_amount - a_salario,
             }
         })
         .collect::<Vec<_>>();

@@ -40,6 +40,27 @@ pub struct UpdateEmployeePayload {
     pub notes: Option<String>,
 }
 
+/// Extra role assigned to an employee (multi-role support).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmployeeExtraRoleDto {
+    pub id: i64,
+    pub role_id: i64,
+    pub role: String,
+}
+
+/// One aggregated payroll row for an employee on a given day.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PayrollDailyRowDto {
+    pub employee_id: i64,
+    pub employee_name: String,
+    pub date: String,
+    pub total_cost: f64,
+    pub paid: f64,
+    pub pending: f64,
+}
+
 /// Cost-row for a work type (used to build the work-batch form).
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -573,6 +594,112 @@ pub fn work_batch_pay(batch_id: i64) -> Result<(), String> {
 
     tx.commit().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Lists the extra roles assigned to an employee.
+#[tauri::command]
+pub fn employee_extra_roles_list(employee_id: i64) -> Result<Vec<EmployeeExtraRoleDto>, String> {
+    let conn = db::open_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT eer.id, eer.role_id, COALESCE(eer.role_snapshot, er.name) AS role_label
+             FROM employee_extra_roles eer
+             JOIN employee_roles er ON er.id = eer.role_id
+             WHERE eer.employee_id = ?1
+             ORDER BY role_label COLLATE NOCASE",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![employee_id], |row| {
+            Ok(EmployeeExtraRoleDto {
+                id: row.get(0)?,
+                role_id: row.get(1)?,
+                role: row.get(2)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Adds an extra role to an employee (no duplicates, cannot equal main role).
+#[tauri::command]
+pub fn employee_extra_role_add(employee_id: i64, role_id: i64) -> Result<(), String> {
+    let conn = db::open_connection()?;
+    let main_role: Option<i64> = conn
+        .query_row(
+            "SELECT role_id FROM employees WHERE id = ?1 AND deleted_at IS NULL",
+            params![employee_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "Empleado no encontrado".to_string())?;
+    if main_role == Some(role_id) {
+        return Err("Ese rol ya es el rol principal del empleado".to_string());
+    }
+    let role_name: String = conn
+        .query_row(
+            "SELECT name FROM employee_roles WHERE id = ?1",
+            params![role_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "Rol no válido".to_string())?;
+    conn.execute(
+        "INSERT OR IGNORE INTO employee_extra_roles (employee_id, role_id, role_snapshot)
+         VALUES (?1, ?2, ?3)",
+        params![employee_id, role_id, role_name],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Removes an extra role assignment by its id.
+#[tauri::command]
+pub fn employee_extra_role_remove(id: i64) -> Result<(), String> {
+    let conn = db::open_connection()?;
+    let removed = conn
+        .execute("DELETE FROM employee_extra_roles WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    if removed == 0 {
+        return Err("Rol adicional no encontrado".to_string());
+    }
+    Ok(())
+}
+
+/// Daily payroll for a month (`YYYY-MM`): total, paid and pending per
+/// employee/day, derived from work batches (production_batches).
+#[tauri::command]
+pub fn payroll_daily(month: String) -> Result<Vec<PayrollDailyRowDto>, String> {
+    let month = month.trim().to_string();
+    if month.len() != 7 {
+        return Err("Mes inválido (formato YYYY-MM)".to_string());
+    }
+    let conn = db::open_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT pb.employee_id, e.name, pb.date,
+                    COALESCE(SUM(pb.total_cost), 0), COALESCE(SUM(pb.paid), 0)
+             FROM production_batches pb
+             JOIN employees e ON e.id = pb.employee_id
+             WHERE pb.employee_id IS NOT NULL
+               AND strftime('%Y-%m', pb.date) = ?1
+             GROUP BY pb.employee_id, pb.date
+             ORDER BY pb.date DESC, e.name COLLATE NOCASE",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![month], |row| {
+            let total_cost: f64 = row.get(3)?;
+            let paid: f64 = row.get(4)?;
+            Ok(PayrollDailyRowDto {
+                employee_id: row.get(0)?,
+                employee_name: row.get(1)?,
+                date: row.get(2)?,
+                total_cost,
+                paid,
+                pending: (total_cost - paid).max(0.0),
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
 /// Lists work batches linked to an invoice (via batch items).

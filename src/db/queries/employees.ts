@@ -3,7 +3,9 @@ import type {
   CreateEmployeePayload,
   CreateWorkBatchPayload,
   EmployeeDto,
+  EmployeeExtraRoleDto,
   InvoiceWorkBatchDto,
+  PayrollDailyRowDto,
   UpdateEmployeePayload,
   WorkBatchDto,
   WorkCostDto,
@@ -84,4 +86,34 @@ export async function fetchWorkBatchesForInvoice(invoiceId: number): Promise<Inv
  */
 export async function payWorkBatch(batchId: number): Promise<void> {
   return invoke<void>("work_batch_pay", { batchId });
+}
+
+/**
+ * Lists the extra roles assigned to an employee (multi-role).
+ */
+export async function fetchEmployeeExtraRoles(
+  employeeId: number,
+): Promise<EmployeeExtraRoleDto[]> {
+  return invoke<EmployeeExtraRoleDto[]>("employee_extra_roles_list", { employeeId });
+}
+
+/**
+ * Adds an extra role to an employee.
+ */
+export async function addEmployeeExtraRole(employeeId: number, roleId: number): Promise<void> {
+  return invoke<void>("employee_extra_role_add", { employeeId, roleId });
+}
+
+/**
+ * Removes an extra role assignment by its id.
+ */
+export async function removeEmployeeExtraRole(id: number): Promise<void> {
+  return invoke<void>("employee_extra_role_remove", { id });
+}
+
+/**
+ * Loads the daily payroll for a month (`YYYY-MM`).
+ */
+export async function fetchPayrollDaily(month: string): Promise<PayrollDailyRowDto[]> {
+  return invoke<PayrollDailyRowDto[]>("payroll_daily", { month });
 }

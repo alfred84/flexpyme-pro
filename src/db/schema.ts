@@ -268,6 +268,22 @@ export const employees = sqliteTable("employees", {
 });
 
 /**
+ * Roles adicionales que un empleado puede cubrir (multi-rol). El rol principal
+ * sigue en `employees.roleId`.
+ */
+export const employeeExtraRoles = sqliteTable("employee_extra_roles", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  employeeId: integer("employee_id")
+    .notNull()
+    .references(() => employees.id, { onDelete: "cascade" }),
+  roleId: integer("role_id")
+    .notNull()
+    .references(() => employeeRoles.id),
+  roleSnapshot: text("role_snapshot"),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
+/**
  * Materiales/insumos del taller con control de stock mínimo.
  */
 export const inventoryItems = sqliteTable("inventory_items", {

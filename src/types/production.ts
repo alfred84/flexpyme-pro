@@ -98,6 +98,7 @@ export interface ProductionFormatRowDto {
   realizadoQty: number;
   pendienteQty: number;
   pedidoAmount: number;
+  salarioAmount: number;
 }
 
 /** Reporte agregado de un área (Impresión, Laminado, Enmarcado...). */
@@ -108,6 +109,8 @@ export interface ProductionAreaReportDto {
   realizadoQty: number;
   pendienteQty: number;
   pedidoAmount: number;
+  salarioAmount: number;
+  diferencia: number;
 }
 
 /** Realizado por día y área (control diario de producción). */

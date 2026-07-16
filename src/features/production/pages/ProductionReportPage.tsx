@@ -45,12 +45,21 @@ export function ProductionReportPage() {
     let pedido = 0;
     let realizado = 0;
     let amount = 0;
+    let salario = 0;
     for (const area of report?.areas ?? []) {
       pedido += area.pedidoQty;
       realizado += area.realizadoQty;
       amount += area.pedidoAmount;
+      salario += area.salarioAmount;
     }
-    return { pedido, realizado, pendiente: Math.max(0, pedido - realizado), amount };
+    return {
+      pedido,
+      realizado,
+      pendiente: Math.max(0, pedido - realizado),
+      amount,
+      salario,
+      diferencia: amount - salario,
+    };
   }, [report?.areas]);
 
   return (
@@ -103,6 +112,32 @@ export function ProductionReportPage() {
         </div>
       </div>
 
+      <div className="card bg-base-100 shadow-sm">
+        <div className="card-body gap-2 p-4">
+          <h2 className="card-title text-base">Factura vs. salario (mes)</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <p className="text-xs uppercase text-base-content/60">Facturado (venta)</p>
+              <p className="text-xl font-semibold">{formatMoney(totals.amount)}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase text-base-content/60">Salario (costo)</p>
+              <p className="text-xl font-semibold">{formatMoney(totals.salario)}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase text-base-content/60">Diferencia (margen)</p>
+              <p
+                className={`text-xl font-semibold ${
+                  totals.diferencia >= 0 ? "text-success" : "text-error"
+                }`}
+              >
+                {formatMoney(totals.diferencia)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {reportQuery.isLoading ? (
         <div className="h-40 animate-pulse rounded-lg bg-base-200" />
       ) : (report?.areas.length ?? 0) === 0 ? (
@@ -116,11 +151,15 @@ export function ProductionReportPage() {
               <div className="card-body gap-2 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h2 className="card-title text-base capitalize">{area.area}</h2>
-                  <div className="flex gap-3 text-xs">
+                  <div className="flex flex-wrap gap-3 text-xs">
                     <span>Pedido: <b>{area.pedidoQty}</b></span>
                     <span className="text-success">Realizado: <b>{area.realizadoQty}</b></span>
                     <span className="text-warning">Pendiente: <b>{area.pendienteQty}</b></span>
-                    <span>Importe: <b>{formatMoney(area.pedidoAmount)}</b></span>
+                    <span>Factura: <b>{formatMoney(area.pedidoAmount)}</b></span>
+                    <span>Salario: <b>{formatMoney(area.salarioAmount)}</b></span>
+                    <span className={area.diferencia >= 0 ? "text-success" : "text-error"}>
+                      Margen: <b>{formatMoney(area.diferencia)}</b>
+                    </span>
                   </div>
                 </div>
                 <div className="overflow-x-auto">

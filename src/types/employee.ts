@@ -30,6 +30,27 @@ export interface UpdateEmployeePayload extends CreateEmployeePayload {
 }
 
 /**
+ * Rol adicional asignado a un empleado (multi-rol).
+ */
+export interface EmployeeExtraRoleDto {
+  id: number;
+  roleId: number;
+  role: string;
+}
+
+/**
+ * Fila de nómina diaria agregada por empleado/día.
+ */
+export interface PayrollDailyRowDto {
+  employeeId: number;
+  employeeName: string;
+  date: string;
+  totalCost: number;
+  paid: number;
+  pending: number;
+}
+
+/**
  * Tipos de trabajo retribuibles a empleados.
  */
 export const WORK_TYPES = ["laminado", "enmarcado", "respaldo", "impresion"] as const;

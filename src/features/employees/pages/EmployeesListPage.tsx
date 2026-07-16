@@ -1,7 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { UserCog, UserPlus } from "lucide-react";
-import { deactivateEmployee, fetchEmployees, reactivateEmployee } from "@/db/queries/employees";
+import { useState } from "react";
+import { CalendarDays, UserCog, UserPlus } from "lucide-react";
+import {
+  deactivateEmployee,
+  fetchEmployees,
+  fetchPayrollDaily,
+  reactivateEmployee,
+} from "@/db/queries/employees";
+import { formatDate, todayIso } from "@/lib/format-date";
+import { formatMoney } from "@/lib/format-money";
 
 /**
  * Listado de empleados con alta y baja (soft delete).
@@ -24,6 +32,21 @@ export function EmployeesListPage() {
     mutationFn: reactivateEmployee,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employees"] }),
   });
+
+  const [payrollMonth, setPayrollMonth] = useState(() => todayIso().slice(0, 7));
+  const payrollQuery = useQuery({
+    queryKey: ["payroll-daily", payrollMonth],
+    queryFn: () => fetchPayrollDaily(payrollMonth),
+  });
+  const payrollRows = payrollQuery.data ?? [];
+  const payrollTotals = payrollRows.reduce(
+    (acc, r) => ({
+      total: acc.total + r.totalCost,
+      paid: acc.paid + r.paid,
+      pending: acc.pending + r.pending,
+    }),
+    { total: 0, paid: 0, pending: 0 },
+  );
 
   const handleDeactivate = (id: number, name: string) => {
     if (window.confirm(`¿Dar de baja a ${name}? Su historial se conserva.`)) {
@@ -120,6 +143,60 @@ export function EmployeesListPage() {
           </table>
         </div>
       )}
+
+      <div className="card bg-base-100 shadow-sm">
+        <div className="card-body gap-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="card-title flex items-center gap-2 text-base">
+              <CalendarDays className="h-5 w-5" /> Nómina diaria
+            </h2>
+            <input
+              type="month"
+              className="input input-bordered input-sm"
+              value={payrollMonth}
+              onChange={(e) => setPayrollMonth(e.target.value || todayIso().slice(0, 7))}
+            />
+          </div>
+          {payrollRows.length === 0 ? (
+            <p className="py-6 text-center text-sm text-base-content/60">
+              Sin salarios registrados en el mes seleccionado.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="table table-sm">
+                <thead>
+                  <tr>
+                    <th>Día</th>
+                    <th>Empleado</th>
+                    <th className="text-right">Total</th>
+                    <th className="text-right">Pagado</th>
+                    <th className="text-right">Pendiente</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payrollRows.map((r) => (
+                    <tr key={`${r.employeeId}-${r.date}`}>
+                      <td className="text-xs">{formatDate(r.date)}</td>
+                      <td>{r.employeeName}</td>
+                      <td className="text-right">{formatMoney(r.totalCost)}</td>
+                      <td className="text-right text-success">{formatMoney(r.paid)}</td>
+                      <td className="text-right text-warning">{formatMoney(r.pending)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-semibold">
+                    <td colSpan={2}>Total mes</td>
+                    <td className="text-right">{formatMoney(payrollTotals.total)}</td>
+                    <td className="text-right text-success">{formatMoney(payrollTotals.paid)}</td>
+                    <td className="text-right text-warning">{formatMoney(payrollTotals.pending)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
