@@ -8,6 +8,7 @@ import {
   costList,
   employeeExtraRoles,
   employees,
+  expenseTypes,
   formats,
   inventoryItems,
   inventoryMovements,
@@ -48,5 +49,6 @@ describe("database schema", () => {
     expect(categoryFinishes).toBeDefined();
     expect(employeeExtraRoles).toBeDefined();
     expect(otherExpenses).toBeDefined();
+    expect(expenseTypes).toBeDefined();
   });
 });

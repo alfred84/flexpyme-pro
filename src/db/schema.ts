@@ -357,6 +357,19 @@ export const cashTransactions = sqliteTable("cash_transactions", {
 });
 
 /**
+ * Catálogo de tipos de gasto para el módulo Otros gastos (configurable en UI).
+ * El nombre se guarda como snapshot en `other_expenses.expense_type`.
+ */
+export const expenseTypes = sqliteTable("expense_types", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull().unique(),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+
+/**
  * Otros gastos operativos (almuerzo, transporte, etc.). Cada gasto genera un
  * `cash_transactions` (egreso) y afecta el flujo de caja diario/mensual.
  */
@@ -364,7 +377,8 @@ export const otherExpenses = sqliteTable("other_expenses", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   date: text("date").notNull(),
   concept: text("concept").notNull(),
-  expenseType: text("expense_type").notNull().default("otros"),
+  /** Snapshot del nombre del tipo (`expense_types.name`) al registrar el gasto. */
+  expenseType: text("expense_type").notNull().default("Otros"),
   employeeId: integer("employee_id").references(() => employees.id, { onDelete: "set null" }),
   amountCup: real("amount_cup").notNull().default(0),
   amountUsd: real("amount_usd").notNull().default(0),
