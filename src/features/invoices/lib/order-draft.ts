@@ -1,20 +1,33 @@
+import type { CreateInvoiceItemPayload } from "@/types/invoice";
 import type { PriceRowDto } from "@/types/price";
 
 /**
+ * Servicio seleccionado dentro de una línea (producto+formato) con su precio.
+ */
+export interface DraftLineService {
+  service: string;
+  unitPrice: string;
+}
+
+/**
  * Línea de borrador en el formulario de nuevo pedido.
+ *
+ * Una línea representa un producto (categoría) + formato + acabado con una
+ * cantidad, y puede incluir varios servicios/áreas (Impresión, Laminado,
+ * Enmarcado...). Al guardar el pedido, cada servicio se expande en un
+ * `invoice_item` independiente (alineado con el Excel formato×servicio).
  */
 export interface DraftLine {
   key: string;
   categoryId: number;
   formatId: number | null;
   finish: string;
-  service: string;
   quantity: string;
-  unitPrice: string;
+  services: DraftLineService[];
 }
 
 /**
- * Crea una línea vacía con categoría por defecto.
+ * Crea una línea vacía con categoría por defecto (sin servicios).
  *
  * @param categoryId - Id de categoría inicial.
  * @returns Línea de borrador.
@@ -25,14 +38,18 @@ export function makeDraftLine(categoryId: number): DraftLine {
     categoryId,
     formatId: null,
     finish: "",
-    service: "",
     quantity: "1",
-    unitPrice: "",
+    services: [],
   };
 }
 
 /**
  * Filtra filas de precio por categoría y formato opcional.
+ *
+ * @param prices - Lista de precios.
+ * @param categoryId - Categoría a filtrar.
+ * @param formatId - Formato opcional.
+ * @returns Filas de precio coincidentes.
  */
 export function filterPricesByCategory(
   prices: PriceRowDto[],
@@ -52,6 +69,10 @@ export function filterPricesByCategory(
 
 /**
  * Valores únicos no vacíos de un campo en filas de precio.
+ *
+ * @param rows - Filas de precio.
+ * @param field - Campo a extraer (`service` o `finish`).
+ * @returns Valores únicos ordenados.
  */
 function uniqueValues(rows: PriceRowDto[], field: "service" | "finish"): string[] {
   const set = new Set<string>();
@@ -66,6 +87,11 @@ function uniqueValues(rows: PriceRowDto[], field: "service" | "finish"): string[
 
 /**
  * Formatos disponibles en lista de precios para una categoría.
+ *
+ * @param prices - Lista de precios.
+ * @param categoryId - Categoría a filtrar.
+ * @param allFormats - Todos los formatos con su etiqueta.
+ * @returns Formatos con precios definidos para la categoría.
  */
 export function formatOptionsForCategory(
   prices: PriceRowDto[],
@@ -82,6 +108,11 @@ export function formatOptionsForCategory(
 
 /**
  * Opciones de servicio y acabado derivadas de la lista de precios.
+ *
+ * @param prices - Lista de precios.
+ * @param categoryId - Categoría a filtrar.
+ * @param formatId - Formato opcional.
+ * @returns Servicios y acabados únicos disponibles.
  */
 export function serviceAndFinishOptions(
   prices: PriceRowDto[],
@@ -97,6 +128,11 @@ export function serviceAndFinishOptions(
 
 /**
  * Resuelve precio unitario desde filas filtradas según servicio y acabado.
+ *
+ * @param rows - Filas de precio ya filtradas.
+ * @param service - Servicio buscado.
+ * @param finish - Acabado buscado.
+ * @returns Precio o `null` si no hay coincidencia.
  */
 export function resolvePriceFromRows(
   rows: PriceRowDto[],
@@ -106,83 +142,91 @@ export function resolvePriceFromRows(
   const norm = (v: string) => v.trim().toLowerCase();
   const wantService = norm(service);
   const wantFinish = norm(finish);
-  const match = rows.find((row) => {
-    const rowService = norm(row.service ?? "");
-    const rowFinish = norm(row.finish ?? "");
-    return rowService === wantService && rowFinish === wantFinish;
-  });
+  const match =
+    rows.find((row) => {
+      const rowService = norm(row.service ?? "");
+      const rowFinish = norm(row.finish ?? "");
+      return rowService === wantService && rowFinish === wantFinish;
+    }) ??
+    // Coincidencia por servicio ignorando el acabado si no hay exacta.
+    rows.find((row) => norm(row.service ?? "") === wantService);
   return match?.price ?? null;
 }
 
 /**
- * Autocompleta servicio, acabado y precio cuando la combinación es única.
+ * Resuelve el precio de un servicio concreto para una categoría/formato/acabado.
+ *
+ * @param prices - Lista de precios.
+ * @param categoryId - Categoría.
+ * @param formatId - Formato opcional.
+ * @param service - Servicio.
+ * @param finish - Acabado.
+ * @returns Precio unitario o `null`.
  */
-export function autoFillLineFromPrices(
+export function resolveServicePrice(
   prices: PriceRowDto[],
-  line: DraftLine,
-): Partial<DraftLine> {
-  const rows = filterPricesByCategory(prices, line.categoryId, line.formatId);
-  if (rows.length === 0) {
-    return { service: "", finish: "", unitPrice: "" };
-  }
-
-  const { services, finishes } = serviceAndFinishOptions(prices, line.categoryId, line.formatId);
-  const patch: Partial<DraftLine> = {};
-
-  let service = line.service;
-  let finish = line.finish;
-
-  if (!service && services.length === 1) {
-    service = services[0] ?? "";
-    patch.service = service;
-  }
-  if (!finish && finishes.length === 1) {
-    finish = finishes[0] ?? "";
-    patch.finish = finish;
-  }
-
-  if (service || finish) {
-    const filtered = rows.filter((row) => {
-      const matchService = !service || (row.service ?? "").trim().toLowerCase() === service.trim().toLowerCase();
-      const matchFinish = !finish || (row.finish ?? "").trim().toLowerCase() === finish.trim().toLowerCase();
-      return matchService && matchFinish;
-    });
-    if (filtered.length === 1) {
-      const only = filtered[0];
-      patch.service = only?.service?.trim() ?? service;
-      patch.finish = only?.finish?.trim() ?? finish;
-      patch.unitPrice = only ? String(only.price) : "";
-      return patch;
-    }
-  }
-
-  if (rows.length === 1 && rows[0]) {
-    const only = rows[0];
-    patch.service = only.service?.trim() ?? "";
-    patch.finish = only.finish?.trim() ?? "";
-    patch.unitPrice = String(only.price);
-  }
-
-  return patch;
+  categoryId: number,
+  formatId: number | null,
+  service: string,
+  finish: string,
+): number | null {
+  const rows = filterPricesByCategory(prices, categoryId, formatId);
+  return resolvePriceFromRows(rows, service, finish);
 }
 
 /**
- * Calcula subtotal de una línea de borrador.
+ * Calcula subtotal de una línea de borrador (cantidad × suma de servicios).
+ *
+ * @param line - Línea de borrador.
+ * @returns Importe total de la línea.
  */
 export function draftLineSubtotal(line: DraftLine): number {
   const qty = Number.parseInt(line.quantity, 10);
-  const unit = Number.parseFloat(line.unitPrice.replace(",", "."));
-  if (!Number.isFinite(qty) || !Number.isFinite(unit)) {
+  if (!Number.isFinite(qty)) {
     return 0;
   }
-  return qty * unit;
+  const servicesTotal = line.services.reduce((sum, s) => {
+    const unit = Number.parseFloat(s.unitPrice.replace(",", "."));
+    return Number.isFinite(unit) ? sum + unit : sum;
+  }, 0);
+  return qty * servicesTotal;
 }
 
 /**
  * Indica si la línea tiene datos mínimos válidos para guardar.
+ *
+ * @param line - Línea de borrador.
+ * @returns `true` si es válida.
  */
 export function isDraftLineValid(line: DraftLine): boolean {
   const qty = Number.parseInt(line.quantity, 10);
-  const unit = Number.parseFloat(line.unitPrice.replace(",", "."));
-  return line.categoryId > 0 && Number.isFinite(qty) && qty > 0 && Number.isFinite(unit) && unit >= 0;
+  if (line.categoryId <= 0 || !Number.isFinite(qty) || qty <= 0) {
+    return false;
+  }
+  if (line.services.length === 0) {
+    return false;
+  }
+  return line.services.every((s) => {
+    const unit = Number.parseFloat(s.unitPrice.replace(",", "."));
+    return Number.isFinite(unit) && unit >= 0;
+  });
+}
+
+/**
+ * Expande una línea en uno o varios items de factura (uno por servicio).
+ *
+ * @param line - Línea de borrador válida.
+ * @returns Items de factura listos para el backend.
+ */
+export function draftLineToItems(line: DraftLine): CreateInvoiceItemPayload[] {
+  const quantity = Number.parseInt(line.quantity, 10);
+  const finish = line.finish.trim() || null;
+  return line.services.map((s) => ({
+    categoryId: line.categoryId,
+    formatId: line.formatId,
+    finish,
+    service: s.service.trim() || null,
+    quantity,
+    unitPrice: Number.parseFloat(s.unitPrice.replace(",", ".")),
+  }));
 }

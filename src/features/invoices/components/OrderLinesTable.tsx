@@ -34,23 +34,43 @@ export function OrderLinesTable(props: OrderLinesTableProps) {
           <tr>
             <th>Categoría</th>
             <th>Formato</th>
-            <th>Servicio</th>
+            <th>Servicios</th>
             <th>Acabado</th>
             <th className="text-right">Cant.</th>
-            <th className="text-right">P.U.</th>
+            <th className="text-right">P.U. total</th>
             <th className="text-right">Subtotal</th>
             <th />
           </tr>
         </thead>
         <tbody>
-          {lines.map((line) => (
+          {lines.map((line) => {
+            const serviceLabels = line.services
+              .map((s) => s.service.trim())
+              .filter((s) => s.length > 0);
+            return (
             <tr key={line.key}>
               <td className="max-w-[8rem] truncate">{categoryNames.get(line.categoryId) ?? "—"}</td>
               <td>{line.formatId ? (formatLabels.get(line.formatId) ?? "—") : "—"}</td>
-              <td className="max-w-[6rem] truncate">{line.service || "—"}</td>
+              <td className="max-w-[10rem]">
+                {serviceLabels.length > 0 ? (
+                  <div className="flex flex-wrap gap-0.5">
+                    {serviceLabels.map((s) => (
+                      <span key={s} className="badge badge-ghost badge-sm">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  "—"
+                )}
+              </td>
               <td className="max-w-[6rem] truncate">{line.finish || "—"}</td>
               <td className="text-right">{line.quantity}</td>
-              <td className="text-right font-mono text-xs">{formatMoney(Number(line.unitPrice) || 0)}</td>
+              <td className="text-right font-mono text-xs">
+                {formatMoney(
+                  line.services.reduce((sum, s) => sum + (Number(s.unitPrice.replace(",", ".")) || 0), 0),
+                )}
+              </td>
               <td className="text-right font-mono text-xs">{formatMoney(draftLineSubtotal(line))}</td>
               <td>
                 <div className="flex justify-end gap-0.5">
@@ -73,7 +93,8 @@ export function OrderLinesTable(props: OrderLinesTableProps) {
                 </div>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

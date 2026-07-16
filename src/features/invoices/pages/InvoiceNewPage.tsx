@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { fetchClients } from "@/db/queries/clients";
 import { createInvoice } from "@/db/queries/invoices";
-import { fetchCategories } from "@/db/queries/categories";
+import { fetchCategories, fetchCategoryFinishes, fetchCategoryServices } from "@/db/queries/categories";
 import { fetchFormats, fetchPrices } from "@/db/queries/prices";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 import {
@@ -20,6 +20,7 @@ import { OrderLinesTable } from "@/features/invoices/components/OrderLinesTable"
 import { OrderPaymentSection, type OrderPaymentState } from "@/features/invoices/components/OrderPaymentSection";
 import {
   draftLineSubtotal,
+  draftLineToItems,
   isDraftLineValid,
   type DraftLine,
 } from "@/features/invoices/lib/order-draft";
@@ -42,6 +43,14 @@ export function InvoiceNewPage() {
   const categoriesQuery = useQuery({ queryKey: ["categories", "active"], queryFn: () => fetchCategories(true) });
   const formatsQuery = useQuery({ queryKey: ["formats"], queryFn: fetchFormats });
   const pricesQuery = useQuery({ queryKey: ["prices", "active"], queryFn: () => fetchPrices(false) });
+  const categoryServicesQuery = useQuery({
+    queryKey: ["category-services"],
+    queryFn: fetchCategoryServices,
+  });
+  const categoryFinishesQuery = useQuery({
+    queryKey: ["category-finishes"],
+    queryFn: fetchCategoryFinishes,
+  });
 
   const defaultCategoryId = categoriesQuery.data?.[0]?.id ?? 1;
 
@@ -112,14 +121,7 @@ export function InvoiceNewPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (collectPayment: boolean) => {
-      const items: CreateInvoiceItemPayload[] = lines.map((line) => ({
-        categoryId: line.categoryId,
-        formatId: line.formatId,
-        finish: line.finish.trim() || null,
-        service: line.service.trim() || null,
-        quantity: Number.parseInt(line.quantity, 10),
-        unitPrice: Number.parseFloat(line.unitPrice.replace(",", ".")),
-      }));
+      const items: CreateInvoiceItemPayload[] = lines.flatMap((line) => draftLineToItems(line));
 
       if (payment.paymentMethod === "efectivo" && payment.paymentCurrency === "USD" && exchangeRate <= 0) {
         throw new Error("Indica una tasa USD→CUP válida.");
@@ -359,6 +361,8 @@ export function InvoiceNewPage() {
         categories={categoriesQuery.data ?? []}
         formats={formatsQuery.data ?? []}
         prices={pricesQuery.data ?? []}
+        categoryServices={categoryServicesQuery.data ?? []}
+        categoryFinishes={categoryFinishesQuery.data ?? []}
         onClose={() => setLineModalOpen(false)}
         onSave={handleSaveLine}
       />

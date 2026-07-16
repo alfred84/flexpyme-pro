@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  autoFillLineFromPrices,
+  draftLineSubtotal,
   formatOptionsForCategory,
-  resolvePriceFromRows,
+  resolveServicePrice,
   serviceAndFinishOptions,
-  filterPricesByCategory,
   type DraftLine,
+  type DraftLineService,
 } from "@/features/invoices/lib/order-draft";
-import type { ProductCategoryDto } from "@/types/category";
+import { formatMoney } from "@/lib/format-money";
+import type { CategoryFinishDto, CategoryServiceDto, ProductCategoryDto } from "@/types/category";
 import type { FormatDto, PriceRowDto } from "@/types/price";
 
 interface OrderLineModalProps {
@@ -17,39 +18,121 @@ interface OrderLineModalProps {
   categories: ProductCategoryDto[];
   formats: FormatDto[];
   prices: PriceRowDto[];
+  categoryServices: CategoryServiceDto[];
+  categoryFinishes: CategoryFinishDto[];
   onClose: () => void;
   onSave: (line: DraftLine) => void;
 }
 
+interface ServiceOption {
+  name: string;
+  isDefault: boolean;
+}
+
 /**
- * Modal CRUD para añadir o editar una línea de pedido con autocompletado de precios.
+ * Deriva las opciones de servicio para una categoría: usa la configuración
+ * (`category_services`) si existe; si no, cae a los servicios de la lista de precios.
+ *
+ * @param categoryServices - Servicios configurados por categoría.
+ * @param prices - Lista de precios.
+ * @param categoryId - Categoría seleccionada.
+ * @param formatId - Formato seleccionado.
+ * @returns Opciones de servicio con su marca de preselección.
+ */
+function serviceOptionsFor(
+  categoryServices: CategoryServiceDto[],
+  prices: PriceRowDto[],
+  categoryId: number,
+  formatId: number | null,
+): ServiceOption[] {
+  const configured = categoryServices.filter((s) => s.categoryId === categoryId);
+  if (configured.length > 0) {
+    return configured.map((s) => ({ name: s.service, isDefault: s.isDefault }));
+  }
+  const { services } = serviceAndFinishOptions(prices, categoryId, formatId);
+  return services.map((name) => ({ name, isDefault: false }));
+}
+
+/**
+ * Deriva los acabados para una categoría: usa configuración si existe, si no
+ * cae a los acabados de la lista de precios.
+ *
+ * @param categoryFinishes - Acabados configurados por categoría.
+ * @param prices - Lista de precios.
+ * @param categoryId - Categoría seleccionada.
+ * @param formatId - Formato seleccionado.
+ * @returns Lista de acabados y el acabado por defecto (si hay).
+ */
+function finishOptionsFor(
+  categoryFinishes: CategoryFinishDto[],
+  prices: PriceRowDto[],
+  categoryId: number,
+  formatId: number | null,
+): { finishes: string[]; defaultFinish: string } {
+  const configured = categoryFinishes.filter((f) => f.categoryId === categoryId);
+  if (configured.length > 0) {
+    const def = configured.find((f) => f.isDefault);
+    return { finishes: configured.map((f) => f.finish), defaultFinish: def?.finish ?? "" };
+  }
+  const { finishes } = serviceAndFinishOptions(prices, categoryId, formatId);
+  return { finishes, defaultFinish: "" };
+}
+
+/**
+ * Modal CRUD para añadir o editar una línea de pedido con auto-selección de
+ * servicios por categoría y cálculo automático de precios.
  *
  * @param props - Estado del modal y catálogos.
  * @returns Diálogo de línea de pedido.
  */
 export function OrderLineModal(props: OrderLineModalProps) {
-  const { open, editing, defaultCategoryId, categories, formats, prices, onClose, onSave } = props;
+  const {
+    open,
+    editing,
+    defaultCategoryId,
+    categories,
+    formats,
+    prices,
+    categoryServices,
+    categoryFinishes,
+    onClose,
+    onSave,
+  } = props;
   const [draft, setDraft] = useState<DraftLine | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Construye la lista de servicios preseleccionados con su precio calculado.
+   */
+  const buildDefaultServices = (categoryId: number, formatId: number | null, finish: string): DraftLineService[] => {
+    const options = serviceOptionsFor(categoryServices, prices, categoryId, formatId);
+    const defaults = options.filter((o) => o.isDefault);
+    const chosen = defaults.length > 0 ? defaults : [];
+    return chosen.map((o) => {
+      const price = resolveServicePrice(prices, categoryId, formatId, o.name, finish);
+      return { service: o.name, unitPrice: price !== null ? String(price) : "" };
+    });
+  };
 
   useEffect(() => {
     if (!open) {
       return;
     }
     if (editing) {
-      setDraft({ ...editing });
+      setDraft({ ...editing, services: editing.services.map((s) => ({ ...s })) });
     } else {
+      const { defaultFinish } = finishOptionsFor(categoryFinishes, prices, defaultCategoryId, null);
       setDraft({
         key: crypto.randomUUID(),
         categoryId: defaultCategoryId,
         formatId: null,
-        finish: "",
-        service: "",
+        finish: defaultFinish,
         quantity: "1",
-        unitPrice: "",
+        services: buildDefaultServices(defaultCategoryId, null, defaultFinish),
       });
     }
     setError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editing, defaultCategoryId]);
 
   const formatOptions = useMemo(() => {
@@ -59,58 +142,114 @@ export function OrderLineModal(props: OrderLineModalProps) {
     return formatOptionsForCategory(prices, draft.categoryId, formats);
   }, [draft, prices, formats]);
 
-  const { services, finishes } = useMemo(() => {
+  const serviceOptions = useMemo(() => {
     if (!draft) {
-      return { services: [], finishes: [] };
+      return [] as ServiceOption[];
     }
-    return serviceAndFinishOptions(prices, draft.categoryId, draft.formatId);
-  }, [draft, prices]);
+    return serviceOptionsFor(categoryServices, prices, draft.categoryId, draft.formatId);
+  }, [draft, categoryServices, prices]);
 
-  const applyAutoFill = (base: DraftLine, patch: Partial<DraftLine>): DraftLine => {
-    const merged = { ...base, ...patch };
-    const auto = autoFillLineFromPrices(prices, merged);
-    return { ...merged, ...auto };
-  };
+  const finishInfo = useMemo(() => {
+    if (!draft) {
+      return { finishes: [] as string[], defaultFinish: "" };
+    }
+    return finishOptionsFor(categoryFinishes, prices, draft.categoryId, draft.formatId);
+  }, [draft, categoryFinishes, prices]);
 
-  const updateDraft = (patch: Partial<DraftLine>) => {
+  const hasConfiguredServices = serviceOptions.length > 0;
+
+  /** Recalcula el precio de los servicios seleccionados tras cambiar formato/acabado. */
+  const recalcServicePrices = (
+    services: DraftLineService[],
+    categoryId: number,
+    formatId: number | null,
+    finish: string,
+  ): DraftLineService[] =>
+    services.map((s) => {
+      const price = resolveServicePrice(prices, categoryId, formatId, s.service, finish);
+      return price !== null ? { ...s, unitPrice: String(price) } : s;
+    });
+
+  const changeCategory = (categoryId: number) => {
     setDraft((prev) => {
       if (!prev) {
         return prev;
       }
-      if (patch.categoryId !== undefined && patch.categoryId !== prev.categoryId) {
-        return applyAutoFill(
-          {
-            ...prev,
-            categoryId: patch.categoryId,
-            formatId: null,
-            service: "",
-            finish: "",
-            unitPrice: "",
-          },
-          {},
-        );
+      const { defaultFinish } = finishOptionsFor(categoryFinishes, prices, categoryId, null);
+      return {
+        ...prev,
+        categoryId,
+        formatId: null,
+        finish: defaultFinish,
+        services: buildDefaultServices(categoryId, null, defaultFinish),
+      };
+    });
+  };
+
+  const changeFormat = (formatId: number | null) => {
+    setDraft((prev) => {
+      if (!prev) {
+        return prev;
       }
-      if (patch.formatId !== undefined && patch.formatId !== prev.formatId) {
-        return applyAutoFill(
-          {
-            ...prev,
-            formatId: patch.formatId,
-            service: "",
-            finish: "",
-            unitPrice: "",
-          },
-          {},
-        );
+      return {
+        ...prev,
+        formatId,
+        services: recalcServicePrices(prev.services, prev.categoryId, formatId, prev.finish),
+      };
+    });
+  };
+
+  const changeFinish = (finish: string) => {
+    setDraft((prev) => {
+      if (!prev) {
+        return prev;
       }
-      const merged = applyAutoFill({ ...prev, ...patch }, {});
-      if (patch.service !== undefined || patch.finish !== undefined) {
-        const rows = filterPricesByCategory(prices, merged.categoryId, merged.formatId);
-        const price = resolvePriceFromRows(rows, merged.service, merged.finish);
-        if (price !== null) {
-          merged.unitPrice = String(price);
+      return {
+        ...prev,
+        finish,
+        services: recalcServicePrices(prev.services, prev.categoryId, prev.formatId, finish),
+      };
+    });
+  };
+
+  const toggleService = (name: string, checked: boolean) => {
+    setDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      if (checked) {
+        if (prev.services.some((s) => s.service === name)) {
+          return prev;
         }
+        const price = resolveServicePrice(prices, prev.categoryId, prev.formatId, name, prev.finish);
+        return {
+          ...prev,
+          services: [...prev.services, { service: name, unitPrice: price !== null ? String(price) : "" }],
+        };
       }
-      return merged;
+      return { ...prev, services: prev.services.filter((s) => s.service !== name) };
+    });
+  };
+
+  const setServicePrice = (name: string, unitPrice: string) => {
+    setDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        services: prev.services.map((s) => (s.service === name ? { ...s, unitPrice } : s)),
+      };
+    });
+  };
+
+  /** Precio del modo manual (categorías sin servicios configurados). */
+  const setManualPrice = (unitPrice: string) => {
+    setDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return { ...prev, services: [{ service: "", unitPrice }] };
     });
   };
 
@@ -119,7 +258,6 @@ export function OrderLineModal(props: OrderLineModalProps) {
       return;
     }
     const qty = Number.parseInt(draft.quantity, 10);
-    const unit = Number.parseFloat(draft.unitPrice.replace(",", "."));
     if (!draft.categoryId) {
       setError("Selecciona una categoría.");
       return;
@@ -128,8 +266,16 @@ export function OrderLineModal(props: OrderLineModalProps) {
       setError("La cantidad debe ser mayor que cero.");
       return;
     }
-    if (!Number.isFinite(unit) || unit < 0) {
-      setError("Indica un precio unitario válido.");
+    if (draft.services.length === 0) {
+      setError("Selecciona al menos un servicio.");
+      return;
+    }
+    const invalidPrice = draft.services.some((s) => {
+      const unit = Number.parseFloat(s.unitPrice.replace(",", "."));
+      return !Number.isFinite(unit) || unit < 0;
+    });
+    if (invalidPrice) {
+      setError("Indica un precio válido para cada servicio.");
       return;
     }
     onSave(draft);
@@ -139,6 +285,8 @@ export function OrderLineModal(props: OrderLineModalProps) {
   if (!open || !draft) {
     return null;
   }
+
+  const manualPrice = draft.services[0]?.unitPrice ?? "";
 
   return (
     <dialog className="modal modal-open">
@@ -150,7 +298,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
             <select
               className="select select-bordered select-sm"
               value={draft.categoryId}
-              onChange={(e) => updateDraft({ categoryId: Number(e.target.value) })}
+              onChange={(e) => changeCategory(Number(e.target.value))}
             >
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -166,7 +314,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
               value={draft.formatId ?? ""}
               onChange={(e) => {
                 const v = e.target.value;
-                updateDraft({ formatId: v === "" ? null : Number(v) });
+                changeFormat(v === "" ? null : Number(v));
               }}
             >
               <option value="">— Ninguno —</option>
@@ -184,43 +332,19 @@ export function OrderLineModal(props: OrderLineModalProps) {
               min={1}
               className="input input-bordered input-sm"
               value={draft.quantity}
-              onChange={(e) => updateDraft({ quantity: e.target.value })}
+              onChange={(e) => setDraft((prev) => (prev ? { ...prev, quantity: e.target.value } : prev))}
             />
           </label>
-          <label className="form-control">
-            <span className="label-text text-xs">Servicio</span>
-            {services.length > 0 ? (
-              <select
-                className="select select-bordered select-sm"
-                value={draft.service}
-                onChange={(e) => updateDraft({ service: e.target.value })}
-              >
-                <option value="">— Seleccionar —</option>
-                {services.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                className="input input-bordered input-sm"
-                value={draft.service}
-                onChange={(e) => updateDraft({ service: e.target.value })}
-                placeholder="ej. impresión"
-              />
-            )}
-          </label>
-          <label className="form-control">
-            <span className="label-text text-xs">Acabado</span>
-            {finishes.length > 0 ? (
+          <label className="form-control sm:col-span-2">
+            <span className="label-text text-xs">Acabado (opcional)</span>
+            {finishInfo.finishes.length > 0 ? (
               <select
                 className="select select-bordered select-sm"
                 value={draft.finish}
-                onChange={(e) => updateDraft({ finish: e.target.value })}
+                onChange={(e) => changeFinish(e.target.value)}
               >
-                <option value="">— Seleccionar —</option>
-                {finishes.map((f) => (
+                <option value="">— Sin acabado —</option>
+                {finishInfo.finishes.map((f) => (
                   <option key={f} value={f}>
                     {f}
                   </option>
@@ -230,21 +354,58 @@ export function OrderLineModal(props: OrderLineModalProps) {
               <input
                 className="input input-bordered input-sm"
                 value={draft.finish}
-                onChange={(e) => updateDraft({ finish: e.target.value })}
+                onChange={(e) => changeFinish(e.target.value)}
                 placeholder="ej. brillo"
               />
             )}
           </label>
-          <label className="form-control sm:col-span-2">
-            <span className="label-text text-xs">Precio unitario (CUP)</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              className="input input-bordered input-sm"
-              value={draft.unitPrice}
-              onChange={(e) => updateDraft({ unitPrice: e.target.value })}
-            />
-          </label>
+
+          <div className="form-control sm:col-span-2">
+            <span className="label-text text-xs">Servicios</span>
+            {hasConfiguredServices ? (
+              <div className="mt-1 space-y-1 rounded-lg border border-base-300 p-2">
+                {serviceOptions.map((opt) => {
+                  const selected = draft.services.find((s) => s.service === opt.name);
+                  const checked = Boolean(selected);
+                  return (
+                    <div key={opt.name} className="flex items-center gap-2">
+                      <label className="flex flex-1 cursor-pointer items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          className="checkbox checkbox-sm"
+                          checked={checked}
+                          onChange={(e) => toggleService(opt.name, e.target.checked)}
+                        />
+                        {opt.name}
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        className="input input-bordered input-xs w-24"
+                        placeholder="Precio"
+                        value={selected?.unitPrice ?? ""}
+                        disabled={!checked}
+                        onChange={(e) => setServicePrice(opt.name, e.target.value)}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <input
+                type="text"
+                inputMode="decimal"
+                className="input input-bordered input-sm"
+                placeholder="Precio unitario (CUP)"
+                value={manualPrice}
+                onChange={(e) => setManualPrice(e.target.value)}
+              />
+            )}
+          </div>
+        </div>
+        <div className="mt-3 flex items-center justify-between text-sm">
+          <span className="text-base-content/60">Subtotal de la línea</span>
+          <span className="font-semibold">{formatMoney(draftLineSubtotal(draft))}</span>
         </div>
         {error && <p className="mt-2 text-sm text-error">{error}</p>}
         <div className="modal-action">
