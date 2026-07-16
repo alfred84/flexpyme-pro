@@ -17,6 +17,9 @@ dist-ssr
 *.db
 src-tauri/flexpyme.db
 
+# Documentos locales (Excel de referencia; no van al repo ni al build)
+documentos/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

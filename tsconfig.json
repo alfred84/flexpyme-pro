@@ -25,5 +25,6 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
+  "exclude": ["documentos", "node_modules", "dist", "src-tauri"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
