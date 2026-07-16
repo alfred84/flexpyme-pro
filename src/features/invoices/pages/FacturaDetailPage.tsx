@@ -6,6 +6,7 @@ import {
   fetchInvoiceDetail,
   fetchInvoicePaymentHistory,
 } from "@/db/queries/invoices";
+import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import {
   invoiceFinancialBadgeClass,
@@ -95,7 +96,7 @@ export function FacturaDetailPage() {
                 <span className="text-base-content/60">Cliente:</span> {inv.clientName}
               </p>
               <p>
-                <span className="text-base-content/60">Fecha:</span> {inv.date}
+                <span className="text-base-content/60">Fecha:</span> {formatDate(inv.date)}
               </p>
               {inv.cancelledReason && (
                 <p className="text-error text-sm">Motivo anulación: {inv.cancelledReason}</p>
@@ -162,7 +163,7 @@ export function FacturaDetailPage() {
                 <ul className="space-y-2 text-sm">
                   {paymentsQuery.data?.map((p) => (
                     <li key={p.id} className="rounded border border-base-300 px-3 py-2">
-                      {p.date} · {p.concept} · {formatMoney(p.amountCup)}
+                      {formatDate(p.date)} · {p.concept} · {formatMoney(p.amountCup)}
                       {p.amountUsd > 0 ? ` (+ ${p.amountUsd} USD)` : ""}
                     </li>
                   ))}

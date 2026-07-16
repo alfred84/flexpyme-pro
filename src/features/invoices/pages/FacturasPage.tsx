@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Eye, Printer } from "lucide-react";
 import { fetchInvoiceMetrics, fetchInvoicesFinancial } from "@/db/queries/invoices";
+import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import {
   invoiceFinancialBadgeClass,
@@ -119,7 +120,7 @@ export function FacturasPage() {
                 <tr key={row.id}>
                   <td className="font-mono text-xs">{row.invoiceNumber}</td>
                   <td>{row.clientName}</td>
-                  <td>{row.date}</td>
+                  <td>{formatDate(row.date)}</td>
                   <td className="tabular-nums">{formatMoney(row.total)}</td>
                   <td>
                     <span className={`badge badge-sm ${invoiceFinancialBadgeClass(fin)}`}>

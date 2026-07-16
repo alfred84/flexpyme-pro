@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { fetchProductionBatches } from "@/db/queries/production";
+import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 
 export function ProductionListPage() {
@@ -49,7 +50,7 @@ export function ProductionListPage() {
               ) : (
                 batchesQuery.data.map((row) => (
                   <tr key={row.id}>
-                    <td>{row.date}</td>
+                    <td>{formatDate(row.date)}</td>
                     <td>{row.type}</td>
                     <td>{row.workerName ?? "—"}</td>
                     <td className="text-right">{formatMoney(row.totalCost)}</td>

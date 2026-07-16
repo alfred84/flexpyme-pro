@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { fetchEmployeeById, fetchWorkBatches, payWorkBatch } from "@/db/queries/employees";
+import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { WORK_TYPE_LABELS, type WorkType } from "@/types/employee";
 
@@ -106,7 +107,7 @@ export function EmployeeDetailPage() {
               <tbody>
                 {batches.map((b) => (
                   <tr key={b.id}>
-                    <td className="text-xs">{b.date}</td>
+                    <td className="text-xs">{formatDate(b.date)}</td>
                     <td>{workTypeLabel(b.workType)}</td>
                     <td className="text-right">{formatMoney(b.totalCost)}</td>
                     <td className="text-right">{formatMoney(b.paid)}</td>

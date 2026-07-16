@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Building2, DatabaseBackup, DollarSign, HardDriveDownload, Hammer, Layers, RotateCcw, Ruler, Scale, Trash2, Upload, Users } from "lucide-react";
 import { CategoriesTab } from "@/features/settings/components/CategoriesTab";
+import { formatDateTime } from "@/lib/format-date";
 import { UnitsTab } from "@/features/settings/components/UnitsTab";
 import { BusinessLogo } from "@/components/common/BusinessLogo";
 import { EmployeeRolesTab } from "@/features/settings/components/EmployeeRolesTab";
@@ -447,7 +448,7 @@ function BackupTab() {
                         {backup.fileName}
                       </td>
                       <td>{backup.kind}</td>
-                      <td>{backup.createdAt}</td>
+                      <td>{formatDateTime(backup.createdAt)}</td>
                       <td className="text-right">{formatBackupSize(backup.sizeBytes)}</td>
                     </tr>
                   ))}

@@ -1,0 +1,16 @@
+---
+description: Formato de fechas en la UI de FlexPyme Pro
+alwaysApply: true
+---
+
+# Formato de fechas (UI)
+
+- TODA fecha mostrada al usuario debe renderizarse en formato `dd/mm/aaaa`
+  (ejemplo: `25/06/2026`) usando `formatDate` de `@/lib/format-date`.
+- Para fecha + hora usar `formatDateTime` (`dd/mm/aaaa HH:MM`).
+- NUNCA mostrar fechas ISO crudas (`2026-06-25`), seriales de Excel ni
+  `toLocaleDateString` sin control de formato.
+- Las fechas se ALMACENAN en SQLite como texto ISO (`YYYY-MM-DD` o
+  `YYYY-MM-DD HH:MM:SS`). El formato `dd/mm/aaaa` es solo de presentación.
+- Para valores de inputs `type="date"` y payloads a Tauri usar ISO
+  (`todayIso()` o `YYYY-MM-DD`), nunca el formato visual.

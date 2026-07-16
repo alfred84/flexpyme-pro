@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { fetchAllSettings, fetchExchangeRateHistory, setExchangeRate } from "@/db/queries/settings";
+import { formatDateTime } from "@/lib/format-date";
 
 /**
  * Tab de tasa de cambio USD → CUP con histórico de cambios.
@@ -84,7 +85,7 @@ export function ExchangeRateTab() {
                 <tbody>
                   {historyQuery.data?.map((row) => (
                     <tr key={row.id}>
-                      <td className="text-xs">{row.effectiveAt}</td>
+                      <td className="text-xs">{formatDateTime(row.effectiveAt)}</td>
                       <td className="text-right font-mono">{row.rate}</td>
                       <td className="text-right font-mono text-base-content/70">
                         {row.previousRate ?? "—"}

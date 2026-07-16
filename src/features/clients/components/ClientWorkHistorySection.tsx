@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { History } from "lucide-react";
 import { ProductionStatusBadge, PaymentStatusBadge } from "@/components/invoices/InvoiceStatusBadges";
 import { fetchClientWorkHistory } from "@/db/queries/clients";
+import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 
 interface ClientWorkHistorySectionProps {
@@ -75,7 +76,7 @@ export function ClientWorkHistorySection(props: ClientWorkHistorySectionProps) {
                   rows.map((row) => (
                     <tr key={row.id}>
                       <td className="font-mono text-xs">{row.invoiceNumber}</td>
-                      <td>{row.date}</td>
+                      <td>{formatDate(row.date)}</td>
                       <td className="tabular-nums">{formatMoney(row.total)}</td>
                       <td>
                         <ProductionStatusBadge status={row.productionStatus} />

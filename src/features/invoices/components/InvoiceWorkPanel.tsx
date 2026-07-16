@@ -10,6 +10,7 @@ import {
 } from "@/db/queries/employees";
 import { serviceMatchesWorkType } from "@/features/invoices/lib/work-type-match";
 import { pushFlashMessage } from "@/lib/flash-message";
+import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import type { InvoiceItemDto } from "@/types/invoice";
 
@@ -189,7 +190,7 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
             <tbody>
               {batches.map((batch) => (
                 <tr key={batch.id}>
-                  <td>{batch.date}</td>
+                  <td>{formatDate(batch.date)}</td>
                   <td>{batch.employeeName}</td>
                   <td>{batch.workType}</td>
                   <td className="text-right">{formatMoney(batch.totalCost)}</td>

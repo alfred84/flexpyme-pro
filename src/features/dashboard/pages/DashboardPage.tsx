@@ -22,6 +22,7 @@ import {
 import { fetchIncomeByCategory, fetchReportsSummary } from "@/db/queries/reports";
 import { fetchInvoices } from "@/db/queries/invoices";
 import { fetchBackupOverview } from "@/db/queries/settings";
+import { formatDate, formatDateTime } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 import { useAppSettings } from "@/hooks/use-app-settings";
@@ -187,7 +188,7 @@ export function DashboardPage() {
                     <tr key={inv.id}>
                       <td className="font-mono text-xs">{inv.invoiceNumber}</td>
                       <td className="max-w-[12rem] truncate">{inv.clientName}</td>
-                      <td className="text-xs">{inv.date}</td>
+                      <td className="text-xs">{formatDate(inv.date)}</td>
                       <td className="text-right">{formatMoney(inv.total)}</td>
                       <td>
                         <span
@@ -264,7 +265,7 @@ export function DashboardPage() {
                       {backup.fileName}
                     </p>
                     <p className="mt-1 text-xs text-base-content/60">
-                      {backup.kind} · {backup.createdAt}
+                      {backup.kind} · {formatDateTime(backup.createdAt)}
                     </p>
                   </div>
                 ))}

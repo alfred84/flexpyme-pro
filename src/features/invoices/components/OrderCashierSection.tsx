@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { Wallet } from "lucide-react";
 import type { OrderPaymentState } from "@/features/invoices/components/OrderPaymentSection";
+import { DenominationGrid } from "@/components/cashflow/DenominationGrid";
 import { buildCountsPayload, emptyDenominationCounts, sumDenominationCounts } from "@/lib/cash-counts";
 import { formatMoney } from "@/lib/format-money";
-import { CASH_DENOMINATIONS } from "@/types/cashier";
 
 export interface OrderCashierState {
   counts: Record<string, number>;
@@ -61,11 +61,6 @@ export function OrderCashierSection(props: OrderCashierSectionProps) {
   const changeDue = Math.max(0, received - balanceDue);
   const applied = Math.min(received, balanceDue);
 
-  const setDenom = (key: string, amount: number) => {
-    const v = Number.isFinite(amount) ? Math.max(0, Math.floor(amount)) : 0;
-    onChange({ ...value, counts: { ...value.counts, [key]: v } });
-  };
-
   return (
     <div className="card bg-base-100 shadow-sm border border-primary/20">
       <div className="card-body gap-3 p-3">
@@ -113,21 +108,13 @@ export function OrderCashierSection(props: OrderCashierSectionProps) {
 
         {!isTransfer && !isUsd && (
           <>
-            <p className="text-xs text-base-content/60">Conteo de billetes o monto total:</p>
-            <div className="grid grid-cols-3 gap-1 sm:grid-cols-4">
-              {CASH_DENOMINATIONS.map((d) => (
-                <label key={d} className="form-control">
-                  <span className="label-text text-[10px] font-mono">{formatMoney(d)}</span>
-                  <input
-                    type="number"
-                    min={0}
-                    className="input input-bordered input-xs"
-                    value={value.counts[String(d)] ?? 0}
-                    onChange={(e) => setDenom(String(d), Number(e.target.value))}
-                  />
-                </label>
-              ))}
-            </div>
+            <DenominationGrid
+              currency="CUP"
+              counts={value.counts}
+              onChange={(counts) => onChange({ ...value, counts })}
+              label="Conteo de billetes o monto total:"
+              hideTotal
+            />
             <label className="form-control">
               <span className="label-text text-xs">O monto total CUP</span>
               <input

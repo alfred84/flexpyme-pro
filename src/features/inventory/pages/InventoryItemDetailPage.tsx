@@ -6,6 +6,7 @@ import {
   fetchInventoryMovements,
   registerInventoryMovement,
 } from "@/db/queries/inventory";
+import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 
 /**
@@ -168,7 +169,7 @@ export function InventoryItemDetailPage() {
               <tbody>
                 {movements.map((mov) => (
                   <tr key={mov.id}>
-                    <td className="text-xs">{mov.date}</td>
+                    <td className="text-xs">{formatDate(mov.date)}</td>
                     <td>
                       <span
                         className={`badge badge-sm ${mov.movementType === "entrada" ? "badge-success" : "badge-warning"}`}

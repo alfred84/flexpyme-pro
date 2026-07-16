@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { fetchCashSessionsForInvoice, registerCashPayment } from "@/db/queries/cashier";
 import { fetchInvoiceDetail } from "@/db/queries/invoices";
 import { useAppSettings } from "@/hooks/use-app-settings";
+import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 import { CASH_DENOMINATIONS } from "@/types/cashier";
@@ -325,7 +326,7 @@ export function InvoiceCashierPage() {
                     <tbody>
                       {sessionsQuery.data.map((row) => (
                         <tr key={row.id}>
-                          <td className="whitespace-nowrap text-xs">{row.date}</td>
+                          <td className="whitespace-nowrap text-xs">{formatDate(row.date)}</td>
                           <td className="text-right">{formatMoney(row.totalAmount)}</td>
                           <td className="text-right">{formatMoney(row.amountReceived)}</td>
                           <td className="text-right">{formatMoney(row.changeGiven)}</td>

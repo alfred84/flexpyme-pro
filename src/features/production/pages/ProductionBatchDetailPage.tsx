@@ -3,6 +3,7 @@ import { getRouteApi, Link, useRouterState } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { fetchProductionBatchDetail } from "@/db/queries/production";
 import { buildCsvLine, downloadTextFile } from "@/lib/csv";
+import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
 
@@ -141,7 +142,7 @@ export function ProductionBatchDetailPage() {
                 <dl className="space-y-1 text-sm">
                   <div>
                     <dt className="text-base-content/60">Fecha</dt>
-                    <dd>{b.date}</dd>
+                    <dd>{formatDate(b.date)}</dd>
                   </div>
                   <div>
                     <dt className="text-base-content/60">Operario</dt>

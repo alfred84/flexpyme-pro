@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { BusinessLogo } from "@/components/common/BusinessLogo";
 import { Building2 } from "lucide-react";
 import { pushFlashMessage } from "@/lib/flash-message";
+import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 
 function statusLabel(status: string): string {
@@ -125,7 +126,7 @@ export function InvoicePrintPage() {
               </div>
               <div className="text-right text-sm print:text-black">
                 <p>
-                  <span className="text-base-content/60">Fecha:</span> {inv.date}
+                  <span className="text-base-content/60">Fecha:</span> {formatDate(inv.date)}
                 </p>
                 <p>
                   <span className="text-base-content/60">Estado:</span> {statusLabel(inv.status)}

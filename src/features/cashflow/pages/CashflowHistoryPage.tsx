@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { fetchCashTransactions } from "@/db/queries/cashflow";
 import { CashTransactionReference } from "@/components/cashflow/CashTransactionReference";
+import { formatDateTime } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 
 /**
@@ -103,7 +104,7 @@ export function CashflowHistoryPage() {
           <tbody>
             {transactions.map((tx) => (
               <tr key={tx.id}>
-                <td className="text-xs">{tx.date.slice(0, 16).replace("T", " ")}</td>
+                <td className="text-xs">{formatDateTime(tx.date)}</td>
                 <td>{tx.concept}</td>
                 <td>
                   <CashTransactionReference

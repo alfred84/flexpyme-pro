@@ -12,6 +12,7 @@ import {
 import { ArrowDownCircle, ArrowUpCircle, Plus, Wallet } from "lucide-react";
 import { fetchCashBalance, fetchCashDailySeries, fetchCashTransactions } from "@/db/queries/cashflow";
 import { CashTransactionReference } from "@/components/cashflow/CashTransactionReference";
+import { formatDateTime } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 
 /**
@@ -118,7 +119,7 @@ export function CashflowPage() {
               <tbody>
                 {recent.map((tx) => (
                   <tr key={tx.id}>
-                    <td className="text-xs">{tx.date.slice(0, 16).replace("T", " ")}</td>
+                    <td className="text-xs">{formatDateTime(tx.date)}</td>
                     <td>{tx.concept}</td>
                     <td>
                       <CashTransactionReference

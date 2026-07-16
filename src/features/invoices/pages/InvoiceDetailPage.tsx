@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { useState } from "react";
 import { fetchInvoiceDetail, fetchInvoicePaymentHistory } from "@/db/queries/invoices";
+import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
@@ -105,7 +106,7 @@ export function InvoiceDetailPage() {
                   </div>
                   <div>
                     <dt className="text-base-content/60">Fecha</dt>
-                    <dd>{inv.date}</dd>
+                    <dd>{formatDate(inv.date)}</dd>
                   </div>
                   <div>
                     <dt className="text-base-content/60">Producción</dt>

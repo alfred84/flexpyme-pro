@@ -4,6 +4,7 @@ import { DollarSign, Moon, Sun } from "lucide-react";
 import { PRIMARY_NAV, SECONDARY_NAV } from "@/config/navigation";
 import { ExchangeRateModal } from "@/components/common/ExchangeRateModal";
 import { useAppSettings } from "@/hooks/use-app-settings";
+import { formatDate } from "@/lib/format-date";
 import type { ThemeName } from "@/lib/theme";
 
 interface HeaderProps {
@@ -42,12 +43,7 @@ export function Header(props: HeaderProps) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const title = resolvePageTitle(pathname);
   const [rateModalOpen, setRateModalOpen] = useState(false);
-  const today = new Date().toLocaleDateString("es", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const today = formatDate(new Date());
 
   return (
     <>
