@@ -1,8 +1,11 @@
 //! Production batch commands: list and create.
 
+use std::collections::BTreeMap;
+
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
+use crate::commands::normalize_token;
 use crate::db;
 
 #[derive(Debug, Serialize)]
@@ -116,6 +119,217 @@ pub struct ProductionLineInRangeDto {
 pub struct ProductionRangeExportDto {
     pub batches: Vec<ProductionBatchInRangeDto>,
     pub lines: Vec<ProductionLineInRangeDto>,
+}
+
+/// One format row within an area of the monthly production report.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductionFormatRowDto {
+    pub format_label: String,
+    pub pedido_qty: i64,
+    pub realizado_qty: i64,
+    pub pendiente_qty: i64,
+    pub pedido_amount: f64,
+}
+
+/// Aggregated report for one area (Impresión, Laminado, Enmarcado...).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductionAreaReportDto {
+    pub area: String,
+    pub rows: Vec<ProductionFormatRowDto>,
+    pub pedido_qty: i64,
+    pub realizado_qty: i64,
+    pub pendiente_qty: i64,
+    pub pedido_amount: f64,
+}
+
+/// Realizado quantity for one day and area (daily production control).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductionDailyDto {
+    pub date: String,
+    pub area: String,
+    pub realizado_qty: i64,
+}
+
+/// Monthly production report: areas with format rows and a daily series.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductionReportDto {
+    pub month: String,
+    pub areas: Vec<ProductionAreaReportDto>,
+    pub daily: Vec<ProductionDailyDto>,
+}
+
+#[derive(Default)]
+struct FormatAgg {
+    pedido_qty: i64,
+    realizado_qty: i64,
+    pedido_amount: f64,
+}
+
+#[derive(Default)]
+struct AreaAgg {
+    display: String,
+    formats: BTreeMap<String, FormatAgg>,
+}
+
+/// Monthly production report by area/format with Realizado vs Pendiente and a
+/// daily series for the current-month production control.
+///
+/// `month` must be `YYYY-MM`. "Realizado" comes from work batches linked to
+/// orders; "Pedido" from the order lines dated in the month.
+#[tauri::command]
+pub fn production_report_monthly(month: String) -> Result<ProductionReportDto, String> {
+    let month = month.trim().to_string();
+    if month.len() != 7 {
+        return Err("Mes inválido (formato YYYY-MM)".to_string());
+    }
+    let conn = db::open_connection()?;
+    let mut areas: BTreeMap<String, AreaAgg> = BTreeMap::new();
+
+    // Pedido: líneas de pedido del mes agrupadas por servicio (Área) y formato.
+    {
+        let mut stmt = conn
+            .prepare(
+                "SELECT ii.service,
+                        COALESCE(ii.format_label_snapshot, f.label, '(sin formato)') AS fmt,
+                        COALESCE(SUM(ii.quantity), 0),
+                        COALESCE(SUM(ii.subtotal), 0)
+                 FROM invoice_items ii
+                 JOIN invoices i ON i.id = ii.invoice_id
+                 LEFT JOIN formats f ON f.id = ii.format_id
+                 WHERE i.deleted_at IS NULL AND i.cancelled_at IS NULL
+                   AND strftime('%Y-%m', i.date) = ?1
+                   AND ii.service IS NOT NULL AND trim(ii.service) <> ''
+                 GROUP BY ii.service, fmt",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![month], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, f64>(3)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        for (service, fmt, qty, amount) in rows {
+            let key = normalize_token(&service);
+            let area = areas.entry(key).or_default();
+            if area.display.is_empty() {
+                area.display = service.trim().to_string();
+            }
+            let f = area.formats.entry(fmt).or_default();
+            f.pedido_qty += qty;
+            f.pedido_amount += amount;
+        }
+    }
+
+    // Realizado: ítems de lotes ligados a pedidos, del mes, por Área y formato.
+    {
+        let mut stmt = conn
+            .prepare(
+                "SELECT pbi.category,
+                        COALESCE(f.label, '(sin formato)') AS fmt,
+                        COALESCE(SUM(pbi.quantity), 0)
+                 FROM production_batch_items pbi
+                 JOIN production_batches pb ON pb.id = pbi.batch_id
+                 LEFT JOIN formats f ON f.id = pbi.format_id
+                 WHERE pbi.invoice_id IS NOT NULL
+                   AND strftime('%Y-%m', pb.date) = ?1
+                 GROUP BY pbi.category, fmt",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![month], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        for (category, fmt, qty) in rows {
+            let key = normalize_token(&category);
+            let area = areas.entry(key).or_default();
+            if area.display.is_empty() {
+                area.display = category.trim().to_string();
+            }
+            let f = area.formats.entry(fmt).or_default();
+            f.realizado_qty += qty;
+        }
+    }
+
+    let area_reports = areas
+        .into_values()
+        .map(|agg| {
+            let mut rows = Vec::new();
+            let mut a_pedido = 0;
+            let mut a_realizado = 0;
+            let mut a_amount = 0.0;
+            for (fmt, f) in agg.formats {
+                let pendiente = (f.pedido_qty - f.realizado_qty).max(0);
+                a_pedido += f.pedido_qty;
+                a_realizado += f.realizado_qty;
+                a_amount += f.pedido_amount;
+                rows.push(ProductionFormatRowDto {
+                    format_label: fmt,
+                    pedido_qty: f.pedido_qty,
+                    realizado_qty: f.realizado_qty,
+                    pendiente_qty: pendiente,
+                    pedido_amount: f.pedido_amount,
+                });
+            }
+            ProductionAreaReportDto {
+                area: agg.display,
+                rows,
+                pedido_qty: a_pedido,
+                realizado_qty: a_realizado,
+                pendiente_qty: (a_pedido - a_realizado).max(0),
+                pedido_amount: a_amount,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    // Serie diaria: realizado por día y Área del mes.
+    let daily = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT pb.date, pbi.category, COALESCE(SUM(pbi.quantity), 0)
+                 FROM production_batch_items pbi
+                 JOIN production_batches pb ON pb.id = pbi.batch_id
+                 WHERE pbi.invoice_id IS NOT NULL
+                   AND strftime('%Y-%m', pb.date) = ?1
+                 GROUP BY pb.date, pbi.category
+                 ORDER BY pb.date",
+            )
+            .map_err(|e| e.to_string())?;
+        let result = stmt
+            .query_map(params![month], |row| {
+                Ok(ProductionDailyDto {
+                    date: row.get(0)?,
+                    area: row.get(1)?,
+                    realizado_qty: row.get(2)?,
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        result
+    };
+
+    Ok(ProductionReportDto {
+        month,
+        areas: area_reports,
+        daily,
+    })
 }
 
 fn trim_optional(value: Option<String>) -> Option<String> {

@@ -10,6 +10,7 @@ import { CostsListPage } from "@/features/products/pages/CostsListPage";
 import { ProductionBatchDetailPage } from "@/features/production/pages/ProductionBatchDetailPage";
 import { ProductionListPage } from "@/features/production/pages/ProductionListPage";
 import { ProductionNewPage } from "@/features/production/pages/ProductionNewPage";
+import { ProductionReportPage } from "@/features/production/pages/ProductionReportPage";
 import { ReportsPage } from "@/features/reports/pages/ReportsPage";
 import { SettingsPage } from "@/features/settings/pages/SettingsPage";
 import { InvoiceCashierPage } from "@/features/invoices/pages/InvoiceCashierPage";
@@ -99,6 +100,12 @@ const reportsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "reportes",
   component: ReportsPage,
+});
+
+const productionReportRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "reportes-produccion",
+  component: ProductionReportPage,
 });
 
 const settingsRoute = createRoute({
@@ -279,6 +286,7 @@ const routeTree = rootRoute.addChildren([
   productionNewRoute,
   productionBatchDetailRoute,
   reportsRoute,
+  productionReportRoute,
   settingsRoute,
   stockListRoute,
   stockDetailRoute,

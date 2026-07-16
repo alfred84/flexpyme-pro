@@ -386,6 +386,11 @@ pub fn work_batch_create(payload: CreateWorkBatchPayload) -> Result<i64, String>
             ],
         )
         .map_err(|e| e.to_string())?;
+
+        // Marca la conclusión en la línea del pedido correspondiente (Área+formato).
+        if let Some(invoice_id) = payload.invoice_id {
+            mark_invoice_item_completed(&tx, invoice_id, item)?;
+        }
     }
 
     if payload.pay_now {
@@ -404,6 +409,63 @@ pub fn work_batch_create(payload: CreateWorkBatchPayload) -> Result<i64, String>
 
     tx.commit().map_err(|e| e.to_string())?;
     Ok(batch_id)
+}
+
+/// Marca como concluida (parcial o total) la línea de pedido que corresponde a
+/// un ítem de lote de trabajo, emparejando por formato y Área (servicio).
+///
+/// Incrementa `completed_quantity` sin superar la cantidad pedida y fija
+/// `completed_at`. Reparte la cantidad del lote entre las líneas coincidentes.
+fn mark_invoice_item_completed(
+    tx: &rusqlite::Transaction<'_>,
+    invoice_id: i64,
+    item: &WorkBatchItemPayload,
+) -> Result<(), String> {
+    let mut stmt = tx
+        .prepare(
+            "SELECT id, service, quantity, completed_quantity
+             FROM invoice_items
+             WHERE invoice_id = ?1 AND (format_id = ?2 OR (?2 IS NULL AND format_id IS NULL))
+             ORDER BY id",
+        )
+        .map_err(|e| e.to_string())?;
+    let candidates = stmt
+        .query_map(params![invoice_id, item.format_id], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, i64>(3)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    let mut remaining = item.quantity;
+    for (id, service, quantity, completed) in candidates {
+        if remaining <= 0 {
+            break;
+        }
+        let service = service.unwrap_or_default();
+        if !crate::commands::area_tokens_match(&service, &item.category) {
+            continue;
+        }
+        let pending = (quantity - completed).max(0);
+        if pending <= 0 {
+            continue;
+        }
+        let add = remaining.min(pending);
+        tx.execute(
+            "UPDATE invoice_items
+             SET completed_quantity = completed_quantity + ?1, completed_at = datetime('now')
+             WHERE id = ?2",
+            params![add, id],
+        )
+        .map_err(|e| e.to_string())?;
+        remaining -= add;
+    }
+    Ok(())
 }
 
 /// Lists work batches for an employee (most recent first).

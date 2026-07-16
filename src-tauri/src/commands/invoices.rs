@@ -69,6 +69,7 @@ pub struct InvoiceItemDto {
     pub quantity: i64,
     pub unit_price: f64,
     pub subtotal: f64,
+    pub completed_quantity: i64,
 }
 
 /// Full invoice payload returned to the UI.
@@ -356,7 +357,7 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                     COALESCE(ii.category_snapshot, NULLIF(trim(pc.label_es), ''), pc.name),
                     ii.format_id,
                     COALESCE(ii.format_label_snapshot, f.label) AS format_label,
-                    ii.finish, ii.service, ii.quantity, ii.unit_price, ii.subtotal
+                    ii.finish, ii.service, ii.quantity, ii.unit_price, ii.subtotal, ii.completed_quantity
              FROM invoice_items ii
              JOIN product_categories pc ON pc.id = ii.category_id
              LEFT JOIN formats f ON f.id = ii.format_id
@@ -377,6 +378,7 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                 quantity: row.get(7)?,
                 unit_price: row.get(8)?,
                 subtotal: row.get(9)?,
+                completed_quantity: row.get(10)?,
             })
         })
         .map_err(|e| e.to_string())?

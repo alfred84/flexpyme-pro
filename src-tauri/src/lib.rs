@@ -70,6 +70,7 @@ pub fn run() {
             commands::production::production_list,
             commands::production::production_get_detail,
             commands::production::production_export_in_date_range,
+            commands::production::production_report_monthly,
             commands::production::production_create,
             commands::reports::reports_summary,
             commands::reports::reports_top_debtors,

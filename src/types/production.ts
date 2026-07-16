@@ -90,3 +90,36 @@ export interface ProductionRangeExportDto {
   batches: ProductionBatchInRangeDto[];
   lines: ProductionLineInRangeDto[];
 }
+
+/** Fila por formato dentro de un área del reporte mensual de producción. */
+export interface ProductionFormatRowDto {
+  formatLabel: string;
+  pedidoQty: number;
+  realizadoQty: number;
+  pendienteQty: number;
+  pedidoAmount: number;
+}
+
+/** Reporte agregado de un área (Impresión, Laminado, Enmarcado...). */
+export interface ProductionAreaReportDto {
+  area: string;
+  rows: ProductionFormatRowDto[];
+  pedidoQty: number;
+  realizadoQty: number;
+  pendienteQty: number;
+  pedidoAmount: number;
+}
+
+/** Realizado por día y área (control diario de producción). */
+export interface ProductionDailyDto {
+  date: string;
+  area: string;
+  realizadoQty: number;
+}
+
+/** Reporte mensual de producción por área/formato con serie diaria. */
+export interface ProductionReportDto {
+  month: string;
+  areas: ProductionAreaReportDto[];
+  daily: ProductionDailyDto[];
+}

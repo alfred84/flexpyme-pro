@@ -9,6 +9,7 @@ import {
   Tag,
   Coins,
   BarChart3,
+  Factory,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -38,6 +39,7 @@ export interface NavItem {
 export const PRIMARY_NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/pedidos", label: "Pedidos", icon: ShoppingCart, badge: "pedidosAtencion" },
+  { to: "/reportes-produccion", label: "Reportes producción", icon: Factory },
   { to: "/facturas", label: "Facturas", icon: FileText, badge: "facturasPendientes" },
   { to: "/clientes", label: "Clientes", icon: Users },
   { to: "/empleados", label: "Empleados", icon: UserCog },

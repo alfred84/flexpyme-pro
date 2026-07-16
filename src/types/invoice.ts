@@ -84,6 +84,7 @@ export interface InvoiceItemDto {
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  completedQuantity: number;
 }
 
 /**

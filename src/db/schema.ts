@@ -148,6 +148,8 @@ export const invoiceItems = sqliteTable("invoice_items", {
   quantity: integer("quantity").notNull().default(0),
   unitPrice: real("unit_price").notNull(),
   subtotal: real("subtotal").notNull(),
+  completedQuantity: integer("completed_quantity").notNull().default(0),
+  completedAt: text("completed_at"),
 });
 
 export const workTypes = sqliteTable("work_types", {

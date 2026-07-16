@@ -5,6 +5,7 @@ import type {
   ProductionBatchDetailDto,
   ProductionBatchListDto,
   ProductionRangeExportDto,
+  ProductionReportDto,
 } from "@/types/production";
 
 export async function fetchProductionBatches(): Promise<ProductionBatchListDto[]> {
@@ -29,4 +30,11 @@ export async function createProductionBatch(
   payload: CreateProductionBatchPayload,
 ): Promise<CreateProductionBatchResponse> {
   return invoke<CreateProductionBatchResponse>("production_create", { payload });
+}
+
+/**
+ * Carga el reporte mensual de producción por área/formato (`YYYY-MM`).
+ */
+export async function fetchProductionReportMonthly(month: string): Promise<ProductionReportDto> {
+  return invoke<ProductionReportDto>("production_report_monthly", { month });
 }

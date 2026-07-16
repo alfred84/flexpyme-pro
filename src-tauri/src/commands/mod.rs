@@ -18,6 +18,38 @@ pub mod settings;
 use crate::db;
 use serde::Serialize;
 
+/// Normaliza un texto para comparar servicios/áreas: minúsculas y sin acentos.
+///
+/// Espeja `serviceMatchesWorkType` del frontend para que las áreas de pedido
+/// (`invoice_items.service`) y de trabajo (`production_batch_items.category`)
+/// se agrupen de forma consistente.
+pub fn normalize_token(value: &str) -> String {
+    value
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| match c {
+            'á' | 'à' | 'ä' | 'â' => 'a',
+            'é' | 'è' | 'ë' | 'ê' => 'e',
+            'í' | 'ì' | 'ï' | 'î' => 'i',
+            'ó' | 'ò' | 'ö' | 'ô' => 'o',
+            'ú' | 'ù' | 'ü' | 'û' => 'u',
+            'ñ' => 'n',
+            other => other,
+        })
+        .collect()
+}
+
+/// Indica si dos tokens de área/servicio se corresponden (igualdad o inclusión).
+pub fn area_tokens_match(a: &str, b: &str) -> bool {
+    let na = normalize_token(a);
+    let nb = normalize_token(b);
+    if na.is_empty() || nb.is_empty() {
+        return false;
+    }
+    na == nb || na.contains(&nb) || nb.contains(&na)
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DbStatusPayload {
