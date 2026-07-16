@@ -53,10 +53,10 @@ export function Sidebar(props: SidebarProps) {
           type="button"
           onClick={onToggle}
           className="btn btn-ghost btn-sm mt-1 w-full justify-start gap-3"
-          aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
+          aria-label={collapsed ? "Expandir menú" : "Contraer menú"}
         >
           {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
-          {!collapsed && <span>Colapsar</span>}
+          {!collapsed && <span>Contraer menú</span>}
         </button>
       </div>
     </aside>
