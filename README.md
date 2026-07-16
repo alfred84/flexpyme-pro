@@ -1,23 +1,29 @@
 # FlexPyme Pro
 
 Aplicación de escritorio **offline** para la gestión integral de un taller de impresión gráfica.
-La fuente de verdad de requisitos es [`REQUIREMENTS.md`](./REQUIREMENTS.md).
+La fuente de verdad de requisitos es [`REQUIREMENTS.md`](./REQUIREMENTS.md) (**v2.5 — Reenfoque a Producción**).
 
-## Módulos (v2)
+## Módulos (v2.5)
 
 - **Dashboard**: KPIs del mes, ingresos por categoría (Recharts), pedidos recientes y alertas.
-- **Pedidos** (`/pedidos`): alta multi-producto, detalle con registro de trabajo de empleados, impresión, cobro en caja y filtros (en producción, listos, pendiente cobro). `/stock` redirige al filtro listos.
+- **Pedidos** (`/pedidos`): alta multi-producto con servicios auto-seleccionados por categoría (línea → varios `invoice_items`), detalle con registro de trabajo, impresión, cobro integrado (CUP/USD + vuelto) y filtros (en producción, listos, pendiente cobro). `/stock` redirige al filtro listos.
+- **Reportes de producción** (`/reportes-produccion`): por Área/día/formato (Realizado vs Pendiente) y comparativa Factura vs Salario.
+- **Facturas** (`/facturas`): vista financiera sobre los mismos pedidos (cobrada/parcial/pendiente/anulada).
 - **Clientes**: CRUD, balance y ficha con historial.
-- **Empleados**: CRUD con baja (soft delete), registro de lotes de trabajo y pago de salarios desde `cost_list`.
-- **Inventario**: ítems con alertas de stock bajo, movimientos (entrada/salida) y recetas de producción (descuento al marcar pedido listo).
-- **Flujo de Caja**: balance CUP/USD, serie de 30 días, movimientos manuales, historial filtrable y enlaces a pedidos cobrados.
-- **Configuración**: tabs General, Tasa de cambio (histórico USD→CUP), Roles, Categorías, Unidades, Formatos, Tipos de trabajo y Backup.
+- **Empleados**: CRUD con baja (soft delete), multi-rol, lotes de trabajo, nómina diaria y pago de salarios desde `cost_list`.
+- **Inventario**: ítems, movimientos, recetas de producción; descuento al **concluir cada línea/servicio**; déficit permitido con bandera en línea y pedido.
+- **Flujo de Caja**: balance CUP/USD, neto del día + neto de 30 días, serie diaria, movimientos con denominaciones, historial filtrable y enlaces a pedidos.
 - **Precios** y **Costos**: entradas del sidebar (debajo de Flujo de Caja).
+- **Otros gastos** (`/otros-gastos`): almuerzo y similares; cada gasto genera egreso en caja (vista diaria/mensual).
+- **Reportes**: exportes y resúmenes generales.
+- **Configuración**: tabs General, Tasa de cambio, Roles, Categorías (servicios/acabados), Unidades, Formatos, Tipos de trabajo y Backup.
 
 ## Moneda
 
 - Principal **CUP**; secundaria **USD** con tasa almacenada por operación.
 - Denominaciones CUP: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000.
+- Denominaciones USD: 100, 50, 20, 10, 5, 2, 1.
+- Fechas en UI: **dd/mm/aaaa**.
 - La tasa USD→CUP se actualiza desde el badge de la cabecera (modal) o desde Configuración > Tasa de cambio; cada cambio queda en el histórico.
 
 ## Stack Tecnologico
@@ -126,11 +132,13 @@ En **Precios** (`/precios`) puedes ver la lista de precios (activos por defecto;
 
 ## Pedidos
 
-En **Pedidos** (`/pedidos`): listado, **Nuevo pedido** con encabezado compacto, líneas en tabla (alta/edición en modal con precio automático desde lista), método de pago y **cobro integrado** al completar los datos. El resumen muestra solo totales del pedido (sin deuda anterior del cliente). Totales del pedido: `total = subtotal - anticipo`. Al guardar se actualiza el balance del cliente. Comandos: `invoices_list`, `invoices_get_detail`, `invoices_create`, `cashier_register_payment`.
+En **Pedidos** (`/pedidos`): listado, **Nuevo pedido** con encabezado compacto, líneas en tabla (alta/edición en modal con servicios por categoría y precio desde lista), método de pago y **cobro integrado** (denominaciones CUP/USD y vuelto). Totales del pedido: `total = subtotal - anticipo`. Al guardar se actualiza el balance del cliente. Comandos: `invoices_list`, `invoices_get_detail`, `invoices_create`, `cashier_register_payment`.
 
-## Empleados, Inventario y Caja
+## Empleados, Inventario, Caja y Gastos
 
-- **Empleados**: `employees_*` (CRUD + baja), `cost_list_for_work_type`, `work_batch_create`, `work_batches_for_employee`, `work_batch_pay`.
-- **Inventario**: `inventory_items_list`, `inventory_item_get/create/update`, `inventory_movement_register`, `inventory_movements_for_item`.
-- **Caja**: `cash_balance`, `cash_transactions_list`, `cash_daily_series`, `cash_transaction_create`.
+- **Empleados**: `employees_*` (CRUD + baja + roles extra), `payroll_daily`, `cost_list_for_work_type`, `work_batch_create`, `work_batches_for_employee`, `work_batch_pay`.
+- **Inventario**: `inventory_items_list`, `inventory_item_get/create/update`, `inventory_movement_register`, `inventory_movements_for_item`; descuento por línea concluida con déficit permitido.
+- **Caja**: `cash_balance`, `cash_transactions_list`, `cash_daily_series`, `cash_net_summary`, `cash_transaction_create`.
+- **Otros gastos**: `other_expenses_*` (registro y listado; egreso en caja).
+- **Producción**: `production_report_monthly`.
 - **Configuración**: `settings_get_all`, `settings_set_value`, `settings_backup_database`, `settings_get_backup_overview`, `settings_restore_database`, `cost_list_all`, `cost_update`.

@@ -33,6 +33,8 @@ globs: ["src/**/*.tsx", "src/**/*.ts"]
 - Skeleton loader mientras cargan los datos
 
 ## Módulo de caja
-- Grid de denominaciones: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 5000 CUP
-- Mostrar vuelto en verde (>0) o rojo (<0)
+- Grid de denominaciones CUP: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000
+- Grid de denominaciones USD: 100, 50, 20, 10, 5, 2, 1
+- Usar `DenominationGrid` (`@/components/cashflow/DenominationGrid`) — no reinventar el grid
+- Mostrar vuelto en verde (>0) o rojo (<0); bloquear cobro si hay vuelto pendiente sin resolver
 - Registrar desglose de billetes como JSON en la transacción

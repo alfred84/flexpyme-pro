@@ -1,7 +1,15 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.4 | Última actualización: 2026-07-07
+### Versión: 2.5 | Última actualización: 2026-07-16
+
+> **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
+> los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
+> producción, Otros gastos, cuadrículas de denominaciones CUP+USD con vuelto que
+> afecta caja, automatización de líneas por categoría (servicios/acabados
+> configurables), inventario por déficit (descuento por línea concluida),
+> empleados multi-rol con nómina diaria, caja con neto diario + 30 días, y fecha
+> `dd/mm/aaaa` en toda la UI.
 
 ---
 
@@ -83,6 +91,8 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Cálculo automático del salario a pagar
 - Historial de pagos al empleado
 - Dar de baja (soft delete, no eliminar)
+- **Multi-rol (v2.5)**: cada empleado tiene un rol principal (`employees.role_id`) y puede tener roles adicionales (`employee_extra_roles`) para cuando cubre otra Área
+- **Nómina diaria (v2.5)**: vista de salario por empleado/día del mes en curso (derivada de `production_batches`), con total, pagado y pendiente; pagar registra el egreso en caja
 
 ### 3.5 Inventario
 - Gestión de materiales/insumos del taller
@@ -90,7 +100,9 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Alertas de stock bajo (cuando cantidad ≤ stock mínimo)
 - Registro de entradas y salidas de inventario
 - Historial de movimientos por ítem
-- **Recetas de producción**: vinculan categoría/servicio del pedido con material y cantidad por unidad; al marcar pedido **listo** se descuenta stock automáticamente (si hay recetas activas y stock suficiente)
+- **Recetas de producción**: vinculan categoría/servicio del pedido con material y cantidad por unidad
+- **Descuento por línea concluida (v2.5)**: el inventario se descuenta al concluir cada línea/servicio vía lotes de trabajo (no al marcar todo el pedido listo)
+- **Déficit permitido (v2.5)**: si falta material, la salida se registra igualmente dejando existencia negativa (déficit) en lugar de bloquear; la línea del pedido se marca `resource_missing` con nota y el pedido agrega la bandera; el inventario muestra el ítem en **Déficit**
 
 ### 3.6 Flujo de Caja
 - Registro de todas las entradas y salidas de dinero
@@ -98,9 +110,11 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
   - **Efectivo**: con desglose por denominaciones de billetes
   - **Transferencia**: con referencia/concepto
 - Denominaciones CUP disponibles: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000
+- Denominaciones USD disponibles: 100, 50, 20, 10, 5, 2, 1
 - Soporte para USD con tasa de conversión a CUP (se almacena la tasa en cada operación)
 - Balance actual de caja (CUP y USD por separado)
-- Módulo de cobro de facturas: ingresa billetes → calcula vuelto automáticamente
+- Módulo de cobro de facturas: ingresa billetes → calcula vuelto automáticamente; el vuelto con denominaciones reduce el neto en caja (recibido − vuelto)
+- **KPIs (v2.5)**: flujo neto del día actual y flujo neto de los últimos 30 días (más serie diaria del mismo período)
 - Historial de movimientos con filtros por fecha, tipo, concepto
 - Resumen diario/mensual
 
@@ -109,6 +123,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Tasa de cambio USD → CUP (actualizable desde cabecera o Configuración; histórico de cambios)
 - **Precios** y **Costos** como entradas del sidebar (debajo de Flujo de Caja), no como tabs de Configuración
 - **Categorías** de productos (CRUD con `is_system`, snapshot en pedidos)
+- **Servicios y acabados por categoría (v2.5)**: tablas `category_services` y `category_finishes`; al crear líneas de pedido se auto-seleccionan los servicios `is_default` (desmarcables) y se expanden en un `invoice_item` por servicio
 - **Unidades** de medida (CRUD con tipo, snapshot en inventario)
 - Formatos disponibles (alta/baja de formatos)
 - Backup y restauración de la base de datos
@@ -118,7 +133,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Ya no hay entrada **Stock** en el sidebar; la bandeja de salida vive en **Pedidos** con filtro `listos`
 - Rutas `/stock` redirigen a `/pedidos?filter=listos` (detalle → `/pedidos/:id`)
 - Badge del sidebar en Pedidos = en producción + listos sin cobrar
-- Al marcar **listo**: `production_completed_at` y descuento de inventario según recetas
+- Al marcar **listo**: `production_completed_at`; el descuento de inventario ocurre por línea/servicio concluido (v2.5), no al marcar todo el pedido listo
 
 ### 3.9 Módulo Facturas (v2.2)
 - Vista financiera/contable sobre la misma tabla `invoices` (1 pedido = 1 factura)
@@ -127,7 +142,19 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Anulación con motivo y reverso en caja (sin borrado físico)
 - Rutas `/facturas`, impresión y registro de pago
 
-### 3.10 Base de datos portable y backups (v2.3)
+### 3.10 Reportes de producción (v2.5)
+- Entrada de sidebar **Reportes producción** (tras Pedidos); ruta `/reportes-produccion`
+- Tracking por línea: `invoice_items.completed_quantity` / `completed_at` vía lotes (`production_batch_items.invoice_id`)
+- Vista mensual por Área (Impresión/Laminado/Enmarcado), día y formato: Realizado vs Pendiente e importes
+- Comparativa Factura vs Salario vs Diferencia del mes en curso
+
+### 3.11 Otros gastos (v2.5)
+- Entrada de sidebar **Otros gastos** (tras Costos); ruta `/otros-gastos`
+- Tabla `other_expenses` (fecha, concepto, tipo, empleado opcional, montos CUP/USD, método, desglose de denominaciones)
+- Cada gasto genera un `cash_transactions` (egreso) que afecta el balance de caja
+- Vistas diaria y mensual
+
+### 3.12 Base de datos portable y backups (v2.3)
 - En release/ejecutable portable, la BD activa siempre se llama `flexpyme.db`.
 - `flexpyme.db` vive en el mismo directorio donde está el ejecutable; si no existe, la app la crea y aplica el esquema vigente.
 - Si existe `flexpyme.db` junto al ejecutable, la app la carga como BD activa del sistema.
@@ -146,8 +173,10 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Moneda principal**: CUP (Pesos Cubanos)
 - **Moneda secundaria**: USD (con tasa de conversión almacenada por operación)
 - **Denominaciones de billetes CUP**: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000
+- **Denominaciones de billetes USD**: 100, 50, 20, 10, 5, 2, 1
 - **Formas de pago**: Efectivo | Transferencia
 - La tasa USD/CUP se establece en Configuración y se guarda en cada transacción
+- **Vuelto (v2.5)**: si el efectivo recibido supera el importe aplicado, el vuelto se desglosa por denominaciones y el neto en caja es recibido − vuelto; no se permite confirmar el cobro con vuelto pendiente sin resolver
 
 ---
 
@@ -155,7 +184,8 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 
 - **Estilo**: Dashboard profesional, limpio, moderno — inspirado en Odoo/FacturaScript
 - **Modo**: Dark mode por defecto (con opción de light mode en Configuración)
-- **Sidebar**: Dashboard, Pedidos, Facturas, Clientes, Empleados, Inventario, Caja, Precios, Costos, Reportes, Configuración
+- **Sidebar**: Dashboard, Pedidos, Reportes producción, Facturas, Clientes, Empleados, Inventario, Caja, Precios, Costos, Otros gastos, Reportes, Configuración
+- **Fechas en UI (v2.5)**: siempre `dd/mm/aaaa` vía `formatDate` / `formatDateTime` (`src/lib/format-date.ts`)
 - **Iconos**: Lucide React en todos los menús, botones y acciones
 - **Tipografía**: moderna y legible
 - **Colores**: paleta profesional con azul/índigo como color primario, acentos de color para estados
@@ -195,7 +225,7 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 4. La deuda anterior del cliente **no** se incluye en el total del pedido; al guardar se actualiza el balance del cliente (`balance += subtotal - anticipo - pagado`)
 5. El flujo de caja registra TODA operación de dinero (cobros a clientes, anticipos de pedido, pagos a empleados, gastos)
 6. Los empleados dados de baja no aparecen en nuevas asignaciones pero su historial se conserva
-7. El inventario descuenta materiales al marcar un pedido como **listo** (`production_status = listo`), según recetas activas en `inventory_recipes`; si el stock es insuficiente la operación falla y el pedido no cambia de estado
+7. El inventario descuenta materiales **al concluir cada línea/servicio** vía lotes de trabajo (`inventory_recipes`); si falta material se permite déficit (existencia negativa), se marca `resource_missing` en la línea y en el pedido, y no se bloquea la conclusión
 8. La tasa USD/CUP vigente se guarda en cada transacción para auditoría
 
 ---
@@ -281,6 +311,16 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - **Inventario operativo**: recetas de consumo (`inventory_recipes`); descuento automático al marcar pedido listo; Stock retirado del sidebar (filtro Listos en Pedidos).
 - **Empleados ↔ pedidos**: panel Registrar trabajo en detalle de pedido; `invoice_id` en líneas de lote de producción.
 - **Caja ↔ pedidos**: cobro y anticipo registran `cash_transactions` en la misma transacción al crear el pedido (`initial_payment`); historial de cobros en detalle de pedido; enlaces desde Flujo de Caja al pedido origen.
+
+### v2.5 — Reenfoque a producción (2026-07-16)
+- **Fechas UI**: `dd/mm/aaaa` vía `formatDate` / `formatDateTime`; regla Cursor `.cursor/rules/fechas.mdc`.
+- **Denominaciones USD** + `DenominationGrid` reutilizable (CUP/USD) en cobros, caja y otros gastos; vuelto con desglose que afecta el neto en caja.
+- **Config por categoría**: `category_services` / `category_finishes`; auto-selección de servicios al crear líneas; expansión a un `invoice_item` por servicio.
+- **Caja**: KPIs de flujo neto del día y de los últimos 30 días; cuadrículas de denominaciones en movimientos nuevos.
+- **Reportes de producción**: `/reportes-produccion` por Área/día/formato (Realizado vs Pendiente) + Factura vs Salario.
+- **Inventario**: descuento por línea concluida; déficit permitido con bandera `resource_missing`.
+- **Empleados**: multi-rol (`employee_extra_roles`) y nómina diaria.
+- **Otros gastos**: `/otros-gastos` con egreso automático en `cash_transactions`.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
