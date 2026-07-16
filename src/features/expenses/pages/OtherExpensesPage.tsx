@@ -156,19 +156,17 @@ export function OtherExpensesPage() {
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <Receipt className="h-6 w-6" /> Otros gastos
-          </h1>
-          <button
-            type="button"
-            className="btn btn-outline btn-sm gap-1"
-            onClick={() => setShowTypesModal(true)}
-          >
-            <Settings2 className="h-4 w-4" />
-            Configurar tipos de gasto
-          </button>
-        </div>
+        <h1 className="flex items-center gap-2 text-2xl font-bold">
+          <Receipt className="h-6 w-6" /> Otros gastos
+        </h1>
+        <button
+          type="button"
+          className="btn btn-outline btn-sm gap-1"
+          onClick={() => setShowTypesModal(true)}
+        >
+          <Settings2 className="h-4 w-4" />
+          Configurar tipos de gasto
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
