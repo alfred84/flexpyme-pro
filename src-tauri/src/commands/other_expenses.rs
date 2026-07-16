@@ -131,7 +131,7 @@ pub fn other_expense_create(payload: CreateOtherExpensePayload) -> Result<i64, S
     }
     let expense_type = payload.expense_type.trim().to_string();
     let expense_type = if expense_type.is_empty() {
-        "otros".to_string()
+        "Otros".to_string()
     } else {
         expense_type
     };

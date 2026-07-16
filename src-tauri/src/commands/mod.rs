@@ -11,6 +11,7 @@ pub mod stock;
 pub mod inventory;
 pub mod invoices;
 pub mod other_expenses;
+pub mod expense_types;
 pub mod production;
 pub mod products;
 pub mod reports;
