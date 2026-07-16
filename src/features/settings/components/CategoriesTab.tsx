@@ -13,6 +13,7 @@ import {
   Power,
   RectangleHorizontal,
   RotateCcw,
+  Settings2,
   Tag,
   Type,
 } from "lucide-react";
@@ -24,6 +25,7 @@ import {
   updateCategory,
 } from "@/db/queries/categories";
 import type { ProductCategoryDto } from "@/types/category";
+import { CategoryConfigModal } from "@/features/settings/components/CategoryConfigModal";
 import { slugify } from "@/lib/slugify";
 
 const ICON_OPTIONS = ["Image", "Layers", "BookOpen", "Album", "Box", "Type", "Book", "RectangleHorizontal", "Key", "Tag"] as const;
@@ -53,6 +55,7 @@ export function CategoriesTab() {
     queryFn: () => fetchCategories(false),
   });
   const [showModal, setShowModal] = useState(false);
+  const [configuring, setConfiguring] = useState<ProductCategoryDto | null>(null);
   const [editing, setEditing] = useState<ProductCategoryDto | null>(null);
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -164,30 +167,40 @@ export function CategoriesTab() {
                   )}
                 </td>
                 <td>
-                  {!row.isSystem && (
-                    <div className="flex gap-1">
-                      <button type="button" className="btn btn-ghost btn-xs" onClick={() => openEdit(row)}>
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                      {row.isActive ? (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-xs text-warning"
-                          onClick={() => void deactivateMutation.mutateAsync(row.id)}
-                        >
-                          <Power className="h-3 w-3" />
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs"
+                      title="Configurar servicios y acabados"
+                      onClick={() => setConfiguring(row)}
+                    >
+                      <Settings2 className="h-3 w-3" />
+                    </button>
+                    {!row.isSystem && (
+                      <>
+                        <button type="button" className="btn btn-ghost btn-xs" onClick={() => openEdit(row)}>
+                          <Pencil className="h-3 w-3" />
                         </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-xs text-success"
-                          onClick={() => void reactivateMutation.mutateAsync(row.id)}
-                        >
-                          <RotateCcw className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                  )}
+                        {row.isActive ? (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs text-warning"
+                            onClick={() => void deactivateMutation.mutateAsync(row.id)}
+                          >
+                            <Power className="h-3 w-3" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs text-success"
+                            onClick={() => void reactivateMutation.mutateAsync(row.id)}
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -257,6 +270,10 @@ export function CategoriesTab() {
           </div>
           <button type="button" className="modal-backdrop bg-transparent" aria-label="Cerrar" onClick={() => setShowModal(false)} />
         </dialog>
+      )}
+
+      {configuring && (
+        <CategoryConfigModal category={configuring} onClose={() => setConfiguring(null)} />
       )}
     </div>
   );

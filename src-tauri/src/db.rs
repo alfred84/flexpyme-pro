@@ -76,6 +76,8 @@ const EMBEDDED_INVENTORY_RECIPES_SCHEMA: &str =
     include_str!("../../src/db/migrations/0010_inventory_recipes.sql");
 const EMBEDDED_INVOICE_WORK_BATCHES_SCHEMA: &str =
     include_str!("../../src/db/migrations/0011_invoice_work_batches.sql");
+const EMBEDDED_CATEGORY_SERVICES_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0012_category_services_finishes.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -212,6 +214,13 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             conn,
             EMBEDDED_INVOICE_WORK_BATCHES_SCHEMA,
             "0011_invoice_work_batches",
+        )?;
+    }
+    if !table_exists(conn, "category_services") {
+        execute_migration(
+            conn,
+            EMBEDDED_CATEGORY_SERVICES_SCHEMA,
+            "0012_category_services_finishes",
         )?;
     }
     Ok(())

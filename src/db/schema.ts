@@ -58,6 +58,36 @@ export const formats = sqliteTable("formats", {
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 });
 
+/**
+ * Servicios/áreas configurables por categoría (Impresión, Laminado, Enmarcado...).
+ * `isDefault` marca los que se preseleccionan al crear una línea de pedido.
+ */
+export const categoryServices = sqliteTable("category_services", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  categoryId: integer("category_id")
+    .notNull()
+    .references(() => productCategories.id, { onDelete: "cascade" }),
+  service: text("service").notNull(),
+  isDefault: integer("is_default", { mode: "boolean" }).notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
+/**
+ * Acabados configurables por categoría (Brillo, 3D, Diamantado, Cuero Acrílico...).
+ * Opcionales aunque estén definidos.
+ */
+export const categoryFinishes = sqliteTable("category_finishes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  categoryId: integer("category_id")
+    .notNull()
+    .references(() => productCategories.id, { onDelete: "cascade" }),
+  finish: text("finish").notNull(),
+  isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
 export const priceList = sqliteTable("price_list", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   categoryId: integer("category_id")

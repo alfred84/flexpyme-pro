@@ -32,3 +32,25 @@ export interface UpdateCategoryPayload {
   icon?: string | null;
   sortOrder?: number;
 }
+
+/**
+ * Servicio/área configurado para una categoría (preseleccionable en pedidos).
+ */
+export interface CategoryServiceDto {
+  id: number;
+  categoryId: number;
+  service: string;
+  isDefault: boolean;
+  sortOrder: number;
+}
+
+/**
+ * Acabado configurado para una categoría (opcional).
+ */
+export interface CategoryFinishDto {
+  id: number;
+  categoryId: number;
+  finish: string;
+  isDefault: boolean;
+  sortOrder: number;
+}

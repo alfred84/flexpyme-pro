@@ -205,6 +205,194 @@ pub fn reactivate_category(id: i64) -> Result<ProductCategoryDto, String> {
     .map_err(|_| "Categoría no encontrada".to_string())
 }
 
+/// Service/area configured for a category (e.g. Impresión, Laminado, Enmarcado).
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryServiceDto {
+    pub id: i64,
+    pub category_id: i64,
+    pub service: String,
+    pub is_default: bool,
+    pub sort_order: i64,
+}
+
+/// Finish configured for a category (e.g. Brillo, 3D, Diamantado).
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryFinishDto {
+    pub id: i64,
+    pub category_id: i64,
+    pub finish: String,
+    pub is_default: bool,
+    pub sort_order: i64,
+}
+
+/// Lists all configured category services (all categories).
+#[tauri::command]
+pub fn category_services_all() -> Result<Vec<CategoryServiceDto>, String> {
+    let conn = db::open_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, category_id, service, is_default, sort_order
+             FROM category_services ORDER BY category_id, sort_order, service",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(CategoryServiceDto {
+                id: row.get(0)?,
+                category_id: row.get(1)?,
+                service: row.get(2)?,
+                is_default: row.get::<_, i64>(3)? != 0,
+                sort_order: row.get(4)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Adds a service to a category.
+#[tauri::command]
+pub fn category_service_create(
+    category_id: i64,
+    service: String,
+    is_default: bool,
+) -> Result<CategoryServiceDto, String> {
+    let service = service.trim().to_string();
+    if service.is_empty() {
+        return Err("El nombre del servicio es obligatorio".to_string());
+    }
+    let conn = db::open_connection()?;
+    let exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM category_services WHERE category_id = ?1 AND lower(service) = lower(?2)",
+            params![category_id, service],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if exists > 0 {
+        return Err("Ese servicio ya está configurado para la categoría".to_string());
+    }
+    conn.execute(
+        "INSERT INTO category_services (category_id, service, is_default, sort_order)
+         VALUES (?1, ?2, ?3, 0)",
+        params![category_id, service, if is_default { 1 } else { 0 }],
+    )
+    .map_err(|e| e.to_string())?;
+    let id = conn.last_insert_rowid();
+    Ok(CategoryServiceDto {
+        id,
+        category_id,
+        service,
+        is_default,
+        sort_order: 0,
+    })
+}
+
+/// Toggles the default-selected flag of a category service.
+#[tauri::command]
+pub fn category_service_set_default(id: i64, is_default: bool) -> Result<(), String> {
+    let conn = db::open_connection()?;
+    conn.execute(
+        "UPDATE category_services SET is_default = ?1 WHERE id = ?2",
+        params![if is_default { 1 } else { 0 }, id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Removes a category service.
+#[tauri::command]
+pub fn category_service_delete(id: i64) -> Result<(), String> {
+    let conn = db::open_connection()?;
+    conn.execute("DELETE FROM category_services WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Lists all configured category finishes (all categories).
+#[tauri::command]
+pub fn category_finishes_all() -> Result<Vec<CategoryFinishDto>, String> {
+    let conn = db::open_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, category_id, finish, is_default, sort_order
+             FROM category_finishes ORDER BY category_id, sort_order, finish",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(CategoryFinishDto {
+                id: row.get(0)?,
+                category_id: row.get(1)?,
+                finish: row.get(2)?,
+                is_default: row.get::<_, i64>(3)? != 0,
+                sort_order: row.get(4)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Adds a finish to a category.
+#[tauri::command]
+pub fn category_finish_create(
+    category_id: i64,
+    finish: String,
+    is_default: bool,
+) -> Result<CategoryFinishDto, String> {
+    let finish = finish.trim().to_string();
+    if finish.is_empty() {
+        return Err("El nombre del acabado es obligatorio".to_string());
+    }
+    let conn = db::open_connection()?;
+    let exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM category_finishes WHERE category_id = ?1 AND lower(finish) = lower(?2)",
+            params![category_id, finish],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if exists > 0 {
+        return Err("Ese acabado ya está configurado para la categoría".to_string());
+    }
+    conn.execute(
+        "INSERT INTO category_finishes (category_id, finish, is_default, sort_order)
+         VALUES (?1, ?2, ?3, 0)",
+        params![category_id, finish, if is_default { 1 } else { 0 }],
+    )
+    .map_err(|e| e.to_string())?;
+    let id = conn.last_insert_rowid();
+    Ok(CategoryFinishDto {
+        id,
+        category_id,
+        finish,
+        is_default,
+        sort_order: 0,
+    })
+}
+
+/// Toggles the default-selected flag of a category finish.
+#[tauri::command]
+pub fn category_finish_set_default(id: i64, is_default: bool) -> Result<(), String> {
+    let conn = db::open_connection()?;
+    conn.execute(
+        "UPDATE category_finishes SET is_default = ?1 WHERE id = ?2",
+        params![if is_default { 1 } else { 0 }, id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Removes a category finish.
+#[tauri::command]
+pub fn category_finish_delete(id: i64) -> Result<(), String> {
+    let conn = db::open_connection()?;
+    conn.execute("DELETE FROM category_finishes WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Resolves the display label stored in invoice item snapshots.
 pub fn category_display_name(conn: &rusqlite::Connection, category_id: i64) -> Result<String, String> {
     conn.query_row(
