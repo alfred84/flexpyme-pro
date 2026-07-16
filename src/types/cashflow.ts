@@ -33,6 +33,16 @@ export interface CashDailyPointDto {
 }
 
 /**
+ * Flujo neto del día actual y del mes en curso.
+ */
+export interface CashNetSummaryDto {
+  netTodayCup: number;
+  netTodayUsd: number;
+  netMonthCup: number;
+  netMonthUsd: number;
+}
+
+/**
  * Filtros para el historial de caja.
  */
 export interface CashFilters {

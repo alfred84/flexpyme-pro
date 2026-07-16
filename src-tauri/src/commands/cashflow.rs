@@ -39,6 +39,16 @@ pub struct CashDailyPointDto {
     pub net_cup: f64,
 }
 
+/// Net cash flow for the current day and the current month.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CashNetSummaryDto {
+    pub net_today_cup: f64,
+    pub net_today_usd: f64,
+    pub net_month_cup: f64,
+    pub net_month_usd: f64,
+}
+
 /// Payload for creating a manual cash transaction.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -179,6 +189,40 @@ pub fn cash_daily_series() -> Result<Vec<CashDailyPointDto>, String> {
         })
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Net cash flow for the current day and the current month (in course).
+#[tauri::command]
+pub fn cash_net_summary() -> Result<CashNetSummaryDto, String> {
+    let conn = db::open_connection()?;
+    let (net_today_cup, net_today_usd): (f64, f64) = conn
+        .query_row(
+            "SELECT
+                COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount_cup ELSE -amount_cup END), 0),
+                COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount_usd ELSE -amount_usd END), 0)
+             FROM cash_transactions
+             WHERE date(date) = date('now', 'localtime')",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| e.to_string())?;
+    let (net_month_cup, net_month_usd): (f64, f64) = conn
+        .query_row(
+            "SELECT
+                COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount_cup ELSE -amount_cup END), 0),
+                COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount_usd ELSE -amount_usd END), 0)
+             FROM cash_transactions
+             WHERE strftime('%Y-%m', date) = strftime('%Y-%m', 'now', 'localtime')",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(CashNetSummaryDto {
+        net_today_cup,
+        net_today_usd,
+        net_month_cup,
+        net_month_usd,
+    })
 }
 
 /// Creates a manual cash transaction (ingreso/egreso).

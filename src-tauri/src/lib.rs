@@ -140,6 +140,7 @@ pub fn run() {
             commands::cashflow::cash_balance,
             commands::cashflow::cash_transactions_list,
             commands::cashflow::cash_daily_series,
+            commands::cashflow::cash_net_summary,
             commands::cashflow::cash_transaction_create
         ])
         .run(tauri::generate_context!())

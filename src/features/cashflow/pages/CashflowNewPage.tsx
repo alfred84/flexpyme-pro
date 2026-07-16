@@ -2,6 +2,12 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createCashTransaction } from "@/db/queries/cashflow";
+import { DenominationGrid } from "@/components/cashflow/DenominationGrid";
+import {
+  emptyDenominationCounts,
+  serializeDenominationBreakdown,
+  sumDenominationCounts,
+} from "@/lib/cash-counts";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { pushFlashMessage } from "@/lib/flash-message";
 
@@ -21,7 +27,21 @@ export function CashflowNewPage() {
   const [currency, setCurrency] = useState<"CUP" | "USD">("CUP");
   const [amount, setAmount] = useState("");
   const [exchangeRate, setExchangeRate] = useState(String(settings.usdExchangeRate || ""));
+  const [cupCounts, setCupCounts] = useState<Record<string, number>>(() => emptyDenominationCounts("CUP"));
+  const [usdCounts, setUsdCounts] = useState<Record<string, number>>(() => emptyDenominationCounts("USD"));
   const [error, setError] = useState<string | null>(null);
+
+  const isCash = paymentMethod === "efectivo";
+
+  const handleCountsChange = (next: Record<string, number>) => {
+    if (currency === "USD") {
+      setUsdCounts(next);
+      setAmount(String(sumDenominationCounts(next, "USD")));
+    } else {
+      setCupCounts(next);
+      setAmount(String(sumDenominationCounts(next, "CUP")));
+    }
+  };
 
   const mutation = useMutation({
     mutationFn: createCashTransaction,
@@ -59,6 +79,10 @@ export function CashflowNewPage() {
       amountCup = value * rate;
     }
 
+    const denominationBreakdown = isCash
+      ? serializeDenominationBreakdown(currency === "USD" ? usdCounts : cupCounts, currency)
+      : null;
+
     await mutation.mutateAsync({
       transactionType,
       concept: concept.trim(),
@@ -67,7 +91,7 @@ export function CashflowNewPage() {
       amountUsd,
       exchangeRate: rate,
       paymentMethod,
-      denominationBreakdown: null,
+      denominationBreakdown,
     });
   };
 
@@ -163,6 +187,16 @@ export function CashflowNewPage() {
               className="input input-bordered"
               value={exchangeRate}
               onChange={(e) => setExchangeRate(e.target.value)}
+            />
+          </div>
+        )}
+        {isCash && (
+          <div className="sm:col-span-2 rounded-lg border border-base-300 p-3">
+            <DenominationGrid
+              currency={currency}
+              counts={currency === "USD" ? usdCounts : cupCounts}
+              onChange={handleCountsChange}
+              label="Desglose de efectivo (opcional, actualiza el importe):"
             />
           </div>
         )}

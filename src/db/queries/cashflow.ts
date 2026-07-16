@@ -3,6 +3,7 @@ import type {
   CashBalanceDto,
   CashDailyPointDto,
   CashFilters,
+  CashNetSummaryDto,
   CashTransactionDto,
   CreateTransactionPayload,
 } from "@/types/cashflow";
@@ -26,6 +27,13 @@ export async function fetchCashTransactions(filters?: CashFilters): Promise<Cash
  */
 export async function fetchCashDailySeries(): Promise<CashDailyPointDto[]> {
   return invoke<CashDailyPointDto[]>("cash_daily_series");
+}
+
+/**
+ * Loads the net cash flow for today and the current month.
+ */
+export async function fetchCashNetSummary(): Promise<CashNetSummaryDto> {
+  return invoke<CashNetSummaryDto>("cash_net_summary");
 }
 
 /**

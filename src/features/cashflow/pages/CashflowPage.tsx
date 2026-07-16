@@ -10,7 +10,12 @@ import {
   YAxis,
 } from "recharts";
 import { ArrowDownCircle, ArrowUpCircle, Plus, Wallet } from "lucide-react";
-import { fetchCashBalance, fetchCashDailySeries, fetchCashTransactions } from "@/db/queries/cashflow";
+import {
+  fetchCashBalance,
+  fetchCashDailySeries,
+  fetchCashNetSummary,
+  fetchCashTransactions,
+} from "@/db/queries/cashflow";
 import { CashTransactionReference } from "@/components/cashflow/CashTransactionReference";
 import { formatDateTime } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
@@ -24,9 +29,11 @@ import { formatMoney } from "@/lib/format-money";
 export function CashflowPage() {
   const balanceQuery = useQuery({ queryKey: ["cashflow", "balance"], queryFn: fetchCashBalance });
   const seriesQuery = useQuery({ queryKey: ["cashflow", "series"], queryFn: fetchCashDailySeries });
+  const netQuery = useQuery({ queryKey: ["cashflow", "net-summary"], queryFn: fetchCashNetSummary });
   const txQuery = useQuery({ queryKey: ["cashflow", "list"], queryFn: () => fetchCashTransactions() });
 
   const balance = balanceQuery.data;
+  const net = netQuery.data;
   const recent = (txQuery.data ?? []).slice(0, 10);
   const series = (seriesQuery.data ?? []).map((point) => ({ name: point.date.slice(5), net: point.netCup }));
 
@@ -43,6 +50,37 @@ export function CashflowPage() {
           <Link to="/caja/nuevo" className="btn btn-primary btn-sm gap-1">
             <Plus className="h-4 w-4" /> Movimiento
           </Link>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="card border border-primary/20 bg-base-100 shadow-sm">
+          <div className="card-body p-4">
+            <p className="text-xs uppercase text-base-content/60">Flujo neto (hoy)</p>
+            <p
+              className={`text-2xl font-semibold ${(net?.netTodayCup ?? 0) >= 0 ? "text-success" : "text-error"}`}
+            >
+              {(net?.netTodayCup ?? 0) >= 0 ? "+" : "−"}
+              {formatMoney(Math.abs(net?.netTodayCup ?? 0))}
+            </p>
+            {Math.abs(net?.netTodayUsd ?? 0) > 0.001 && (
+              <p className="text-xs text-base-content/60">USD neto: {(net?.netTodayUsd ?? 0).toFixed(2)}</p>
+            )}
+          </div>
+        </div>
+        <div className="card border border-secondary/20 bg-base-100 shadow-sm">
+          <div className="card-body p-4">
+            <p className="text-xs uppercase text-base-content/60">Flujo neto (mes en curso)</p>
+            <p
+              className={`text-2xl font-semibold ${(net?.netMonthCup ?? 0) >= 0 ? "text-success" : "text-error"}`}
+            >
+              {(net?.netMonthCup ?? 0) >= 0 ? "+" : "−"}
+              {formatMoney(Math.abs(net?.netMonthCup ?? 0))}
+            </p>
+            {Math.abs(net?.netMonthUsd ?? 0) > 0.001 && (
+              <p className="text-xs text-base-content/60">USD neto: {(net?.netMonthUsd ?? 0).toFixed(2)}</p>
+            )}
+          </div>
         </div>
       </div>
 
