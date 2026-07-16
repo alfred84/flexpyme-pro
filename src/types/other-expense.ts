@@ -1,18 +1,26 @@
 /**
- * Tipos de otros gastos operativos.
+ * Tipo de gasto configurable del módulo Otros gastos.
  */
-export const OTHER_EXPENSE_TYPES = ["almuerzo", "transporte", "salario", "otros"] as const;
-export type OtherExpenseType = (typeof OTHER_EXPENSE_TYPES)[number];
+export interface ExpenseTypeDto {
+  id: number;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+}
 
 /**
- * Etiqueta en español por tipo de gasto.
+ * Payload para crear un tipo de gasto.
  */
-export const OTHER_EXPENSE_TYPE_LABELS: Record<OtherExpenseType, string> = {
-  almuerzo: "Almuerzo",
-  transporte: "Transporte",
-  salario: "Salario",
-  otros: "Otros",
-};
+export interface CreateExpenseTypePayload {
+  name: string;
+}
+
+/**
+ * Payload para renombrar un tipo de gasto.
+ */
+export interface UpdateExpenseTypePayload {
+  name: string;
+}
 
 /**
  * Otro gasto operativo (afecta la caja como egreso).
@@ -21,6 +29,7 @@ export interface OtherExpenseDto {
   id: number;
   date: string;
   concept: string;
+  /** Snapshot del nombre del tipo al registrar. */
   expenseType: string;
   employeeId: number | null;
   employeeName: string | null;

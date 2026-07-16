@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Receipt, Trash2 } from "lucide-react";
+import { Receipt, Settings2, Trash2 } from "lucide-react";
 import {
   createOtherExpense,
   deleteOtherExpense,
   fetchOtherExpenses,
   fetchOtherExpensesSummary,
 } from "@/db/queries/other-expenses";
+import { fetchExpenseTypes } from "@/db/queries/expense-types";
 import { fetchEmployees } from "@/db/queries/employees";
 import { DenominationGrid } from "@/components/cashflow/DenominationGrid";
+import { ExpenseTypesConfigModal } from "@/features/expenses/components/ExpenseTypesConfigModal";
 import {
   emptyDenominationCounts,
   serializeDenominationBreakdown,
@@ -17,11 +19,6 @@ import {
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { formatDate, todayIso } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
-import {
-  OTHER_EXPENSE_TYPES,
-  OTHER_EXPENSE_TYPE_LABELS,
-  type OtherExpenseType,
-} from "@/types/other-expense";
 
 /**
  * Módulo "Otros gastos": registra gastos operativos (almuerzo, transporte,
@@ -35,7 +32,7 @@ export function OtherExpensesPage() {
 
   const [date, setDate] = useState(() => todayIso());
   const [concept, setConcept] = useState("");
-  const [expenseType, setExpenseType] = useState<OtherExpenseType>("almuerzo");
+  const [expenseType, setExpenseType] = useState("");
   const [employeeId, setEmployeeId] = useState<number | "">("");
   const [paymentMethod, setPaymentMethod] = useState<"efectivo" | "transferencia">("efectivo");
   const [currency, setCurrency] = useState<"CUP" | "USD">("CUP");
@@ -47,6 +44,7 @@ export function OtherExpensesPage() {
     emptyDenominationCounts("USD"),
   );
   const [error, setError] = useState<string | null>(null);
+  const [showTypesModal, setShowTypesModal] = useState(false);
 
   const isCash = paymentMethod === "efectivo";
 
@@ -62,6 +60,15 @@ export function OtherExpensesPage() {
     queryKey: ["employees", "list"],
     queryFn: () => fetchEmployees(true),
   });
+  const typesQuery = useQuery({
+    queryKey: ["expense-types", "active"],
+    queryFn: () => fetchExpenseTypes(true),
+  });
+
+  const activeTypes = typesQuery.data ?? [];
+  const selectedType = activeTypes.some((t) => t.name === expenseType)
+    ? expenseType
+    : (activeTypes[0]?.name ?? "");
 
   const expenses = expensesQuery.data ?? [];
   const summary = summaryQuery.data;
@@ -104,6 +111,10 @@ export function OtherExpensesPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!selectedType.trim()) {
+      setError("Configura al menos un tipo de gasto activo antes de registrar.");
+      return;
+    }
     if (!concept.trim()) {
       setError("El concepto es obligatorio.");
       return;
@@ -133,7 +144,7 @@ export function OtherExpensesPage() {
     createMutation.mutate({
       date,
       concept: concept.trim(),
-      expenseType,
+      expenseType: selectedType,
       employeeId: employeeId === "" ? null : employeeId,
       amountCup,
       amountUsd,
@@ -145,9 +156,19 @@ export function OtherExpensesPage() {
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="flex items-center gap-2 text-2xl font-bold">
-          <Receipt className="h-6 w-6" /> Otros gastos
-        </h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="flex items-center gap-2 text-2xl font-bold">
+            <Receipt className="h-6 w-6" /> Otros gastos
+          </h1>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm gap-1"
+            onClick={() => setShowTypesModal(true)}
+          >
+            <Settings2 className="h-4 w-4" />
+            Configurar tipos de gasto
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -181,6 +202,14 @@ export function OtherExpensesPage() {
         </div>
       )}
 
+      {typesQuery.isSuccess && activeTypes.length === 0 && (
+        <div className="alert alert-warning">
+          <span>
+            No hay tipos de gasto activos. Usa «Configurar tipos de gasto» para crear al menos uno.
+          </span>
+        </div>
+      )}
+
       <form
         className="grid grid-cols-1 gap-4 rounded-lg border border-base-300 bg-base-100 p-4 sm:grid-cols-2 xl:grid-cols-3"
         onSubmit={handleSubmit}
@@ -198,14 +227,19 @@ export function OtherExpensesPage() {
           <span className="label-text">Tipo</span>
           <select
             className="select select-bordered select-sm"
-            value={expenseType}
-            onChange={(e) => setExpenseType(e.target.value as OtherExpenseType)}
+            value={selectedType}
+            onChange={(e) => setExpenseType(e.target.value)}
+            disabled={activeTypes.length === 0}
           >
-            {OTHER_EXPENSE_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {OTHER_EXPENSE_TYPE_LABELS[t]}
-              </option>
-            ))}
+            {activeTypes.length === 0 ? (
+              <option value="">Sin tipos activos</option>
+            ) : (
+              activeTypes.map((t) => (
+                <option key={t.id} value={t.name}>
+                  {t.name}
+                </option>
+              ))
+            )}
           </select>
         </label>
         <label className="form-control">
@@ -274,7 +308,11 @@ export function OtherExpensesPage() {
           </div>
         )}
         <div className="sm:col-span-2 xl:col-span-3">
-          <button type="submit" className="btn btn-primary btn-sm" disabled={createMutation.isPending}>
+          <button
+            type="submit"
+            className="btn btn-primary btn-sm"
+            disabled={createMutation.isPending || activeTypes.length === 0}
+          >
             {createMutation.isPending ? (
               <span className="loading loading-spinner loading-sm" />
             ) : (
@@ -302,9 +340,7 @@ export function OtherExpensesPage() {
               <tr key={exp.id}>
                 <td className="text-xs">{formatDate(exp.date)}</td>
                 <td>{exp.concept}</td>
-                <td className="capitalize">
-                  {OTHER_EXPENSE_TYPE_LABELS[exp.expenseType as OtherExpenseType] ?? exp.expenseType}
-                </td>
+                <td>{exp.expenseType}</td>
                 <td>{exp.employeeName ?? "—"}</td>
                 <td className="capitalize">{exp.paymentMethod}</td>
                 <td className="text-right font-mono">{formatMoney(exp.amountCup)}</td>
@@ -335,6 +371,10 @@ export function OtherExpensesPage() {
           </tbody>
         </table>
       </div>
+
+      {showTypesModal && (
+        <ExpenseTypesConfigModal onClose={() => setShowTypesModal(false)} />
+      )}
     </section>
   );
 }
