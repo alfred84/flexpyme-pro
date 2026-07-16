@@ -36,6 +36,8 @@ pub fn run() {
             commands::clients::clients_create,
             commands::clients::clients_update,
             commands::clients::clients_soft_delete,
+            commands::clients::clients_list_deleted,
+            commands::clients::clients_restore,
             commands::products::product_categories_list,
             commands::categories::get_categories,
             commands::categories::create_category,

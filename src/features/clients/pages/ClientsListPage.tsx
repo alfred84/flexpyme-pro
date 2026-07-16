@@ -9,8 +9,10 @@ import {
 } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
-import { fetchClients } from "@/db/queries/clients";
+import { RestoreClientsModal } from "@/features/clients/components/RestoreClientsModal";
+import { fetchClients, fetchDeletedClients } from "@/db/queries/clients";
 import type { ClientDto } from "@/types/client";
 import { formatMoney } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
@@ -67,11 +69,18 @@ export function ClientsListPage() {
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [flash] = useState<FlashMessage | null>(() => popFlashMessage());
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
   const columns = useClientColumns();
   const clientsQuery = useQuery({
     queryKey: ["clients", "list"],
     queryFn: fetchClients,
   });
+  const deletedQuery = useQuery({
+    queryKey: ["clients", "deleted"],
+    queryFn: fetchDeletedClients,
+  });
+
+  const hasDeletedClients = (deletedQuery.data?.length ?? 0) > 0;
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table API is intentionally imperative
   const table = useReactTable({
@@ -90,9 +99,22 @@ export function ClientsListPage() {
     <section className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold">Clientes</h1>
-        <Link to="/clientes/nuevo" className="btn btn-primary btn-sm sm:btn-md">
-          Nuevo cliente
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {hasDeletedClients && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm sm:btn-md gap-1"
+              onClick={() => setShowRestoreModal(true)}
+            >
+              <RotateCcw className="h-4 w-4" />
+              Restaurar clientes
+              <span className="badge badge-sm badge-ghost">{deletedQuery.data?.length}</span>
+            </button>
+          )}
+          <Link to="/clientes/nuevo" className="btn btn-primary btn-sm sm:btn-md">
+            Nuevo cliente
+          </Link>
+        </div>
       </div>
 
       {clientsQuery.isLoading && <p>Cargando clientes...</p>}
@@ -166,6 +188,8 @@ export function ClientsListPage() {
           </div>
         </>
       )}
+
+      {showRestoreModal && <RestoreClientsModal onClose={() => setShowRestoreModal(false)} />}
     </section>
   );
 }

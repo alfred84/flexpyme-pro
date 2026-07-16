@@ -3,6 +3,7 @@ import type {
   ClientDto,
   ClientWorkHistoryDto,
   CreateClientPayload,
+  DeletedClientDto,
   UpdateClientPayload,
 } from "@/types/client";
 
@@ -46,4 +47,22 @@ export async function updateClient(payload: UpdateClientPayload): Promise<void> 
  */
 export async function softDeleteClient(id: number): Promise<void> {
   return invoke<void>("clients_soft_delete", { id });
+}
+
+/**
+ * Lista clientes con eliminación lógica (candidatos a restaurar).
+ *
+ * @returns Clientes con `deleted_at` no nulo, más recientes primero.
+ */
+export async function fetchDeletedClients(): Promise<DeletedClientDto[]> {
+  return invoke<DeletedClientDto[]>("clients_list_deleted");
+}
+
+/**
+ * Restaura un cliente eliminado lógicamente (limpia `deleted_at`).
+ *
+ * @param id - Identificador del cliente.
+ */
+export async function restoreClient(id: number): Promise<void> {
+  return invoke<void>("clients_restore", { id });
 }

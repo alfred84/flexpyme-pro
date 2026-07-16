@@ -286,3 +286,66 @@ pub fn clients_soft_delete(id: i64) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Soft-deleted client row for the restore modal.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeletedClientDto {
+    pub id: i64,
+    pub code: String,
+    pub name: String,
+    pub phone: Option<String>,
+    pub balance: f64,
+    pub deleted_at: String,
+}
+
+/// Lists soft-deleted clients ordered by most recently deleted first.
+#[tauri::command]
+pub fn clients_list_deleted() -> Result<Vec<DeletedClientDto>, String> {
+    let conn = db::open_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, code, name, phone, balance, deleted_at
+             FROM clients
+             WHERE deleted_at IS NOT NULL
+             ORDER BY deleted_at DESC, id DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(DeletedClientDto {
+                id: row.get(0)?,
+                code: row.get(1)?,
+                name: row.get(2)?,
+                phone: row.get(3)?,
+                balance: row.get(4)?,
+                deleted_at: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
+/// Restores a soft-deleted client by clearing deleted_at.
+#[tauri::command]
+pub fn clients_restore(id: i64) -> Result<(), String> {
+    let conn = db::open_connection()?;
+    let updated = conn
+        .execute(
+            "UPDATE clients SET deleted_at = NULL, updated_at = datetime('now')
+             WHERE id = ?1 AND deleted_at IS NOT NULL",
+            params![id],
+        )
+        .map_err(|e| e.to_string())?;
+
+    if updated == 0 {
+        return Err("Cliente eliminado no encontrado".to_string());
+    }
+    Ok(())
+}

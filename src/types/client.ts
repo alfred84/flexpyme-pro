@@ -38,6 +38,18 @@ export interface ClientWorkHistoryDto {
 }
 
 /**
+ * Cliente con eliminación lógica, para el modal de restauración.
+ */
+export interface DeletedClientDto {
+  id: number;
+  code: string;
+  name: string;
+  phone: string | null;
+  balance: number;
+  deletedAt: string;
+}
+
+/**
  * Payload for creating a client.
  */
 export interface CreateClientPayload {
