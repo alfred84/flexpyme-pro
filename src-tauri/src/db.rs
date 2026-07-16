@@ -78,6 +78,8 @@ const EMBEDDED_INVOICE_WORK_BATCHES_SCHEMA: &str =
     include_str!("../../src/db/migrations/0011_invoice_work_batches.sql");
 const EMBEDDED_CATEGORY_SERVICES_SCHEMA: &str =
     include_str!("../../src/db/migrations/0012_category_services_finishes.sql");
+const EMBEDDED_CASH_CHANGE_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0013_cash_change_breakdown.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -222,6 +224,9 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             EMBEDDED_CATEGORY_SERVICES_SCHEMA,
             "0012_category_services_finishes",
         )?;
+    }
+    if !column_exists(conn, "cash_sessions", "change_breakdown") {
+        execute_migration(conn, EMBEDDED_CASH_CHANGE_SCHEMA, "0013_cash_change_breakdown")?;
     }
     Ok(())
 }

@@ -10,6 +10,7 @@ import { pedidosListSearch } from "@/lib/pedidos-search";
 import {
   OrderCashierSection,
   buildCountsPayload,
+  computeChangePending,
   computeReceivedAmount,
   emptyDenominationCounts,
   type OrderCashierState,
@@ -70,9 +71,11 @@ export function InvoiceNewPage() {
   }));
   const [cashier, setCashier] = useState<OrderCashierState>(() => ({
     counts: emptyDenominationCounts(),
+    usdCounts: emptyDenominationCounts("USD"),
     amountCup: "",
     amountUsd: "",
     transferConcept: "",
+    changeCounts: emptyDenominationCounts(),
   }));
 
   const categoryNames = useMemo(() => {
@@ -118,6 +121,10 @@ export function InvoiceNewPage() {
   );
 
   const pendingAfterPay = Math.max(orderTotal - received, 0);
+  const changePending = useMemo(
+    () => (canCheckout ? computeChangePending(received, orderTotal, cashier.changeCounts) : false),
+    [canCheckout, received, orderTotal, cashier.changeCounts],
+  );
 
   const saveMutation = useMutation({
     mutationFn: async (collectPayment: boolean) => {
@@ -130,6 +137,7 @@ export function InvoiceNewPage() {
       const isUsd = payment.paymentMethod === "efectivo" && payment.paymentCurrency === "USD";
       const isTransfer = payment.paymentMethod === "transferencia";
       const counts = !isUsd && !isTransfer ? buildCountsPayload(cashier.counts) : null;
+      const changeCounts = !isTransfer ? buildCountsPayload(cashier.changeCounts) : null;
 
       const res = await createInvoice({
         clientId,
@@ -153,6 +161,7 @@ export function InvoiceNewPage() {
                   : null,
                 exchangeRate: isUsd ? exchangeRate : null,
                 transferConcept: (cashier.transferConcept || payment.transferConcept).trim() || null,
+                changeCounts,
               }
             : null,
         items,
@@ -207,8 +216,10 @@ export function InvoiceNewPage() {
       setFormError("El anticipado no puede ser negativo.");
       return false;
     }
-    if (received - orderTotal > 1e-6) {
-      setFormError("El cobro no puede ser mayor que el total del pedido.");
+    if (changePending) {
+      setFormError(
+        "Hay vuelto pendiente por entregar. Cuadra el desglose de billetes del vuelto antes de cobrar.",
+      );
       return false;
     }
     return true;
@@ -339,7 +350,7 @@ export function InvoiceNewPage() {
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
-                  disabled={saveMutation.isPending || received <= 1e-6}
+                  disabled={saveMutation.isPending || received <= 1e-6 || changePending}
                   onClick={() => handleSave(true)}
                 >
                   {saveMutation.isPending ? (

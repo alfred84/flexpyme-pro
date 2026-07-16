@@ -48,6 +48,8 @@ pub struct InitialPaymentPayload {
     pub amount_usd: Option<f64>,
     pub exchange_rate: Option<f64>,
     pub transfer_concept: Option<String>,
+    /// Desglose de billetes CUP entregados como vuelto (denominación -> cantidad).
+    pub change_counts: Option<HashMap<String, i64>>,
 }
 
 impl InitialPaymentPayload {
@@ -60,6 +62,7 @@ impl InitialPaymentPayload {
             amount_usd: self.amount_usd,
             exchange_rate: self.exchange_rate,
             transfer_concept: self.transfer_concept,
+            change_counts: self.change_counts,
         }
     }
 }
@@ -76,6 +79,8 @@ pub struct CashierRegisterPayload {
     pub amount_usd: Option<f64>,
     pub exchange_rate: Option<f64>,
     pub transfer_concept: Option<String>,
+    /// Desglose de billetes CUP entregados como vuelto (denominación -> cantidad).
+    pub change_counts: Option<HashMap<String, i64>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -234,6 +239,24 @@ pub fn apply_invoice_payment_in_tx(
     let amount_applied = amount_received_cup.min(balance);
     let change_given = (amount_received_cup - balance).max(0.0);
 
+    // Validación de vuelto: si hay vuelto y se entregó desglose, debe cuadrar.
+    let change_breakdown_json = if let Some(change_counts) = &payload.change_counts {
+        let change_sum = sum_from_counts(change_counts)?;
+        if change_sum > EPS {
+            if (change_sum - change_given).abs() > 0.5 {
+                return Err(format!(
+                    "El vuelto entregado ({:.2} CUP) no coincide con el vuelto a devolver ({:.2} CUP).",
+                    change_sum, change_given
+                ));
+            }
+            Some(serde_json::to_string(change_counts).map_err(|e| e.to_string())?)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     let new_paid = paid + amount_applied;
     let new_balance = (total - new_paid).max(0.0);
     let payment_status = if new_balance <= EPS {
@@ -264,16 +287,17 @@ pub fn apply_invoice_payment_in_tx(
         .map_err(|e| e.to_string())?;
 
     let mut session_id: Option<i64> = None;
-    if tx_method == "efectivo" && breakdown_json.is_some() {
+    if tx_method == "efectivo" && (breakdown_json.is_some() || change_breakdown_json.is_some()) {
         tx.execute(
-            "INSERT INTO cash_sessions (invoice_id, total_amount, amount_received, change_given, denomination_breakdown)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO cash_sessions (invoice_id, total_amount, amount_received, change_given, denomination_breakdown, change_breakdown)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 payload.invoice_id,
                 balance,
                 amount_received_cup,
                 change_given,
-                breakdown_json
+                breakdown_json,
+                change_breakdown_json
             ],
         )
         .map_err(|e| e.to_string())?;

@@ -38,95 +38,88 @@ export function OrderPaymentSection(props: OrderPaymentSectionProps) {
   };
 
   return (
-    <div className="card bg-base-100 shadow">
-      <div className="card-body space-y-3">
-        <h2 className="card-title text-base">Método de pago</h2>
-
-        <div className="flex flex-wrap gap-2">
-          <label className="label cursor-pointer gap-2">
-            <input
-              type="radio"
-              name="payment-method"
-              className="radio radio-sm"
-              checked={value.paymentMethod === "efectivo"}
-              onChange={() => setMethod("efectivo")}
-            />
-            <span className="label-text">Efectivo</span>
-          </label>
-          <label className="label cursor-pointer gap-2">
-            <input
-              type="radio"
-              name="payment-method"
-              className="radio radio-sm"
-              checked={value.paymentMethod === "transferencia"}
-              onChange={() => setMethod("transferencia")}
-            />
-            <span className="label-text">Transferencia</span>
-          </label>
+    <div className="card bg-base-100 shadow-sm">
+      <div className="card-body gap-2 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="card-title text-sm">Método de pago</h2>
+          <div className="join">
+            <button
+              type="button"
+              className={`btn btn-xs join-item ${value.paymentMethod === "efectivo" ? "btn-primary" : "btn-ghost"}`}
+              onClick={() => setMethod("efectivo")}
+            >
+              Efectivo
+            </button>
+            <button
+              type="button"
+              className={`btn btn-xs join-item ${value.paymentMethod === "transferencia" ? "btn-primary" : "btn-ghost"}`}
+              onClick={() => setMethod("transferencia")}
+            >
+              Transferencia
+            </button>
+          </div>
         </div>
 
         {!isTransfer && (
-          <div className="flex flex-wrap gap-2">
-            <span className="text-sm text-base-content/70 w-full">Moneda:</span>
-            <label className="label cursor-pointer gap-2">
-              <input
-                type="radio"
-                name="payment-currency"
-                className="radio radio-sm"
-                checked={value.paymentCurrency === "CUP"}
-                onChange={() => onChange({ ...value, paymentCurrency: "CUP" })}
-              />
-              <span className="label-text">CUP</span>
-            </label>
-            <label className="label cursor-pointer gap-2">
-              <input
-                type="radio"
-                name="payment-currency"
-                className="radio radio-sm"
-                checked={value.paymentCurrency === "USD"}
-                onChange={() => onChange({ ...value, paymentCurrency: "USD" })}
-              />
-              <span className="label-text">USD</span>
-            </label>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-base-content/70">Moneda</span>
+            <div className="join">
+              <button
+                type="button"
+                className={`btn btn-xs join-item ${value.paymentCurrency === "CUP" ? "btn-secondary" : "btn-ghost"}`}
+                onClick={() => onChange({ ...value, paymentCurrency: "CUP" })}
+              >
+                CUP
+              </button>
+              <button
+                type="button"
+                className={`btn btn-xs join-item ${value.paymentCurrency === "USD" ? "btn-secondary" : "btn-ghost"}`}
+                onClick={() => onChange({ ...value, paymentCurrency: "USD" })}
+              >
+                USD
+              </button>
+            </div>
           </div>
         )}
 
         {isUsd && (
-          <div className="space-y-2 rounded-lg bg-base-200 p-3 text-sm">
+          <div className="space-y-1 rounded-lg bg-base-200 p-2 text-xs">
             <label className="form-control">
-              <span className="label-text">Tasa aplicada (1 USD = CUP)</span>
+              <span className="label-text text-xs">Tasa aplicada (1 USD = CUP)</span>
               <input
                 type="number"
-                className="input input-bordered input-sm"
+                className="input input-bordered input-xs"
                 value={value.exchangeRate}
                 onChange={(e) => onChange({ ...value, exchangeRate: e.target.value })}
               />
             </label>
-            <p>Total en USD: {formatMoney(amountUsd).replace("$", "$ ")} USD</p>
-            <p>Total en CUP: {formatMoney(totalCup)}</p>
-            <p className="text-xs text-base-content/60">
-              Tasa cargada de Configuración; editable solo para este pedido.
-            </p>
+            <div className="flex justify-between">
+              <span>Total USD</span>
+              <span>{formatMoney(amountUsd).replace("$", "$ ")} USD</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Total CUP</span>
+              <span>{formatMoney(totalCup)}</span>
+            </div>
           </div>
         )}
 
         {isTransfer && (
-          <div className="space-y-2 rounded-lg bg-base-200 p-3 text-sm">
-            <p className="text-base-content/70">Solo CUP · Transferencia bancaria</p>
-            <label className="form-control">
-              <span className="label-text">Concepto / referencia</span>
-              <input
-                className="input input-bordered input-sm"
-                value={value.transferConcept}
-                onChange={(e) => onChange({ ...value, transferConcept: e.target.value })}
-                placeholder="Nº de operación, banco..."
-              />
-            </label>
-          </div>
+          <label className="form-control">
+            <span className="label-text text-xs">Concepto / referencia</span>
+            <input
+              className="input input-bordered input-xs"
+              value={value.transferConcept}
+              onChange={(e) => onChange({ ...value, transferConcept: e.target.value })}
+              placeholder="Nº de operación, banco..."
+            />
+          </label>
         )}
 
-        {!isUsd && !isTransfer && (
-          <p className="text-sm">Total a pagar: {formatMoney(totalCup)}</p>
+        {!isUsd && (
+          <p className="text-right text-xs">
+            Total a pagar: <span className="font-semibold">{formatMoney(totalCup)}</span>
+          </p>
         )}
       </div>
     </div>

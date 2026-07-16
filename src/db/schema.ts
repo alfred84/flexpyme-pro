@@ -201,6 +201,7 @@ export const cashSessions = sqliteTable("cash_sessions", {
   changeGiven: real("change_given").notNull(),
   date: text("date").notNull().default(sql`(datetime('now'))`),
   denominationBreakdown: text("denomination_breakdown"),
+  changeBreakdown: text("change_breakdown"),
 });
 
 export const settings = sqliteTable("settings", {

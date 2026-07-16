@@ -115,6 +115,7 @@ export interface InitialPaymentPayload {
   amountUsd?: number | null;
   exchangeRate?: number | null;
   transferConcept?: string | null;
+  changeCounts?: Record<string, number> | null;
 }
 
 /**
