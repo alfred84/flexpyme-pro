@@ -10,7 +10,7 @@ import {
 } from "@/db/queries/employees";
 import { serviceMatchesWorkType } from "@/features/invoices/lib/work-type-match";
 import { pushFlashMessage } from "@/lib/flash-message";
-import { formatDate } from "@/lib/format-date";
+import { formatDate, todayIso } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import type { InvoiceItemDto } from "@/types/invoice";
 
@@ -51,7 +51,7 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
 
   const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [workTypeId, setWorkTypeId] = useState(1);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => todayIso());
   const [payNow, setPayNow] = useState(false);
   const [quantities, setQuantities] = useState<Record<number, string>>({});
   const [formError, setFormError] = useState<string | null>(null);

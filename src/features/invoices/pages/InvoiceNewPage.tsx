@@ -26,6 +26,7 @@ import {
   type DraftLine,
 } from "@/features/invoices/lib/order-draft";
 import { useAppSettings } from "@/hooks/use-app-settings";
+import { todayIso } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 import type { CreateInvoiceItemPayload } from "@/types/invoice";
@@ -56,7 +57,7 @@ export function InvoiceNewPage() {
   const defaultCategoryId = categoriesQuery.data?.[0]?.id ?? 1;
 
   const [clientId, setClientId] = useState(0);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => todayIso());
   const [notes, setNotes] = useState("");
   const [advancePayment, setAdvancePayment] = useState("0");
   const [lines, setLines] = useState<DraftLine[]>([]);

@@ -5,6 +5,7 @@ import { fetchClients } from "@/db/queries/clients";
 import { fetchFormats } from "@/db/queries/prices";
 import { createProductionBatch } from "@/db/queries/production";
 import { formatMoney } from "@/lib/format-money";
+import { todayIso } from "@/lib/format-date";
 import { pushFlashMessage } from "@/lib/flash-message";
 import type { CreateProductionItemPayload } from "@/types/production";
 
@@ -35,7 +36,7 @@ export function ProductionNewPage() {
   const formatsQuery = useQuery({ queryKey: ["formats"], queryFn: fetchFormats });
 
   const [type, setType] = useState("Tercerizada");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => todayIso());
   const [workerName, setWorkerName] = useState("");
   const [notes, setNotes] = useState("");
   const [paid, setPaid] = useState("0");

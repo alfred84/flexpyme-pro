@@ -22,16 +22,22 @@ import {
 import { fetchIncomeByCategory, fetchReportsSummary } from "@/db/queries/reports";
 import { fetchInvoices } from "@/db/queries/invoices";
 import { fetchBackupOverview } from "@/db/queries/settings";
-import { formatDate, formatDateTime } from "@/lib/format-date";
+import { formatDate, formatDateTime, todayIso } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 import { useAppSettings } from "@/hooks/use-app-settings";
 
 /**
- * Devuelve la fecha en formato `YYYY-MM-DD`.
+ * Devuelve una fecha en formato `YYYY-MM-DD` (calendario local).
+ *
+ * @param date - Fecha a formatear.
+ * @returns Cadena ISO de solo fecha.
  */
 function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 /**
@@ -71,8 +77,8 @@ export function DashboardPage() {
   const settings = useAppSettings();
   const now = new Date();
   const monthStart = isoDate(new Date(now.getFullYear(), now.getMonth(), 1));
-  const today = isoDate(now);
-  const thirtyDaysAgo = isoDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+  const today = todayIso();
+  const thirtyDaysAgo = isoDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30));
 
   const summaryQuery = useQuery({
     queryKey: ["reports", "summary", monthStart, today],

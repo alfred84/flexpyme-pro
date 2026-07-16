@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Receipt, Trash2 } from "lucide-react";
 import {
@@ -99,10 +99,7 @@ export function OtherExpensesPage() {
     }
   };
 
-  const monthTotal = useMemo(
-    () => expenses.reduce((acc, e) => acc + e.amountCup, 0),
-    [expenses],
-  );
+  const monthTotal = expenses.reduce((acc, e) => acc + e.amountCup, 0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

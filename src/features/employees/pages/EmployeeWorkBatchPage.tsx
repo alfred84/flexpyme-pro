@@ -9,6 +9,7 @@ import {
   fetchEmployeeById,
 } from "@/db/queries/employees";
 import { pushFlashMessage } from "@/lib/flash-message";
+import { todayIso } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 
 interface WorkTypeOption {
@@ -35,7 +36,7 @@ export function EmployeeWorkBatchPage() {
   });
   const [workTypeId, setWorkTypeId] = useState(1);
   const selectedWorkType = workTypesQuery.data?.find((w) => w.id === workTypeId);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => todayIso());
   const [clientId, setClientId] = useState<number | null>(null);
   const [payNow, setPayNow] = useState(false);
   const [quantities, setQuantities] = useState<Record<number, string>>({});

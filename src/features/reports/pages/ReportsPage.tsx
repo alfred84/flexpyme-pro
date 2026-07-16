@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useMemo, useState } from "react";
 import { pushFlashMessage } from "@/lib/flash-message";
+import { todayIso } from "@/lib/format-date";
 import { fetchInvoices } from "@/db/queries/invoices";
 import { fetchProductionExportInDateRange } from "@/db/queries/production";
 import { fetchReportsSummary, fetchTopDebtors } from "@/db/queries/reports";
@@ -53,8 +54,7 @@ export function ReportsPage() {
     (!rangeSelected || productionRangeQuery.isSuccess);
 
   const exportBasename = useMemo(() => {
-    const d = new Date().toISOString().slice(0, 10);
-    return `reportes-${d}`;
+    return `reportes-${todayIso()}`;
   }, []);
 
   const buildExportSections = () => {
