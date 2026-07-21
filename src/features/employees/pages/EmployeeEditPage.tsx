@@ -48,6 +48,7 @@ export function EmployeeEditPage() {
             roleId: employeeQuery.data.roleId ?? 0,
             phone: employeeQuery.data.phone ?? "",
             notes: employeeQuery.data.notes ?? "",
+            extraRoleIds: employeeQuery.data.extraRoleIds ?? [],
           }}
           onCancel={() => navigate({ to: "/empleados" })}
           onSubmit={async (values) => {
@@ -57,6 +58,7 @@ export function EmployeeEditPage() {
               roleId: values.roleId,
               phone: values.phone || null,
               notes: values.notes || null,
+              extraRoleIds: values.extraRoleIds,
             });
           }}
         />

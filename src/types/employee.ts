@@ -10,6 +10,10 @@ export interface EmployeeDto {
   notes: string | null;
   isActive: boolean;
   createdAt: string;
+  /** Nombres de roles adicionales (listado/detalle). */
+  extraRoles: string[];
+  /** Ids de roles adicionales (formulario de edición). */
+  extraRoleIds: number[];
 }
 
 /**
@@ -20,6 +24,7 @@ export interface CreateEmployeePayload {
   roleId: number | null;
   phone: string | null;
   notes: string | null;
+  extraRoleIds: number[];
 }
 
 /**

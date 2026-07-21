@@ -17,6 +17,10 @@ pub struct EmployeeDto {
     pub notes: Option<String>,
     pub is_active: bool,
     pub created_at: String,
+    /// Nombres de roles adicionales (para listado/detalle).
+    pub extra_roles: Vec<String>,
+    /// Ids de roles adicionales (para editar el formulario).
+    pub extra_role_ids: Vec<i64>,
 }
 
 /// Payload for creating an employee.
@@ -27,6 +31,7 @@ pub struct CreateEmployeePayload {
     pub role_id: Option<i64>,
     pub phone: Option<String>,
     pub notes: Option<String>,
+    pub extra_role_ids: Option<Vec<i64>>,
 }
 
 /// Payload for updating an employee.
@@ -38,6 +43,7 @@ pub struct UpdateEmployeePayload {
     pub role_id: Option<i64>,
     pub phone: Option<String>,
     pub notes: Option<String>,
+    pub extra_role_ids: Option<Vec<i64>>,
 }
 
 /// Extra role assigned to an employee (multi-role support).
@@ -130,6 +136,76 @@ fn normalize_optional(value: Option<String>) -> Option<String> {
     })
 }
 
+/// Loads extra role ids and labels for one employee.
+fn load_extra_roles(
+    conn: &rusqlite::Connection,
+    employee_id: i64,
+) -> Result<(Vec<i64>, Vec<String>), String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT eer.role_id, COALESCE(eer.role_snapshot, er.name) AS role_label
+             FROM employee_extra_roles eer
+             JOIN employee_roles er ON er.id = eer.role_id
+             WHERE eer.employee_id = ?1
+             ORDER BY role_label COLLATE NOCASE",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![employee_id], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut ids = Vec::new();
+    let mut names = Vec::new();
+    for r in rows {
+        let (id, name) = r.map_err(|e| e.to_string())?;
+        ids.push(id);
+        names.push(name);
+    }
+    Ok((ids, names))
+}
+
+/// Replaces the extra-role set for an employee (excludes the main role).
+fn sync_extra_roles(
+    conn: &rusqlite::Connection,
+    employee_id: i64,
+    main_role_id: i64,
+    extra_role_ids: &[i64],
+) -> Result<(), String> {
+    let mut unique: Vec<i64> = Vec::new();
+    for &role_id in extra_role_ids {
+        if role_id == main_role_id {
+            continue;
+        }
+        if !unique.contains(&role_id) {
+            unique.push(role_id);
+        }
+    }
+
+    conn.execute(
+        "DELETE FROM employee_extra_roles WHERE employee_id = ?1",
+        params![employee_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    for role_id in unique {
+        let role_name: String = conn
+            .query_row(
+                "SELECT name FROM employee_roles WHERE id = ?1",
+                params![role_id],
+                |row| row.get(0),
+            )
+            .map_err(|_| "Rol adicional no válido".to_string())?;
+        conn.execute(
+            "INSERT INTO employee_extra_roles (employee_id, role_id, role_snapshot)
+             VALUES (?1, ?2, ?3)",
+            params![employee_id, role_id, role_name],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// Lists employees. When `active_only` is true, hides deactivated employees.
 #[tauri::command]
 pub fn employees_list(active_only: Option<bool>) -> Result<Vec<EmployeeDto>, String> {
@@ -155,47 +231,80 @@ pub fn employees_list(active_only: Option<bool>) -> Result<Vec<EmployeeDto>, Str
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |row| {
-            Ok(EmployeeDto {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                role_id: row.get(2)?,
-                role: row.get(3)?,
-                phone: row.get(4)?,
-                notes: row.get(5)?,
-                is_active: row.get::<_, i64>(6)? != 0,
-                created_at: row.get(7)?,
-            })
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<i64>>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, i64>(6)? != 0,
+                row.get::<_, String>(7)?,
+            ))
         })
         .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+
+    let mut out = Vec::new();
+    for r in rows {
+        let (id, name, role_id, role, phone, notes, is_active, created_at) =
+            r.map_err(|e| e.to_string())?;
+        let (extra_role_ids, extra_roles) = load_extra_roles(&conn, id)?;
+        out.push(EmployeeDto {
+            id,
+            name,
+            role_id,
+            role,
+            phone,
+            notes,
+            is_active,
+            created_at,
+            extra_roles,
+            extra_role_ids,
+        });
+    }
+    Ok(out)
 }
 
 /// Loads a single employee by id.
 #[tauri::command]
 pub fn employees_get_by_id(id: i64) -> Result<EmployeeDto, String> {
     let conn = db::open_connection()?;
-    conn.query_row(
-        "SELECT e.id, e.name, e.role_id,
-                COALESCE(e.role_snapshot, er.name, e.role) AS role_label,
-                e.phone, e.notes, e.is_active, e.created_at
-         FROM employees e
-         LEFT JOIN employee_roles er ON er.id = e.role_id
-         WHERE e.id = ?1 AND e.deleted_at IS NULL",
-        params![id],
-        |row| {
-            Ok(EmployeeDto {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                role_id: row.get(2)?,
-                role: row.get(3)?,
-                phone: row.get(4)?,
-                notes: row.get(5)?,
-                is_active: row.get::<_, i64>(6)? != 0,
-                created_at: row.get(7)?,
-            })
-        },
-    )
-    .map_err(|_| "Empleado no encontrado".to_string())
+    let (emp_id, name, role_id, role, phone, notes, is_active, created_at) = conn
+        .query_row(
+            "SELECT e.id, e.name, e.role_id,
+                    COALESCE(e.role_snapshot, er.name, e.role) AS role_label,
+                    e.phone, e.notes, e.is_active, e.created_at
+             FROM employees e
+             LEFT JOIN employee_roles er ON er.id = e.role_id
+             WHERE e.id = ?1 AND e.deleted_at IS NULL",
+            params![id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<i64>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, i64>(6)? != 0,
+                    row.get::<_, String>(7)?,
+                ))
+            },
+        )
+        .map_err(|_| "Empleado no encontrado".to_string())?;
+    let (extra_role_ids, extra_roles) = load_extra_roles(&conn, emp_id)?;
+    Ok(EmployeeDto {
+        id: emp_id,
+        name,
+        role_id,
+        role,
+        phone,
+        notes,
+        is_active,
+        created_at,
+        extra_roles,
+        extra_role_ids,
+    })
 }
 
 /// Creates a new employee.
@@ -206,7 +315,7 @@ pub fn employees_create(payload: CreateEmployeePayload) -> Result<i64, String> {
         return Err("El nombre es obligatorio".to_string());
     }
     let role_id = payload.role_id.ok_or_else(|| "Selecciona un rol".to_string())?;
-    let conn = db::open_connection()?;
+    let mut conn = db::open_connection()?;
     let role_name: String = conn
         .query_row(
             "SELECT name FROM employee_roles WHERE id = ?1 AND is_active = 1",
@@ -214,7 +323,8 @@ pub fn employees_create(payload: CreateEmployeePayload) -> Result<i64, String> {
             |row| row.get(0),
         )
         .map_err(|_| "Rol no válido".to_string())?;
-    conn.execute(
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    tx.execute(
         "INSERT INTO employees (name, role_id, role_snapshot, phone, notes, is_active, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, 1, datetime('now'))",
         params![
@@ -226,7 +336,11 @@ pub fn employees_create(payload: CreateEmployeePayload) -> Result<i64, String> {
         ],
     )
     .map_err(|e| e.to_string())?;
-    Ok(conn.last_insert_rowid())
+    let id = tx.last_insert_rowid();
+    let extras = payload.extra_role_ids.unwrap_or_default();
+    sync_extra_roles(&*tx, id, role_id, &extras)?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(id)
 }
 
 /// Updates an existing employee.
@@ -236,23 +350,26 @@ pub fn employees_update(payload: UpdateEmployeePayload) -> Result<(), String> {
     if name.is_empty() {
         return Err("El nombre es obligatorio".to_string());
     }
-    let conn = db::open_connection()?;
+    let mut conn = db::open_connection()?;
     let role_id = payload.role_id.ok_or_else(|| "Selecciona un rol".to_string())?;
-    let _role_exists: String = conn
+    let role_name: String = conn
         .query_row(
             "SELECT name FROM employee_roles WHERE id = ?1",
             params![role_id],
             |row| row.get(0),
         )
         .map_err(|_| "Rol no válido".to_string())?;
-    let updated = conn
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let updated = tx
         .execute(
             "UPDATE employees
-             SET name = ?1, role_id = ?2, phone = ?3, notes = ?4, updated_at = datetime('now')
-             WHERE id = ?5 AND deleted_at IS NULL",
+             SET name = ?1, role_id = ?2, role_snapshot = ?3, phone = ?4, notes = ?5,
+                 updated_at = datetime('now')
+             WHERE id = ?6 AND deleted_at IS NULL",
             params![
                 name,
                 role_id,
+                role_name,
                 normalize_optional(payload.phone),
                 normalize_optional(payload.notes),
                 payload.id
@@ -262,6 +379,9 @@ pub fn employees_update(payload: UpdateEmployeePayload) -> Result<(), String> {
     if updated == 0 {
         return Err("Empleado no encontrado".to_string());
     }
+    let extras = payload.extra_role_ids.unwrap_or_default();
+    sync_extra_roles(&*tx, payload.id, role_id, &extras)?;
+    tx.commit().map_err(|e| e.to_string())?;
     Ok(())
 }
 

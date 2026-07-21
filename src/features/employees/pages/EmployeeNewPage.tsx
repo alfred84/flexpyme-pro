@@ -45,6 +45,7 @@ export function EmployeeNewPage() {
             roleId: values.roleId,
             phone: values.phone || null,
             notes: values.notes || null,
+            extraRoleIds: values.extraRoleIds,
           });
         }}
       />

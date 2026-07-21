@@ -79,6 +79,7 @@ export function EmployeesListPage() {
               <tr>
                 <th>Nombre</th>
                 <th>Rol</th>
+                <th>Roles adicionales</th>
                 <th>Teléfono</th>
                 <th>Estado</th>
                 <th></th>
@@ -89,6 +90,19 @@ export function EmployeesListPage() {
                 <tr key={emp.id} className={emp.isActive ? "" : "opacity-50"}>
                   <td className="font-medium">{emp.name}</td>
                   <td className="capitalize">{emp.role ?? "—"}</td>
+                  <td>
+                    {(emp.extraRoles ?? []).length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {emp.extraRoles.map((role) => (
+                          <span key={role} className="badge badge-ghost badge-sm capitalize">
+                            {role}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-base-content/40">—</span>
+                    )}
+                  </td>
                   <td>{emp.phone ?? "—"}</td>
                   <td>
                     <span className={`badge badge-sm ${emp.isActive ? "badge-success" : "badge-ghost"}`}>
@@ -134,7 +148,7 @@ export function EmployeesListPage() {
               ))}
               {employeesQuery.data.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-base-content/60">
+                  <td colSpan={6} className="py-6 text-center text-base-content/60">
                     No hay empleados todavía.
                   </td>
                 </tr>
