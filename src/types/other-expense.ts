@@ -36,7 +36,10 @@ export interface OtherExpenseDto {
   amountCup: number;
   amountUsd: number;
   paymentMethod: string;
+  denominationBreakdown: string | null;
   notes: string | null;
+  cashTransactionId: number | null;
+  createdAt: string;
 }
 
 /**
@@ -60,4 +63,11 @@ export interface CreateOtherExpensePayload {
   paymentMethod: string;
   denominationBreakdown?: string | null;
   notes?: string | null;
+}
+
+/**
+ * Payload de actualización de otro gasto.
+ */
+export interface UpdateOtherExpensePayload extends CreateOtherExpensePayload {
+  id: number;
 }

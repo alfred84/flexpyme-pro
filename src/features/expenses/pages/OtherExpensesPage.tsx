@@ -13,7 +13,8 @@ import { formatMoney } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
 
 /**
- * Listado y resumen de Otros gastos. El alta se hace en `/otros-gastos/nuevo`.
+ * Listado y resumen de Otros gastos. Alta en `/otros-gastos/nuevo`;
+ * detalle/edición en rutas anidadas.
  *
  * @returns Página de otros gastos.
  */
@@ -115,32 +116,56 @@ export function OtherExpensesPage() {
               <th>Empleado</th>
               <th>Método</th>
               <th className="text-right">Importe</th>
-              <th></th>
+              <th className="text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {expenses.map((exp) => (
               <tr key={exp.id}>
                 <td className="text-xs">{formatDate(exp.date)}</td>
-                <td>{exp.concept}</td>
+                <td>
+                  <Link
+                    to="/otros-gastos/$expenseId"
+                    params={{ expenseId: String(exp.id) }}
+                    className="link link-hover font-medium"
+                  >
+                    {exp.concept}
+                  </Link>
+                </td>
                 <td>{exp.expenseType}</td>
                 <td>{exp.employeeName ?? "—"}</td>
                 <td className="capitalize">{exp.paymentMethod}</td>
                 <td className="text-right font-mono">{formatMoney(exp.amountCup)}</td>
                 <td className="text-right">
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-xs text-error"
-                    title="Eliminar gasto"
-                    disabled={deleteMutation.isPending}
-                    onClick={() => {
-                      if (window.confirm("¿Eliminar este gasto y su egreso en caja?")) {
-                        deleteMutation.mutate(exp.id);
-                      }
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex justify-end gap-1">
+                    <Link
+                      to="/otros-gastos/$expenseId"
+                      params={{ expenseId: String(exp.id) }}
+                      className="btn btn-xs btn-outline"
+                    >
+                      Ver
+                    </Link>
+                    <Link
+                      to="/otros-gastos/$expenseId/editar"
+                      params={{ expenseId: String(exp.id) }}
+                      className="btn btn-xs btn-ghost"
+                    >
+                      Editar
+                    </Link>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs text-error"
+                      title="Eliminar gasto"
+                      disabled={deleteMutation.isPending}
+                      onClick={() => {
+                        if (window.confirm("¿Eliminar este gasto y su egreso en caja?")) {
+                          deleteMutation.mutate(exp.id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

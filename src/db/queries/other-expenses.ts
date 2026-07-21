@@ -3,6 +3,7 @@ import type {
   CreateOtherExpensePayload,
   OtherExpenseDto,
   OtherExpenseSummaryDto,
+  UpdateOtherExpensePayload,
 } from "@/types/other-expense";
 
 /**
@@ -10,6 +11,16 @@ import type {
  */
 export async function fetchOtherExpenses(): Promise<OtherExpenseDto[]> {
   return invoke<OtherExpenseDto[]>("other_expenses_list");
+}
+
+/**
+ * Loads a single other expense by id.
+ *
+ * @param id - Identificador del gasto.
+ * @returns Gasto con desglose y metadatos.
+ */
+export async function fetchOtherExpenseById(id: number): Promise<OtherExpenseDto> {
+  return invoke<OtherExpenseDto>("other_expense_get_by_id", { id });
 }
 
 /**
@@ -24,6 +35,15 @@ export async function fetchOtherExpensesSummary(): Promise<OtherExpenseSummaryDt
  */
 export async function createOtherExpense(payload: CreateOtherExpensePayload): Promise<number> {
   return invoke<number>("other_expense_create", { payload });
+}
+
+/**
+ * Updates an other expense and syncs its linked cash transaction.
+ *
+ * @param payload - Datos actualizados del gasto.
+ */
+export async function updateOtherExpense(payload: UpdateOtherExpensePayload): Promise<void> {
+  return invoke<void>("other_expense_update", { payload });
 }
 
 /**

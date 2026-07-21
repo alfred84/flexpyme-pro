@@ -74,5 +74,45 @@ export function serializeDenominationBreakdown(
   return JSON.stringify({ currency, counts: payload });
 }
 
+/**
+ * Resultado de parsear un desglose de denominaciones almacenado.
+ */
+export interface ParsedDenominationBreakdown {
+  currency: DenominationCurrency;
+  counts: Record<string, number>;
+}
+
+/**
+ * Parsea el JSON de desglose guardado en caja/gastos.
+ *
+ * @param raw - Cadena JSON o `null`.
+ * @returns Moneda y conteos, o `null` si no es válido.
+ */
+export function parseDenominationBreakdown(
+  raw: string | null | undefined,
+): ParsedDenominationBreakdown | null {
+  if (!raw?.trim()) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as {
+      currency?: string;
+      counts?: Record<string, number>;
+    };
+    const currency: DenominationCurrency = parsed.currency === "USD" ? "USD" : "CUP";
+    const counts = emptyDenominationCounts(currency);
+    if (parsed.counts && typeof parsed.counts === "object") {
+      for (const d of denominationsFor(currency)) {
+        const key = String(d);
+        const value = Number(parsed.counts[key] ?? 0);
+        counts[key] = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+      }
+    }
+    return { currency, counts };
+  } catch {
+    return null;
+  }
+}
+
 // Reexport para retrocompatibilidad de importaciones existentes.
 export { CASH_DENOMINATIONS };
