@@ -29,29 +29,45 @@ export function DenominationGrid(props: DenominationGridProps) {
   const denominations = denominationsFor(currency);
   const total = sumDenominationCounts(counts, currency);
 
-  const setDenom = (key: string, raw: number) => {
-    const value = Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
-    onChange({ ...counts, [key]: value });
+  /**
+   * Actualiza el conteo de una denominación a partir del texto del input.
+   * Usa cadena vacía como “0” visible para evitar el bug de React con ceros
+   * a la izquierda en `type="number"` controlados (p. ej. teclear 1 → "01").
+   *
+   * @param key - Valor de la denominación como string.
+   * @param raw - Texto del input.
+   */
+  const setDenom = (key: string, raw: string) => {
+    const digits = raw.replace(/\D/g, "");
+    const value = digits === "" ? 0 : Math.max(0, Math.floor(Number(digits)));
+    onChange({ ...counts, [key]: Number.isFinite(value) ? value : 0 });
   };
 
   return (
     <div className="space-y-1">
       {label && <p className="text-xs text-base-content/60">{label}</p>}
       <div className="grid grid-cols-3 gap-1 sm:grid-cols-4">
-        {denominations.map((d) => (
-          <label key={d} className="form-control">
-            <span className="label-text text-[10px] font-mono">
-              {currency === "USD" ? `$${d}` : formatMoney(d)}
-            </span>
-            <input
-              type="number"
-              min={0}
-              className="input input-bordered input-xs"
-              value={counts[String(d)] ?? 0}
-              onChange={(e) => setDenom(String(d), Number(e.target.value))}
-            />
-          </label>
-        ))}
+        {denominations.map((d) => {
+          const key = String(d);
+          const count = counts[key] ?? 0;
+          return (
+            <label key={d} className="form-control">
+              <span className="label-text text-[10px] font-mono">
+                {currency === "USD" ? `$${d}` : formatMoney(d)}
+              </span>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                className="input input-bordered input-xs"
+                value={count === 0 ? "" : String(count)}
+                placeholder="0"
+                onChange={(e) => setDenom(key, e.target.value)}
+                aria-label={`Cantidad de ${currency === "USD" ? `$${d}` : formatMoney(d)}`}
+              />
+            </label>
+          );
+        })}
       </div>
       {!hideTotal && (
         <p className="text-right text-xs">

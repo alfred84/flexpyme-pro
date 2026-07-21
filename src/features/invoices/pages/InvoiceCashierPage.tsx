@@ -112,9 +112,10 @@ export function InvoiceCashierPage() {
     );
   }
 
-  function setDenom(key: string, value: number) {
-    const v = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
-    setCounts((prev) => ({ ...prev, [key]: v }));
+  function setDenom(key: string, raw: string) {
+    const digits = raw.replace(/\D/g, "");
+    const value = digits === "" ? 0 : Math.max(0, Math.floor(Number(digits)));
+    setCounts((prev) => ({ ...prev, [key]: Number.isFinite(value) ? value : 0 }));
   }
 
   function submit() {
@@ -259,18 +260,24 @@ export function InvoiceCashierPage() {
                   <>
                     <p className="text-xs text-base-content/60">Conteo de billetes o monto total:</p>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {CASH_DENOMINATIONS.map((d) => (
-                        <label key={d} className="form-control">
-                          <span className="label-text text-xs font-mono">{formatMoney(d)}</span>
-                          <input
-                            type="number"
-                            min={0}
-                            className="input input-bordered input-sm"
-                            value={counts[String(d)] ?? 0}
-                            onChange={(e) => setDenom(String(d), Number(e.target.value))}
-                          />
-                        </label>
-                      ))}
+                      {CASH_DENOMINATIONS.map((d) => {
+                        const key = String(d);
+                        const count = counts[key] ?? 0;
+                        return (
+                          <label key={d} className="form-control">
+                            <span className="label-text text-xs font-mono">{formatMoney(d)}</span>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              className="input input-bordered input-sm"
+                              value={count === 0 ? "" : String(count)}
+                              placeholder="0"
+                              onChange={(e) => setDenom(key, e.target.value)}
+                            />
+                          </label>
+                        );
+                      })}
                     </div>
                     <label className="form-control">
                       <span className="label-text">O monto total CUP</span>
