@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Plus, Receipt, Settings2, Trash2 } from "lucide-react";
@@ -8,9 +8,68 @@ import {
   fetchOtherExpensesSummary,
 } from "@/db/queries/other-expenses";
 import { ExpenseTypesConfigModal } from "@/features/expenses/components/ExpenseTypesConfigModal";
-import { formatDate } from "@/lib/format-date";
+import { formatDate, todayIso } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
+import type { OtherExpenseDto } from "@/types/other-expense";
+
+/** Periodo rápido del listado de Otros gastos. */
+type ExpensePeriodFilter = "hoy" | "mes" | "todos";
+
+const PERIOD_OPTIONS: { id: ExpensePeriodFilter; label: string }[] = [
+  { id: "hoy", label: "Día actual" },
+  { id: "mes", label: "Mes actual" },
+  { id: "todos", label: "Todos" },
+];
+
+/**
+ * Extrae `YYYY-MM-DD` de una fecha almacenada (con o sin hora).
+ *
+ * @param value - Fecha ISO del gasto.
+ * @returns Solo la parte de fecha o cadena vacía.
+ */
+function expenseDateOnly(value: string): string {
+  return value.trim().slice(0, 10);
+}
+
+/**
+ * Filtra gastos según el periodo seleccionado (calendario local).
+ *
+ * @param expenses - Listado completo.
+ * @param period - Periodo activo.
+ * @returns Gastos del periodo.
+ */
+function filterExpensesByPeriod(
+  expenses: OtherExpenseDto[],
+  period: ExpensePeriodFilter,
+): OtherExpenseDto[] {
+  if (period === "todos") {
+    return expenses;
+  }
+  const today = todayIso();
+  if (period === "hoy") {
+    return expenses.filter((e) => expenseDateOnly(e.date) === today);
+  }
+  const monthPrefix = today.slice(0, 7);
+  return expenses.filter((e) => expenseDateOnly(e.date).startsWith(monthPrefix));
+}
+
+/**
+ * Etiqueta del KPI de total según el periodo del listado.
+ *
+ * @param period - Periodo activo.
+ * @returns Texto del KPI.
+ */
+function periodTotalLabel(period: ExpensePeriodFilter): string {
+  switch (period) {
+    case "hoy":
+      return "Total del día (listado)";
+    case "mes":
+      return "Total del mes (listado)";
+    default:
+      return "Total listado";
+  }
+}
 
 /**
  * Listado y resumen de Otros gastos. Alta en `/otros-gastos/nuevo`;
@@ -21,6 +80,7 @@ import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
 export function OtherExpensesPage() {
   const queryClient = useQueryClient();
   const [showTypesModal, setShowTypesModal] = useState(false);
+  const [period, setPeriod] = useState<ExpensePeriodFilter>("hoy");
   const [flash] = useState<FlashMessage | null>(() => popFlashMessage());
 
   const expensesQuery = useQuery({
@@ -34,7 +94,12 @@ export function OtherExpensesPage() {
 
   const expenses = expensesQuery.data ?? [];
   const summary = summaryQuery.data;
-  const monthTotal = expenses.reduce((acc, e) => acc + e.amountCup, 0);
+
+  const filteredExpenses = useMemo(
+    () => filterExpensesByPeriod(expenses, period),
+    [expenses, period],
+  );
+  const periodTotal = filteredExpenses.reduce((acc, e) => acc + e.amountCup, 0);
 
   const deleteMutation = useMutation({
     mutationFn: deleteOtherExpense,
@@ -91,9 +156,31 @@ export function OtherExpensesPage() {
         </div>
         <div className="card bg-base-200">
           <div className="card-body p-4">
-            <p className="text-xs uppercase text-base-content/60">Total listado</p>
-            <p className="text-2xl font-semibold">{formatMoney(monthTotal)}</p>
+            <p className="text-xs uppercase text-base-content/60">{periodTotalLabel(period)}</p>
+            <p className="text-2xl font-semibold">{formatMoney(periodTotal)}</p>
           </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">Periodo del listado</p>
+          <p className="text-xs text-base-content/60">
+            Filtra la tabla de forma rápida. Por defecto: día actual.
+          </p>
+        </div>
+        <div className="join" role="group" aria-label="Filtrar gastos por periodo">
+          {PERIOD_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              className={`btn btn-sm join-item ${period === opt.id ? "btn-primary" : "btn-ghost"}`}
+              aria-pressed={period === opt.id}
+              onClick={() => setPeriod(opt.id)}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -120,7 +207,7 @@ export function OtherExpensesPage() {
             </tr>
           </thead>
           <tbody>
-            {expenses.map((exp) => (
+            {filteredExpenses.map((exp) => (
               <tr key={exp.id}>
                 <td className="text-xs">{formatDate(exp.date)}</td>
                 <td>
@@ -169,13 +256,28 @@ export function OtherExpensesPage() {
                 </td>
               </tr>
             ))}
-            {expensesQuery.isSuccess && expenses.length === 0 && (
+            {expensesQuery.isSuccess && filteredExpenses.length === 0 && (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-base-content/60">
-                  <p>Sin gastos registrados.</p>
-                  <Link to="/otros-gastos/nuevo" className="btn btn-link btn-sm mt-2">
-                    Registrar el primero
-                  </Link>
+                  {expenses.length === 0 ? (
+                    <>
+                      <p>Sin gastos registrados.</p>
+                      <Link to="/otros-gastos/nuevo" className="btn btn-link btn-sm mt-2">
+                        Registrar el primero
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <p>No hay gastos en este periodo.</p>
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm mt-2"
+                        onClick={() => setPeriod("todos")}
+                      >
+                        Ver todos
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
             )}
