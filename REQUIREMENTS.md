@@ -150,6 +150,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 
 ### 3.11 Otros gastos (v2.5)
 - Entrada de sidebar **Otros gastos** (tras Costos); ruta `/otros-gastos`
+- Alta en pantalla dedicada `/otros-gastos/nuevo` (botón «Registrar gasto»); el listado muestra KPIs y el historial
 - Tabla `other_expenses` (fecha, concepto, tipo, empleado opcional, montos CUP/USD, método, desglose de denominaciones)
 - Cada gasto genera un `cash_transactions` (egreso) que afecta el balance de caja
 - Vistas diaria y mensual

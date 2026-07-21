@@ -32,6 +32,7 @@ import { CashflowPage } from "@/features/cashflow/pages/CashflowPage";
 import { CashflowNewPage } from "@/features/cashflow/pages/CashflowNewPage";
 import { CashflowHistoryPage } from "@/features/cashflow/pages/CashflowHistoryPage";
 import { OtherExpensesPage } from "@/features/expenses/pages/OtherExpensesPage";
+import { OtherExpenseNewPage } from "@/features/expenses/pages/OtherExpenseNewPage";
 
 const rootRoute = createRootRoute({
   component: AppShell,
@@ -281,6 +282,12 @@ const otherExpensesRoute = createRoute({
   component: OtherExpensesPage,
 });
 
+const otherExpenseNewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "otros-gastos/nuevo",
+  component: OtherExpenseNewPage,
+});
+
 const routeTree = rootRoute.addChildren([
   dashboardRoute,
   clientsListRoute,
@@ -318,6 +325,7 @@ const routeTree = rootRoute.addChildren([
   cashflowNewRoute,
   cashflowHistoryRoute,
   otherExpensesRoute,
+  otherExpenseNewRoute,
 ]);
 
 export const appRouter = createRouter({

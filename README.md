@@ -14,7 +14,7 @@ La fuente de verdad de requisitos es [`REQUIREMENTS.md`](./REQUIREMENTS.md) (**v
 - **Inventario**: ítems, movimientos, recetas de producción; descuento al **concluir cada línea/servicio**; déficit permitido con bandera en línea y pedido.
 - **Flujo de Caja**: balance CUP/USD, neto del día + neto de 30 días, serie diaria, movimientos con denominaciones, historial filtrable y enlaces a pedidos.
 - **Precios** y **Costos**: entradas del sidebar (debajo de Flujo de Caja).
-- **Otros gastos** (`/otros-gastos`): almuerzo y similares; tipos de gasto configurables; cada gasto genera egreso en caja (vista diaria/mensual).
+- **Otros gastos** (`/otros-gastos`): listado y KPIs; alta en `/otros-gastos/nuevo`; tipos configurables; cada gasto genera egreso en caja.
 - **Reportes**: exportes y resúmenes generales.
 - **Configuración**: tabs General, Tasa de cambio, Roles, Categorías (servicios/acabados), Unidades, Formatos, Tipos de trabajo y Backup.
 
