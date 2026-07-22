@@ -125,7 +125,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Categorías** de productos (CRUD con `is_system`, snapshot en pedidos)
 - **Tipos de trabajo y acabados por categoría**: tabla `category_work_types` (tipos del catálogo asociados a la categoría) y `category_finishes` (acabados propios). Al crear líneas de pedido se preseleccionan los tipos vinculados (desmarcables) y se expanden en un `invoice_item` por tipo (`invoice_items.service` = nombre del tipo). La tabla legacy `category_services` ya no se usa en la UI.
 - **Unidades** de medida (CRUD con tipo, snapshot en inventario)
-- Formatos disponibles (alta/baja de formatos)
+- Formatos disponibles (alta, edición y baja de formatos)
 - Backup y restauración de la base de datos
 - Preferencias de la aplicación
 

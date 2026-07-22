@@ -79,22 +79,29 @@ pub fn create_format(label: String, width: f64, height: f64) -> Result<FormatDto
     })
 }
 
-/// Updates a non-system format.
+/// Updates a format label and dimensions (system formats included; history uses snapshots).
 #[tauri::command]
 pub fn update_format(id: i64, data: UpdateFormatPayload) -> Result<FormatDto, String> {
-    let conn = db::open_connection()?;
-    let is_system: i64 = conn
-        .query_row("SELECT is_system FROM formats WHERE id = ?1", params![id], |row| row.get(0))
-        .map_err(|_| "Formato no encontrado".to_string())?;
-    if is_system != 0 {
-        return Err("Los formatos del sistema no se pueden editar".to_string());
+    let label = data.label.trim().to_string();
+    if label.is_empty() || data.width_inches <= 0.0 || data.height_inches <= 0.0 {
+        return Err("Etiqueta y dimensiones deben ser válidas".to_string());
     }
-    let label = data.label.trim();
-    conn.execute(
-        "UPDATE formats SET label = ?1, width_inches = ?2, height_inches = ?3 WHERE id = ?4",
-        params![label, data.width_inches, data.height_inches, id],
-    )
-    .map_err(|e| e.to_string())?;
+    let conn = db::open_connection()?;
+    let updated = conn
+        .execute(
+            "UPDATE formats SET label = ?1, width_inches = ?2, height_inches = ?3 WHERE id = ?4",
+            params![label, data.width_inches, data.height_inches, id],
+        )
+        .map_err(|e| {
+            if e.to_string().contains("UNIQUE") {
+                "Ya existe un formato con esa etiqueta".to_string()
+            } else {
+                e.to_string()
+            }
+        })?;
+    if updated == 0 {
+        return Err("Formato no encontrado".to_string());
+    }
     conn.query_row(
         "SELECT id, label, width_inches, height_inches, is_active, is_system FROM formats WHERE id = ?1",
         params![id],

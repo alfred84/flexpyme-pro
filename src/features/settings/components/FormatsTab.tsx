@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
-import { Plus, Power, RotateCcw } from "lucide-react";
+import { Pencil, Plus, Power, RotateCcw } from "lucide-react";
 
 interface FormatDto {
   id: number;
@@ -13,7 +13,7 @@ interface FormatDto {
 }
 
 /**
- * Tab de gestión de formatos de impresión.
+ * Tab de gestión de formatos de impresión (alta, edición, baja/reactivación).
  *
  * @returns Tabla CRUD de formatos.
  */
@@ -23,18 +23,45 @@ export function FormatsTab() {
     queryKey: ["formats", "manage"],
     queryFn: () => invoke<FormatDto[]>("get_formats", { activeOnly: false }),
   });
+
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState<FormatDto | null>(null);
   const [label, setLabel] = useState("");
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
 
-  const createMutation = useMutation({
-    mutationFn: async () =>
-      invoke<FormatDto>("create_format", {
-        label,
-        width: Number(width),
-        height: Number(height),
-      }),
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const widthInches = Number(width.replace(",", "."));
+      const heightInches = Number(height.replace(",", "."));
+      if (!label.trim()) {
+        throw new Error("La etiqueta es obligatoria");
+      }
+      if (!Number.isFinite(widthInches) || widthInches <= 0) {
+        throw new Error("El ancho debe ser un número mayor que cero");
+      }
+      if (!Number.isFinite(heightInches) || heightInches <= 0) {
+        throw new Error("El alto debe ser un número mayor que cero");
+      }
+      if (editing) {
+        return invoke<FormatDto>("update_format", {
+          id: editing.id,
+          data: {
+            label: label.trim(),
+            widthInches,
+            heightInches,
+          },
+        });
+      }
+      return invoke<FormatDto>("create_format", {
+        label: label.trim(),
+        width: widthInches,
+        height: heightInches,
+      });
+    },
     onSuccess: async () => {
+      setShowModal(false);
+      setEditing(null);
       setLabel("");
       setWidth("");
       setHeight("");
@@ -56,28 +83,44 @@ export function FormatsTab() {
     },
   });
 
+  const openCreate = () => {
+    setEditing(null);
+    setLabel("");
+    setWidth("");
+    setHeight("");
+    setShowModal(true);
+  };
+
+  /**
+   * Abre el modal con los datos del formato a editar.
+   *
+   * @param format - Formato seleccionado.
+   */
+  const openEdit = (format: FormatDto) => {
+    setEditing(format);
+    setLabel(format.label);
+    setWidth(format.widthInches != null ? String(format.widthInches) : "");
+    setHeight(format.heightInches != null ? String(format.heightInches) : "");
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditing(null);
+    saveMutation.reset();
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Formatos de impresión</h2>
-      </div>
-      <div className="card bg-base-200 max-w-lg">
-        <div className="card-body gap-2">
-          <h3 className="font-medium flex items-center gap-2">
-            <Plus size={14} /> Nuevo formato
-          </h3>
-          <div className="grid grid-cols-3 gap-2">
-            <input className="input input-sm input-bordered" placeholder="Etiqueta" value={label} onChange={(e) => setLabel(e.target.value)} />
-            <input className="input input-sm input-bordered" placeholder="Ancho" value={width} onChange={(e) => setWidth(e.target.value)} />
-            <input className="input input-sm input-bordered" placeholder="Alto" value={height} onChange={(e) => setHeight(e.target.value)} />
-          </div>
-          <button type="button" className="btn btn-sm btn-primary w-fit" onClick={() => void createMutation.mutateAsync()}>
-            Guardar formato
-          </button>
-        </div>
+        <button type="button" className="btn btn-primary btn-sm gap-2" onClick={openCreate}>
+          <Plus className="h-4 w-4" /> Nuevo formato
+        </button>
       </div>
       <p className="text-xs text-base-content/60">
-        Los formatos desactivados no aparecen en nuevos pedidos pero se conservan en el historial.
+        Puedes editar la etiqueta y las dimensiones. Los formatos desactivados no aparecen en nuevos
+        pedidos; el historial conserva la etiqueta guardada en cada pedido.
       </p>
       <div className="overflow-x-auto rounded-lg border border-base-300">
         <table className="table table-sm">
@@ -91,38 +134,139 @@ export function FormatsTab() {
           </thead>
           <tbody>
             {(formatsQuery.data ?? []).map((f) => (
-              <tr key={f.id}>
-                <td>{f.label}</td>
+              <tr key={f.id} className={f.isActive ? "" : "opacity-60"}>
+                <td className="font-medium">{f.label}</td>
                 <td>
                   {f.widthInches ?? "—"}&quot; × {f.heightInches ?? "—"}&quot;
                 </td>
                 <td>
-                  <span className={`badge badge-sm ${f.isActive ? "badge-success" : "badge-ghost"}`}>
-                    {f.isSystem ? "Base" : f.isActive ? "Activo" : "Inactivo"}
-                  </span>
+                  {f.isSystem ? (
+                    <span className="badge badge-sm badge-neutral">Base</span>
+                  ) : (
+                    <span className={`badge badge-sm ${f.isActive ? "badge-success" : "badge-ghost"}`}>
+                      {f.isActive ? "Activo" : "Inactivo"}
+                    </span>
+                  )}
                 </td>
                 <td className="text-right">
-                  {!f.isSystem && f.isActive && (
-                    <button type="button" className="btn btn-ghost btn-xs" onClick={() => void deactivateMutation.mutateAsync(f.id)}>
-                      <Power size={14} />
-                    </button>
-                  )}
-                  {!f.isSystem && !f.isActive && (
+                  <div className="flex justify-end gap-1">
                     <button
                       type="button"
-                      className="btn btn-ghost btn-xs text-success"
-                      title="Activar"
-                      onClick={() => void reactivateMutation.mutateAsync(f.id)}
+                      className="btn btn-ghost btn-xs"
+                      title="Editar"
+                      onClick={() => openEdit(f)}
                     >
-                      <RotateCcw size={14} />
+                      <Pencil className="h-3 w-3" />
                     </button>
-                  )}
+                    {!f.isSystem && f.isActive && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-warning"
+                        title="Desactivar"
+                        onClick={() => void deactivateMutation.mutateAsync(f.id)}
+                      >
+                        <Power className="h-3 w-3" />
+                      </button>
+                    )}
+                    {!f.isSystem && !f.isActive && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-success"
+                        title="Activar"
+                        onClick={() => void reactivateMutation.mutateAsync(f.id)}
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
+            {(formatsQuery.data ?? []).length === 0 && (
+              <tr>
+                <td colSpan={4} className="py-6 text-center text-base-content/60">
+                  No hay formatos definidos.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+
+      {showModal && (
+        <dialog className="modal modal-open">
+          <div className="modal-box max-w-md">
+            <h3 className="text-lg font-bold">{editing ? "Editar formato" : "Nuevo formato"}</h3>
+            <p className="mt-1 text-sm text-base-content/60">
+              Indica la etiqueta (ej. 8x10) y las dimensiones en pulgadas.
+            </p>
+            <div className="mt-4 space-y-3">
+              <label className="form-control">
+                <span className="label-text">Etiqueta *</span>
+                <input
+                  className="input input-bordered"
+                  value={label}
+                  autoComplete="off"
+                  onChange={(e) => setLabel(e.target.value)}
+                  placeholder="Ej. 8x10"
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="form-control">
+                  <span className="label-text">Ancho (pulgadas) *</span>
+                  <input
+                    className="input input-bordered"
+                    inputMode="decimal"
+                    value={width}
+                    onChange={(e) => setWidth(e.target.value)}
+                    placeholder="8"
+                  />
+                </label>
+                <label className="form-control">
+                  <span className="label-text">Alto (pulgadas) *</span>
+                  <input
+                    className="input input-bordered"
+                    inputMode="decimal"
+                    value={height}
+                    onChange={(e) => setHeight(e.target.value)}
+                    placeholder="10"
+                  />
+                </label>
+              </div>
+            </div>
+            {saveMutation.isError && (
+              <p className="mt-2 text-sm text-error">
+                {(saveMutation.error as Error)?.message ?? "No se pudo guardar el formato."}
+              </p>
+            )}
+            <div className="modal-action">
+              <button type="button" className="btn" onClick={closeModal} disabled={saveMutation.isPending}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={saveMutation.isPending}
+                onClick={() => void saveMutation.mutateAsync()}
+              >
+                {saveMutation.isPending ? (
+                  <span className="loading loading-spinner loading-sm" />
+                ) : editing ? (
+                  "Guardar cambios"
+                ) : (
+                  "Crear formato"
+                )}
+              </button>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="modal-backdrop bg-transparent"
+            aria-label="Cerrar"
+            onClick={closeModal}
+          />
+        </dialog>
+      )}
     </div>
   );
 }
