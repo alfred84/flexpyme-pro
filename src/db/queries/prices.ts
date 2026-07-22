@@ -56,14 +56,15 @@ export interface CostRowDto {
 }
 
 /**
- * Loads all employee cost rows.
+ * Loads employee payment-tariff rows (`cost_list`).
  */
 export async function fetchCostList(): Promise<CostRowDto[]> {
   return invoke<CostRowDto[]>("cost_list_all");
 }
 
 /**
- * Updates a single cost-list row (unit cost and active flag).
+ * Updates a single payment-tariff row (unit cost and active flag).
+ * Prefer editing via Precios; this remains for programmatic sync.
  */
 export async function updateCost(payload: {
   id: number;

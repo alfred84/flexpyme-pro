@@ -293,8 +293,9 @@ export const exchangeRateHistory = sqliteTable("exchange_rate_history", {
 });
 
 /**
- * Precios de COSTO para el cálculo del salario de empleados.
- * Separado de `price_list` (precios de VENTA). Importes en CUP.
+ * Tarifas de pago a empleados (mano de obra) por tipo de trabajo y formato.
+ * Se mantiene sincronizada desde Precios (`price_list.cost` → tarifa de pago).
+ * Importes en CUP.
  */
 export const costList = sqliteTable("cost_list", {
   id: integer("id").primaryKey({ autoIncrement: true }),

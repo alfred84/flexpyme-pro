@@ -258,13 +258,13 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
 
       {eligibleLines.length === 0 ? (
         <p className="text-sm text-base-content/60">
-          Este pedido no tiene líneas con formato; no se puede calcular el costo de mano de obra.
+          Este pedido no tiene líneas con formato; no se puede calcular la tarifa de mano de obra.
         </p>
       ) : costsQuery.isLoading ? (
-        <p className="text-sm">Cargando costos...</p>
+        <p className="text-sm">Cargando tarifas...</p>
       ) : costs.length === 0 ? (
         <p className="text-sm text-base-content/60">
-          No hay costos configurados para este tipo de trabajo.
+          No hay tarifas de pago configuradas para este tipo de trabajo. Defínelas en Precios.
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-base-300">
@@ -274,7 +274,7 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
                 <th>Línea</th>
                 <th>Tipo de trabajo</th>
                 <th className="text-right">Pedido</th>
-                <th className="text-right">Costo unit.</th>
+                <th className="text-right">Tarifa</th>
                 <th className="w-28">Cant. trabajo</th>
                 <th className="text-right">Subtotal</th>
               </tr>

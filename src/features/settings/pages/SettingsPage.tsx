@@ -80,12 +80,8 @@ export function SettingsPage() {
   const [tab, setTab] = useState<TabKey>(() => resolveSettingsTab(initialTab));
 
   useEffect(() => {
-    if (initialTab === "precios") {
+    if (initialTab === "precios" || initialTab === "costos") {
       void navigate({ to: "/precios" });
-      return;
-    }
-    if (initialTab === "costos") {
-      void navigate({ to: "/costos" });
       return;
     }
     if (initialTab) {

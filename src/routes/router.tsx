@@ -6,7 +6,6 @@ import { ClientEditPage } from "@/features/clients/pages/ClientEditPage";
 import { ClientNewPage } from "@/features/clients/pages/ClientNewPage";
 import { ClientsListPage } from "@/features/clients/pages/ClientsListPage";
 import { PricesListPage } from "@/features/products/pages/PricesListPage";
-import { CostsListPage } from "@/features/products/pages/CostsListPage";
 import { ProductionBatchDetailPage } from "@/features/production/pages/ProductionBatchDetailPage";
 import { ProductionListPage } from "@/features/production/pages/ProductionListPage";
 import { ProductionNewPage } from "@/features/production/pages/ProductionNewPage";
@@ -76,10 +75,13 @@ const pricesListRoute = createRoute({
   component: PricesListPage,
 });
 
+/** Legacy route: Costos se gestiona dentro de Precios. */
 const costsListRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "costos",
-  component: CostsListPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/precios" });
+  },
 });
 
 const productionListRoute = createRoute({

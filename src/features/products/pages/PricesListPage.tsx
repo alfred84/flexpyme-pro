@@ -8,11 +8,22 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { ArrowLeft } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { fetchAllCategoryWorkTypes, fetchCategories } from "@/db/queries/categories";
 import { fetchPrices, updatePrice } from "@/db/queries/prices";
+import { serviceMatchesWorkType } from "@/features/invoices/lib/work-type-match";
+import { categoryMosaicTone, resolveCategoryIcon } from "@/lib/category-icons";
 import { formatMoney } from "@/lib/format-money";
+import type { CategoryWorkTypeDto, ProductCategoryDto } from "@/types/category";
 import type { PriceRowDto } from "@/types/price";
 
+/**
+ * Formatea un importe CUP o muestra guión si no hay valor.
+ *
+ * @param value - Importe o nulo.
+ * @returns Texto formateado.
+ */
 function formatCell(value: number | null | undefined): string {
   if (value === null || value === undefined) {
     return "—";
@@ -21,30 +32,46 @@ function formatCell(value: number | null | undefined): string {
 }
 
 /**
- * Price list management: browse rows, filter, and edit price/cost/active in a modal.
+ * Precios: mosaico por categoría → tipos de trabajo → tabla con precio y tarifa de pago.
  *
- * @returns Prices administration page.
+ * @returns Pantalla de administración de precios.
  */
 export function PricesListPage() {
   const queryClient = useQueryClient();
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedWorkTypeId, setSelectedWorkTypeId] = useState<number | null>(null);
   const [includeInactive, setIncludeInactive] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [editing, setEditing] = useState<PriceRowDto | null>(null);
   const [editPrice, setEditPrice] = useState("");
-  const [editCost, setEditCost] = useState("");
+  const [editTarifa, setEditTarifa] = useState("0");
   const [editActive, setEditActive] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const categoriesQuery = useQuery({
+    queryKey: ["categories", "active"],
+    queryFn: () => fetchCategories(true),
+  });
+
+  const workTypesQuery = useQuery({
+    queryKey: ["category-work-types", "all"],
+    queryFn: fetchAllCategoryWorkTypes,
+  });
 
   const pricesQuery = useQuery({
     queryKey: ["prices", "list", includeInactive],
     queryFn: () => fetchPrices(includeInactive),
+    enabled: selectedCategoryId != null,
   });
 
   const updateMutation = useMutation({
     mutationFn: updatePrice,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["prices"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["prices"] }),
+        queryClient.invalidateQueries({ queryKey: ["costs"] }),
+      ]);
       setEditing(null);
       setFormError(null);
     },
@@ -53,25 +80,67 @@ export function PricesListPage() {
     },
   });
 
+  const categories = useMemo(
+    () => (categoriesQuery.data ?? []).filter((c) => c.isActive),
+    [categoriesQuery.data],
+  );
+
+  const selectedCategory = useMemo(
+    () => categories.find((c) => c.id === selectedCategoryId) ?? null,
+    [categories, selectedCategoryId],
+  );
+
+  const categoryWorkTypes = useMemo(() => {
+    if (selectedCategoryId == null) {
+      return [] as CategoryWorkTypeDto[];
+    }
+    return (workTypesQuery.data ?? []).filter(
+      (wt) => wt.categoryId === selectedCategoryId && wt.workTypeActive,
+    );
+  }, [selectedCategoryId, workTypesQuery.data]);
+
+  const selectedWorkType = useMemo(
+    () => categoryWorkTypes.find((wt) => wt.workTypeId === selectedWorkTypeId) ?? null,
+    [categoryWorkTypes, selectedWorkTypeId],
+  );
+
+  useEffect(() => {
+    if (categoryWorkTypes.length === 0) {
+      setSelectedWorkTypeId(null);
+      return;
+    }
+    setSelectedWorkTypeId((prev) => {
+      if (prev != null && categoryWorkTypes.some((wt) => wt.workTypeId === prev)) {
+        return prev;
+      }
+      return categoryWorkTypes[0]?.workTypeId ?? null;
+    });
+  }, [categoryWorkTypes]);
+
+  const filteredRows = useMemo(() => {
+    if (!selectedCategory || !selectedWorkType) {
+      return [] as PriceRowDto[];
+    }
+    return (pricesQuery.data ?? []).filter(
+      (row) =>
+        row.categoryId === selectedCategory.id &&
+        serviceMatchesWorkType(row.service, selectedWorkType.workTypeCode, selectedWorkType.workTypeName),
+    );
+  }, [pricesQuery.data, selectedCategory, selectedWorkType]);
+
   const openEdit = useCallback((row: PriceRowDto) => {
     setEditing(row);
     setEditPrice(String(row.price));
-    setEditCost(row.cost === null || row.cost === undefined ? "" : String(row.cost));
+    setEditTarifa(row.cost === null || row.cost === undefined ? "0" : String(row.cost));
     setEditActive(row.isActive);
     setFormError(null);
   }, []);
 
   const columns = useMemo<ColumnDef<PriceRowDto>[]>(
     () => [
-      { accessorKey: "categoryName", header: "Categoría" },
       {
         accessorKey: "formatLabel",
         header: "Formato",
-        cell: (info) => info.getValue<string | null>() ?? "—",
-      },
-      {
-        accessorKey: "service",
-        header: "Servicio",
         cell: (info) => info.getValue<string | null>() ?? "—",
       },
       {
@@ -86,8 +155,8 @@ export function PricesListPage() {
       },
       {
         accessorKey: "cost",
-        header: "Costo",
-        cell: (info) => formatCell(info.getValue<number | null>()),
+        header: "Tarifa de Pago",
+        cell: (info) => formatCell(info.getValue<number | null>() ?? 0),
       },
       {
         accessorKey: "isActive",
@@ -110,7 +179,7 @@ export function PricesListPage() {
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table API is intentionally imperative
   const table = useReactTable({
-    data: pricesQuery.data ?? [],
+    data: filteredRows,
     columns,
     state: { globalFilter, sorting },
     onGlobalFilterChange: setGlobalFilter,
@@ -121,6 +190,20 @@ export function PricesListPage() {
     globalFilterFn: "includesString",
   });
 
+  const handleSelectCategory = (category: ProductCategoryDto) => {
+    setSelectedCategoryId(category.id);
+    setSelectedWorkTypeId(null);
+    setGlobalFilter("");
+    setSorting([]);
+  };
+
+  const handleBackToMosaic = () => {
+    setSelectedCategoryId(null);
+    setSelectedWorkTypeId(null);
+    setGlobalFilter("");
+    setEditing(null);
+  };
+
   const handleSaveEdit = () => {
     if (!editing) {
       return;
@@ -130,35 +213,81 @@ export function PricesListPage() {
       setFormError("Introduce un precio válido mayor que cero.");
       return;
     }
-    let cost: number | null = null;
-    const costTrim = editCost.trim();
-    if (costTrim !== "") {
-      const c = Number.parseFloat(costTrim.replace(",", "."));
-      if (!Number.isFinite(c) || c < 0) {
-        setFormError("Introduce un costo válido o déjalo vacío.");
-        return;
-      }
-      cost = c;
-      if (c > price) {
-        setFormError("El costo no puede ser mayor que el precio.");
-        return;
-      }
+    const tarifa = Number.parseFloat(editTarifa.replace(",", "."));
+    if (!Number.isFinite(tarifa) || tarifa < 0) {
+      setFormError("Introduce una tarifa de pago válida (0 o mayor).");
+      return;
+    }
+    if (tarifa > price) {
+      setFormError("La tarifa de pago no puede ser mayor que el precio.");
+      return;
     }
     setFormError(null);
     void updateMutation.mutateAsync({
       id: editing.id,
       price,
-      cost,
+      cost: tarifa,
       isActive: editActive,
     });
   };
 
+  if (selectedCategory == null) {
+    return (
+      <section className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Precios</h1>
+          <p className="text-sm text-base-content/70">
+            Elige una categoría para gestionar precios de venta y tarifas de pago a trabajadores.
+          </p>
+        </div>
+
+        {categoriesQuery.isLoading && <p>Cargando categorías...</p>}
+        {categoriesQuery.isError && (
+          <div className="alert alert-error">
+            <span>No se pudieron cargar las categorías.</span>
+          </div>
+        )}
+
+        {categoriesQuery.data && categories.length === 0 && (
+          <p className="text-sm text-base-content/60">No hay categorías activas.</p>
+        )}
+
+        {categories.length > 0 && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {categories.map((category, index) => {
+              const Icon = resolveCategoryIcon(category.icon);
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  className={`flex min-h-28 flex-col items-center justify-center gap-3 rounded-xl border p-4 text-center transition ${categoryMosaicTone(index)}`}
+                  onClick={() => handleSelectCategory(category)}
+                >
+                  <Icon className="h-8 w-8 opacity-90" aria-hidden />
+                  <span className="text-sm font-semibold leading-tight">{category.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    );
+  }
+
   return (
     <section className="space-y-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Lista de precios</h1>
-          <p className="text-sm text-base-content/70">Precios de venta y costos internos por categoría y formato.</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-2">
+          <button type="button" className="btn btn-ghost btn-sm gap-2 px-0" onClick={handleBackToMosaic}>
+            <ArrowLeft className="h-4 w-4" />
+            Todas las categorías
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold">{selectedCategory.name}</h1>
+            <p className="text-sm text-base-content/70">
+              Precio de venta y tarifa de pago por formato según el tipo de trabajo.
+            </p>
+          </div>
         </div>
         <label className="label cursor-pointer justify-start gap-3 sm:justify-end">
           <span className="label-text">Mostrar inactivos</span>
@@ -171,70 +300,112 @@ export function PricesListPage() {
         </label>
       </div>
 
-      {pricesQuery.isLoading && <p>Cargando precios...</p>}
-      {pricesQuery.isError && (
+      {workTypesQuery.isLoading && <p className="text-sm">Cargando tipos de trabajo...</p>}
+      {workTypesQuery.isError && (
         <div className="alert alert-error">
-          <span>No se pudieron cargar los precios.</span>
+          <span>No se pudieron cargar los tipos de trabajo.</span>
         </div>
       )}
 
-      {pricesQuery.data && (
-        <>
-          <input
-            type="search"
-            className="input input-bordered w-full max-w-md"
-            placeholder="Buscar en la tabla..."
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            aria-label="Filtrar precios"
-          />
+      {!workTypesQuery.isLoading && categoryWorkTypes.length === 0 && (
+        <div className="alert alert-warning">
+          <span>
+            Esta categoría no tiene tipos de trabajo asociados. Configúralos en Configuración → Categorías.
+          </span>
+        </div>
+      )}
 
-          <div className="overflow-x-auto rounded-lg border border-base-300 bg-base-100">
-            <table className="table table-zebra table-sm">
-              <thead>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <th key={header.id}>
-                        {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1 hover:underline"
-                            onClick={header.column.getToggleSortingHandler()}
-                          >
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                            {{
-                              asc: "↑",
-                              desc: "↓",
-                            }[header.column.getIsSorted() as string] ?? "↕"}
-                          </button>
-                        ) : (
-                          flexRender(header.column.columnDef.header, header.getContext())
-                        )}
-                      </th>
+      {categoryWorkTypes.length > 0 && (
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Tipos de trabajo">
+          {categoryWorkTypes.map((wt) => {
+            const active = wt.workTypeId === selectedWorkTypeId;
+            return (
+              <button
+                key={wt.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                className={`btn btn-sm ${active ? "btn-primary" : "btn-outline"}`}
+                onClick={() => {
+                  setSelectedWorkTypeId(wt.workTypeId);
+                  setGlobalFilter("");
+                }}
+              >
+                {wt.workTypeName}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {selectedWorkType && (
+        <>
+          {pricesQuery.isLoading && <p>Cargando precios...</p>}
+          {pricesQuery.isError && (
+            <div className="alert alert-error">
+              <span>No se pudieron cargar los precios.</span>
+            </div>
+          )}
+
+          {pricesQuery.data && (
+            <>
+              <input
+                type="search"
+                className="input input-bordered w-full max-w-md"
+                placeholder="Buscar formato o acabado..."
+                value={globalFilter}
+                onChange={(e) => setGlobalFilter(e.target.value)}
+                aria-label="Filtrar precios"
+              />
+
+              <div className="overflow-x-auto rounded-lg border border-base-300 bg-base-100">
+                <table className="table table-zebra table-sm">
+                  <thead>
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <tr key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <th key={header.id}>
+                            {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 hover:underline"
+                                onClick={header.column.getToggleSortingHandler()}
+                              >
+                                {flexRender(header.column.columnDef.header, header.getContext())}
+                                {{
+                                  asc: "↑",
+                                  desc: "↓",
+                                }[header.column.getIsSorted() as string] ?? "↕"}
+                              </button>
+                            ) : (
+                              flexRender(header.column.columnDef.header, header.getContext())
+                            )}
+                          </th>
+                        ))}
+                      </tr>
                     ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody>
-                {table.getRowModel().rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={columns.length} className="text-center text-base-content/60">
-                      No hay filas.
-                    </td>
-                  </tr>
-                ) : (
-                  table.getRowModel().rows.map((row) => (
-                    <tr key={row.id}>
-                      {row.getVisibleCells().map((cell) => (
-                        <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
-                      ))}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {table.getRowModel().rows.length === 0 ? (
+                      <tr>
+                        <td colSpan={columns.length} className="text-center text-base-content/60">
+                          No hay precios para {selectedWorkType.workTypeName} en esta categoría.
+                        </td>
+                      </tr>
+                    ) : (
+                      table.getRowModel().rows.map((row) => (
+                        <tr key={row.id}>
+                          {row.getVisibleCells().map((cell) => (
+                            <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                          ))}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -243,9 +414,9 @@ export function PricesListPage() {
           <div className="modal-box max-w-lg">
             <h3 className="text-lg font-bold">Editar precio</h3>
             <p className="py-1 text-sm text-base-content/70">
-              {editing.categoryName}
+              {selectedCategory.name}
+              {selectedWorkType ? ` · ${selectedWorkType.workTypeName}` : ""}
               {editing.formatLabel ? ` · ${editing.formatLabel}` : ""}
-              {editing.service ? ` · ${editing.service}` : ""}
               {editing.finish ? ` · ${editing.finish}` : ""}
             </p>
             <div className="form-control py-2">
@@ -262,34 +433,54 @@ export function PricesListPage() {
               />
             </div>
             <div className="form-control py-2">
-              <label className="label" htmlFor="edit-cost">
-                <span className="label-text">Costo (opcional)</span>
+              <label className="label" htmlFor="edit-tarifa">
+                <span className="label-text">Tarifa de Pago</span>
               </label>
               <input
-                id="edit-cost"
+                id="edit-tarifa"
                 type="text"
                 inputMode="decimal"
                 className="input input-bordered"
-                value={editCost}
-                onChange={(e) => setEditCost(e.target.value)}
-                placeholder="Vacío = sin costo"
+                value={editTarifa}
+                onChange={(e) => setEditTarifa(e.target.value)}
+                required
               />
+              <label className="label">
+                <span className="label-text-alt text-base-content/60">
+                  Importe unitario que se paga al trabajador (por defecto 0).
+                </span>
+              </label>
             </div>
             <label className="label cursor-pointer justify-start gap-3 py-2">
               <span className="label-text">Activo</span>
-              <input type="checkbox" className="toggle toggle-primary" checked={editActive} onChange={(e) => setEditActive(e.target.checked)} />
+              <input
+                type="checkbox"
+                className="toggle toggle-primary"
+                checked={editActive}
+                onChange={(e) => setEditActive(e.target.checked)}
+              />
             </label>
             {formError && <p className="text-error text-sm">{formError}</p>}
             <div className="modal-action">
               <button type="button" className="btn" onClick={() => setEditing(null)}>
                 Cerrar
               </button>
-              <button type="button" className="btn btn-primary" disabled={updateMutation.isPending} onClick={handleSaveEdit}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={updateMutation.isPending}
+                onClick={handleSaveEdit}
+              >
                 {updateMutation.isPending ? <span className="loading loading-spinner loading-sm" /> : "Guardar"}
               </button>
             </div>
           </div>
-          <button type="button" className="modal-backdrop bg-transparent" aria-label="Cerrar" onClick={() => setEditing(null)} />
+          <button
+            type="button"
+            className="modal-backdrop bg-transparent"
+            aria-label="Cerrar"
+            onClick={() => setEditing(null)}
+          />
         </dialog>
       )}
     </section>

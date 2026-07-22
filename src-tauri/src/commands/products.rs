@@ -134,28 +134,38 @@ pub fn prices_list(args: PricesListArgs) -> Result<Vec<PriceRowDto>, String> {
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
-/// Updates price, optional cost, and active flag for a price list row.
+/// Updates sale price, payment tariff (`cost`), and active flag for a price list row.
+/// Also syncs the matching `cost_list` row used for employee salary calculations.
 #[tauri::command]
 pub fn prices_update(payload: UpdatePricePayload) -> Result<(), String> {
     if payload.price <= 0.0 {
         return Err("El precio debe ser mayor que cero".to_string());
     }
-    if let Some(cost) = payload.cost {
-        if cost < 0.0 {
-            return Err("El costo no puede ser negativo".to_string());
-        }
-        if cost > payload.price {
-            return Err("El costo no puede ser mayor que el precio de venta".to_string());
-        }
+    let tarifa = payload.cost.unwrap_or(0.0);
+    if tarifa < 0.0 {
+        return Err("La tarifa de pago no puede ser negativa".to_string());
+    }
+    if tarifa > payload.price {
+        return Err("La tarifa de pago no puede ser mayor que el precio de venta".to_string());
     }
 
-    let conn = db::open_connection()?;
-    let updated = conn
+    let mut conn = db::open_connection()?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let (format_id, service): (Option<i64>, Option<String>) = tx
+        .query_row(
+            "SELECT format_id, service FROM price_list WHERE id = ?1",
+            params![payload.id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Precio no encontrado".to_string())?;
+
+    let updated = tx
         .execute(
             "UPDATE price_list SET price = ?1, cost = ?2, is_active = ?3 WHERE id = ?4",
             params![
                 payload.price,
-                payload.cost,
+                tarifa,
                 if payload.is_active { 1i64 } else { 0i64 },
                 payload.id
             ],
@@ -165,7 +175,65 @@ pub fn prices_update(payload: UpdatePricePayload) -> Result<(), String> {
     if updated == 0 {
         return Err("Precio no encontrado".to_string());
     }
+
+    // Sync employee pay rate (cost_list) when we can resolve work type + format.
+    if let Some(ref service_name) = service {
+        if let Some(fid) = format_id {
+            if let Ok(work_code) = resolve_work_type_code(&tx, service_name) {
+                let synced = tx
+                    .execute(
+                        "UPDATE cost_list SET unit_cost = ?1, is_active = ?2
+                         WHERE work_type = ?3 AND format_id = ?4",
+                        params![
+                            tarifa,
+                            if payload.is_active { 1i64 } else { 0i64 },
+                            work_code,
+                            fid
+                        ],
+                    )
+                    .map_err(|e| e.to_string())?;
+                if synced == 0 {
+                    // Insert if the pair did not exist yet.
+                    let _ = tx.execute(
+                        "INSERT INTO cost_list (work_type, format_id, unit_cost, is_active)
+                         VALUES (?1, ?2, ?3, ?4)",
+                        params![
+                            work_code,
+                            fid,
+                            tarifa,
+                            if payload.is_active { 1i64 } else { 0i64 }
+                        ],
+                    );
+                }
+            }
+        }
+    }
+
+    tx.commit().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Resolves a `work_types.code` from a price-list service label (name or code).
+fn resolve_work_type_code(conn: &rusqlite::Connection, service: &str) -> Result<String, String> {
+    let needle = service.trim().to_lowercase();
+    conn.query_row(
+        "SELECT code FROM work_types
+         WHERE lower(code) = ?1 OR lower(name) = ?1
+         LIMIT 1",
+        params![needle],
+        |row| row.get(0),
+    )
+    .or_else(|_| {
+        // Fuzzy: strip accents not available in SQLite; try contains via LIKE.
+        conn.query_row(
+            "SELECT code FROM work_types
+             WHERE lower(name) LIKE '%' || ?1 || '%' OR lower(code) LIKE '%' || ?1 || '%'
+             LIMIT 1",
+            params![needle],
+            |row| row.get(0),
+        )
+    })
+    .map_err(|_| "Tipo de trabajo no encontrado".to_string())
 }
 
 /// Cost-list row with format label (employee salary costs).

@@ -469,6 +469,7 @@ pub struct CategoryWorkTypeDto {
     pub id: i64,
     pub category_id: i64,
     pub work_type_id: i64,
+    pub work_type_code: String,
     pub work_type_name: String,
     pub work_type_active: bool,
 }
@@ -492,13 +493,13 @@ fn list_category_work_types(
     category_id: Option<i64>,
 ) -> Result<Vec<CategoryWorkTypeDto>, String> {
     let sql = if category_id.is_some() {
-        "SELECT cwt.id, cwt.category_id, cwt.work_type_id, wt.name, wt.is_active
+        "SELECT cwt.id, cwt.category_id, cwt.work_type_id, wt.code, wt.name, wt.is_active
          FROM category_work_types cwt
          JOIN work_types wt ON wt.id = cwt.work_type_id
          WHERE cwt.category_id = ?1
          ORDER BY wt.name COLLATE NOCASE"
     } else {
-        "SELECT cwt.id, cwt.category_id, cwt.work_type_id, wt.name, wt.is_active
+        "SELECT cwt.id, cwt.category_id, cwt.work_type_id, wt.code, wt.name, wt.is_active
          FROM category_work_types cwt
          JOIN work_types wt ON wt.id = cwt.work_type_id
          ORDER BY cwt.category_id, wt.name COLLATE NOCASE"
@@ -509,8 +510,9 @@ fn list_category_work_types(
             id: row.get(0)?,
             category_id: row.get(1)?,
             work_type_id: row.get(2)?,
-            work_type_name: row.get(3)?,
-            work_type_active: row.get::<_, i64>(4)? != 0,
+            work_type_code: row.get(3)?,
+            work_type_name: row.get(4)?,
+            work_type_active: row.get::<_, i64>(5)? != 0,
         })
     };
     let rows = if let Some(id) = category_id {
@@ -526,11 +528,11 @@ fn list_category_work_types(
 #[tauri::command]
 pub fn category_work_type_add(category_id: i64, work_type_id: i64) -> Result<CategoryWorkTypeDto, String> {
     let conn = db::open_connection()?;
-    let (name, is_active): (String, i64) = conn
+    let (code, name, is_active): (String, String, i64) = conn
         .query_row(
-            "SELECT name, is_active FROM work_types WHERE id = ?1",
+            "SELECT code, name, is_active FROM work_types WHERE id = ?1",
             params![work_type_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .map_err(|_| "Tipo de trabajo no válido".to_string())?;
     let category_exists: i64 = conn
@@ -560,6 +562,7 @@ pub fn category_work_type_add(category_id: i64, work_type_id: i64) -> Result<Cat
         id,
         category_id,
         work_type_id,
+        work_type_code: code,
         work_type_name: name,
         work_type_active: is_active != 0,
     })

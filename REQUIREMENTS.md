@@ -121,7 +121,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 ### 3.7 Configuración
 - Datos del negocio (nombre, dirección, teléfono, logo)
 - Tasa de cambio USD → CUP (actualizable desde cabecera o Configuración; histórico de cambios)
-- **Precios** y **Costos** como entradas del sidebar (debajo de Flujo de Caja), no como tabs de Configuración
+- **Precios** como entrada del sidebar (debajo de Flujo de Caja), no como tab de Configuración. Incluye precios de venta y **tarifas de pago** a trabajadores (antes «Costos»); la ruta legacy `/costos` redirige a `/precios`.
 - **Categorías** de productos (CRUD con `is_system`, snapshot en pedidos)
 - **Tipos de trabajo, formatos y acabados por categoría**: tablas `category_work_types`, `category_formats` y `category_finishes` (vinculadas a los catálogos `work_types`, `formats` y `finishes`). Catálogo global de acabados en Configuración → Acabados. Al crear líneas se preseleccionan tipos y acabados «por defecto», se limitan formatos asociados y cada tipo se expande en un `invoice_item`.
 - **Unidades** de medida (CRUD con tipo, snapshot en inventario)
@@ -149,7 +149,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Comparativa Factura vs Salario vs Diferencia del mes en curso
 
 ### 3.11 Otros gastos (v2.5)
-- Entrada de sidebar **Otros gastos** (tras Costos); ruta `/otros-gastos`
+- Entrada de sidebar **Otros gastos** (tras Precios); ruta `/otros-gastos`
 - Alta en pantalla dedicada `/otros-gastos/nuevo` (botón «Registrar gasto»); el listado muestra KPIs y el historial
 - Detalle `/otros-gastos/:id` y edición `/otros-gastos/:id/editar` (la edición sincroniza el egreso en `cash_transactions`)
 - Filtro rápido de periodo en el listado: **Día actual** (por defecto), **Mes actual** o **Todos**
@@ -188,7 +188,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 
 - **Estilo**: Dashboard profesional, limpio, moderno — inspirado en Odoo/FacturaScript
 - **Modo**: Dark mode por defecto (con opción de light mode en Configuración)
-- **Sidebar**: Dashboard, Pedidos, Reportes producción, Facturas, Clientes, Empleados, Inventario, Caja, Precios, Costos, Otros gastos, Reportes, Configuración
+- **Sidebar**: Dashboard, Pedidos, Reportes producción, Facturas, Clientes, Empleados, Inventario, Caja, Precios, Otros gastos, Reportes, Configuración
 - **Fechas en UI (v2.5)**: siempre `dd/mm/aaaa` vía `formatDate` / `formatDateTime` (`src/lib/format-date.ts`)
 - **Iconos**: Lucide React en todos los menús, botones y acciones
 - **Tipografía**: moderna y legible
@@ -309,7 +309,7 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - **Tasa de cambio**: modal en cabecera; tab Configuración renombrado a **Tasa de cambio** con histórico de cambios.
 - **Catálogos**: reactivar tipos de trabajo, formatos, unidades y roles desactivados.
 - **Roles**: corrección del formulario de alta; modal CRUD.
-- **Navegación**: Precios y Costos en sidebar (debajo de Flujo de Caja).
+- **Navegación**: Precios en sidebar (debajo de Flujo de Caja); Costos unificado en Precios (tarifa de pago).
 - **Caja**: denominación CUP **2000** en conteo de billetes.
 - **Nuevo pedido**: encabezado compacto; líneas en tabla + modal CRUD; resumen solo del pedido (sin deuda anterior); cobro integrado al completar encabezado, líneas y método de pago; autocompletado de línea desde lista de precios.
 - **Inventario operativo**: recetas de consumo (`inventory_recipes`); descuento automático al marcar pedido listo; Stock retirado del sidebar (filtro Listos en Pedidos).
@@ -326,6 +326,11 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - **Empleados**: multi-rol (`employee_extra_roles`) y nómina diaria.
 - **Otros gastos**: `/otros-gastos` con egreso automático en `cash_transactions`.
 - **Tipos de gasto (Otros gastos)**: catálogo `expense_types` con alta/renombre/activar-desactivar desde la UI; el select del formulario usa tipos activos.
+
+### v2.6 — Precios y tarifas de pago (2026-07)
+- **Costos** retirado del sidebar; gestión unificada en **Precios** (ruta `/costos` → `/precios`).
+- **UX Precios**: mosaico por categoría → pestañas por tipo de trabajo de la categoría → tabla (formato, acabado, precio, tarifa de pago).
+- Columna/modal **Tarifa de Pago** (obligatoria, default 0); al guardar se sincroniza `cost_list` para salarios.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

@@ -32,11 +32,12 @@ export interface PriceRowDto {
 }
 
 /**
- * Payload for updating a price row.
+ * Payload for updating a price row (sale price + payment tariff).
  */
 export interface UpdatePricePayload {
   id: number;
   price: number;
+  /** Tarifa de pago al trabajador (CUP); required in UI, default 0. */
   cost: number | null;
   isActive: boolean;
 }

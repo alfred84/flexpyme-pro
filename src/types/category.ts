@@ -64,6 +64,7 @@ export interface CategoryWorkTypeDto {
   id: number;
   categoryId: number;
   workTypeId: number;
+  workTypeCode: string;
   workTypeName: string;
   workTypeActive: boolean;
 }

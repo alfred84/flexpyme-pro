@@ -186,16 +186,18 @@ export function EmployeeWorkBatchPage() {
         <div className="card-body">
           <h2 className="card-title text-base">Cantidades por formato</h2>
           {costsQuery.isLoading ? (
-            <p>Cargando costos...</p>
+            <p>Cargando tarifas...</p>
           ) : costs.length === 0 ? (
-            <p className="text-sm text-base-content/60">No hay costos configurados para este tipo de trabajo.</p>
+            <p className="text-sm text-base-content/60">
+              No hay tarifas de pago configuradas para este tipo de trabajo. Defínelas en Precios.
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="table table-sm">
                 <thead>
                   <tr>
                     <th>Formato</th>
-                    <th className="text-right">Costo unitario</th>
+                    <th className="text-right">Tarifa de pago</th>
                     <th className="w-32">Cantidad</th>
                     <th className="text-right">Subtotal</th>
                   </tr>

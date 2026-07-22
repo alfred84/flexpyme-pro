@@ -1,22 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import {
-  Album,
-  Book,
-  BookOpen,
-  Box,
-  Image,
-  Key,
-  Layers,
-  Pencil,
-  Plus,
-  Power,
-  RectangleHorizontal,
-  RotateCcw,
-  Settings2,
-  Tag,
-  Type,
-} from "lucide-react";
+import { Pencil, Plus, Power, RotateCcw, Settings2 } from "lucide-react";
 import {
   createCategory,
   deactivateCategory,
@@ -26,22 +10,10 @@ import {
 } from "@/db/queries/categories";
 import type { ProductCategoryDto } from "@/types/category";
 import { CategoryConfigModal } from "@/features/settings/components/CategoryConfigModal";
+import { CATEGORY_ICON_MAP, resolveCategoryIcon } from "@/lib/category-icons";
 import { slugify } from "@/lib/slugify";
 
-const ICON_OPTIONS = ["Image", "Layers", "BookOpen", "Album", "Box", "Type", "Book", "RectangleHorizontal", "Key", "Tag"] as const;
-
-const ICON_MAP = {
-  Image,
-  Layers,
-  BookOpen,
-  Album,
-  Box,
-  Type,
-  Book,
-  RectangleHorizontal,
-  Key,
-  Tag,
-};
+const ICON_OPTIONS = Object.keys(CATEGORY_ICON_MAP);
 
 /**
  * Tab de gestión de categorías de productos.
@@ -124,7 +96,7 @@ export function CategoriesTab() {
   };
 
   const renderIcon = (iconName: string | null) => {
-    const Icon = ICON_MAP[(iconName as keyof typeof ICON_MAP) ?? "Tag"] ?? Tag;
+    const Icon = resolveCategoryIcon(iconName);
     return <Icon className="h-4 w-4" />;
   };
 
