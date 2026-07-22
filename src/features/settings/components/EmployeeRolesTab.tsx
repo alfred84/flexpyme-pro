@@ -8,6 +8,7 @@ import {
   reactivateEmployeeRole,
   updateEmployeeRole,
 } from "@/db/queries/employee-roles";
+import { ModalPortal } from "@/components/common/ModalPortal";
 import { pushFlashMessage } from "@/lib/flash-message";
 
 /**
@@ -155,7 +156,8 @@ export function EmployeeRolesTab() {
       </div>
 
       {showModal && (
-        <dialog className="modal modal-open">
+        <ModalPortal>
+          <dialog className="modal modal-open">
           <div className="modal-box">
             <h3 className="font-bold text-lg">{editingId ? "Editar rol" : "Nuevo rol"}</h3>
             <div className="mt-4 space-y-3">
@@ -188,7 +190,8 @@ export function EmployeeRolesTab() {
             </div>
           </div>
           <button type="button" className="modal-backdrop bg-transparent" aria-label="Cerrar" onClick={closeModal} />
-        </dialog>
+          </dialog>
+        </ModalPortal>
       )}
     </div>
   );

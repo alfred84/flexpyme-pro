@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Pencil, Plus, Power, RotateCcw } from "lucide-react";
+import { ModalPortal } from "@/components/common/ModalPortal";
 import { createUnit, deactivateUnit, fetchUnits, reactivateUnit, updateUnit } from "@/db/queries/units";
 import type { UnitDto, UnitType } from "@/types/unit";
 
@@ -164,7 +165,8 @@ export function UnitsTab() {
       </div>
 
       {showModal && (
-        <dialog className="modal modal-open">
+        <ModalPortal>
+          <dialog className="modal modal-open">
           <div className="modal-box">
             <h3 className="font-bold text-lg">{editing ? "Editar unidad" : "Nueva unidad"}</h3>
             <div className="mt-4 space-y-3">
@@ -204,7 +206,8 @@ export function UnitsTab() {
             </div>
           </div>
           <button type="button" className="modal-backdrop bg-transparent" aria-label="Cerrar" onClick={() => setShowModal(false)} />
-        </dialog>
+          </dialog>
+        </ModalPortal>
       )}
     </div>
   );

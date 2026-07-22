@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Pencil, Plus, Power, RotateCcw, Sparkles } from "lucide-react";
+import { ModalPortal } from "@/components/common/ModalPortal";
 import {
   createFinish,
   deactivateFinish,
@@ -177,7 +178,8 @@ export function FinishesTab() {
       </div>
 
       {showModal && (
-        <dialog className="modal modal-open">
+        <ModalPortal>
+          <dialog className="modal modal-open">
           <div className="modal-box max-w-md">
             <h3 className="text-lg font-bold">{editing ? "Editar acabado" : "Nuevo acabado"}</h3>
             <p className="mt-1 text-sm text-base-content/60">
@@ -235,7 +237,8 @@ export function FinishesTab() {
             aria-label="Cerrar"
             onClick={closeModal}
           />
-        </dialog>
+          </dialog>
+        </ModalPortal>
       )}
     </div>
   );

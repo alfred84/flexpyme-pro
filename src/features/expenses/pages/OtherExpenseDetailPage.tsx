@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { ArrowLeft, Pencil, Receipt, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { ModalPortal } from "@/components/common/ModalPortal";
 import { deleteOtherExpense, fetchOtherExpenseById } from "@/db/queries/other-expenses";
 import { parseDenominationBreakdown, sumDenominationCounts } from "@/lib/cash-counts";
 import { formatDate, formatDateTime } from "@/lib/format-date";
@@ -181,7 +182,8 @@ export function OtherExpenseDetailPage() {
       )}
 
       {showDelete && (
-        <dialog className="modal modal-open">
+        <ModalPortal>
+          <dialog className="modal modal-open">
           <div className="modal-box">
             <h3 className="text-lg font-bold">Eliminar gasto</h3>
             <p className="py-4">
@@ -217,7 +219,8 @@ export function OtherExpenseDetailPage() {
               cerrar
             </button>
           </form>
-        </dialog>
+          </dialog>
+        </ModalPortal>
       )}
     </section>
   );

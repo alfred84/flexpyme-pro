@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ModalPortal } from "@/components/common/ModalPortal";
 import {
   fetchAllCategoryFormats,
   fetchAllCategoryWorkTypes,
@@ -497,7 +498,8 @@ export function PricesListPage() {
       )}
 
       {editing && (
-        <dialog className="modal modal-open">
+        <ModalPortal>
+          <dialog className="modal modal-open">
           <div className="modal-box max-w-lg">
             <h3 className="text-lg font-bold">
               {editing.isDraft ? "Definir precio" : "Editar precio"}
@@ -570,7 +572,8 @@ export function PricesListPage() {
             aria-label="Cerrar"
             onClick={() => setEditing(null)}
           />
-        </dialog>
+          </dialog>
+        </ModalPortal>
       )}
     </section>
   );

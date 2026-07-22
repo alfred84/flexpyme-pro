@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Power, RotateCcw, Settings2, X } from "lucide-react";
 import { useState } from "react";
+import { ModalPortal } from "@/components/common/ModalPortal";
 import {
   createExpenseType,
   deactivateExpenseType,
@@ -109,7 +110,8 @@ export function ExpenseTypesConfigModal(props: ExpenseTypesConfigModalProps) {
     saveMutation.isPending || deactivateMutation.isPending || reactivateMutation.isPending;
 
   return (
-    <dialog className="modal modal-open" aria-labelledby="expense-types-title">
+    <ModalPortal>
+      <dialog className="modal modal-open" aria-labelledby="expense-types-title">
       <div className="modal-box flex max-h-[85vh] w-full max-w-lg flex-col gap-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -240,7 +242,8 @@ export function ExpenseTypesConfigModal(props: ExpenseTypesConfigModalProps) {
       </form>
 
       {formOpen && (
-        <dialog className="modal modal-open">
+        <ModalPortal>
+          <dialog className="modal modal-open">
           <div className="modal-box max-w-sm">
             <h4 className="text-base font-bold">
               {editingId ? "Renombrar tipo" : "Nuevo tipo de gasto"}
@@ -285,8 +288,10 @@ export function ExpenseTypesConfigModal(props: ExpenseTypesConfigModalProps) {
               cerrar
             </button>
           </form>
-        </dialog>
+          </dialog>
+        </ModalPortal>
       )}
-    </dialog>
+      </dialog>
+    </ModalPortal>
   );
 }

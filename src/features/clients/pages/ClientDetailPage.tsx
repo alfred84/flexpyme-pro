@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useState } from "react";
+import { ModalPortal } from "@/components/common/ModalPortal";
 import { ClientWorkHistorySection } from "@/features/clients/components/ClientWorkHistorySection";
 import { fetchClientById, softDeleteClient } from "@/db/queries/clients";
 import { formatMoney } from "@/lib/format-money";
@@ -127,7 +128,8 @@ export function ClientDetailPage() {
       )}
 
       {showDelete && (
-        <dialog className="modal modal-open">
+        <ModalPortal>
+          <dialog className="modal modal-open">
           <div className="modal-box">
             <h3 className="text-lg font-bold">Eliminar cliente</h3>
             <p className="py-4">Se ocultará del listado (eliminación lógica). ¿Continuar?</p>
@@ -151,7 +153,8 @@ export function ClientDetailPage() {
             </div>
           </div>
           <button type="button" className="modal-backdrop bg-transparent" aria-label="Cerrar" onClick={() => setShowDelete(false)} />
-        </dialog>
+          </dialog>
+        </ModalPortal>
       )}
     </section>
   );

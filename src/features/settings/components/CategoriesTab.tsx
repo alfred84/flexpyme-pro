@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Pencil, Plus, Power, RotateCcw, Settings2 } from "lucide-react";
+import { ModalPortal } from "@/components/common/ModalPortal";
 import {
   createCategory,
   deactivateCategory,
@@ -181,7 +182,8 @@ export function CategoriesTab() {
       </div>
 
       {showModal && (
-        <dialog className="modal modal-open">
+        <ModalPortal>
+          <dialog className="modal modal-open">
           <div className="modal-box">
             <h3 className="font-bold text-lg">{editing ? "Editar categoría" : "Nueva categoría"}</h3>
             <div className="mt-4 space-y-3">
@@ -241,7 +243,8 @@ export function CategoriesTab() {
             </div>
           </div>
           <button type="button" className="modal-backdrop bg-transparent" aria-label="Cerrar" onClick={() => setShowModal(false)} />
-        </dialog>
+          </dialog>
+        </ModalPortal>
       )}
 
       {configuring && (

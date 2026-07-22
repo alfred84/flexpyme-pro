@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { Pencil, Plus, Power, RotateCcw } from "lucide-react";
+import { ModalPortal } from "@/components/common/ModalPortal";
 
 interface WorkTypeDto {
   id: number;
@@ -186,7 +187,8 @@ export function WorkTypesTab() {
       </div>
 
       {showModal && (
-        <dialog className="modal modal-open">
+        <ModalPortal>
+          <dialog className="modal modal-open">
           <div className="modal-box max-w-md">
             <h3 className="text-lg font-bold">
               {editing ? "Editar tipo de trabajo" : "Nuevo tipo de trabajo"}
@@ -257,7 +259,8 @@ export function WorkTypesTab() {
             aria-label="Cerrar"
             onClick={closeModal}
           />
-        </dialog>
+          </dialog>
+        </ModalPortal>
       )}
     </div>
   );

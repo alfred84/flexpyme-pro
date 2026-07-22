@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { ModalPortal } from "@/components/common/ModalPortal";
 import { fetchDeletedClients, restoreClient } from "@/db/queries/clients";
 import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
@@ -73,7 +74,8 @@ export function RestoreClientsModal(props: RestoreClientsModalProps) {
   };
 
   return (
-    <dialog className="modal modal-open" aria-labelledby="restore-clients-title">
+    <ModalPortal>
+      <dialog className="modal modal-open" aria-labelledby="restore-clients-title">
       <div className="modal-box flex max-h-[85vh] w-full max-w-2xl flex-col gap-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -202,6 +204,7 @@ export function RestoreClientsModal(props: RestoreClientsModalProps) {
           cerrar
         </button>
       </form>
-    </dialog>
+      </dialog>
+    </ModalPortal>
   );
 }

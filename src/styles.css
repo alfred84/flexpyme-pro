@@ -13,6 +13,32 @@ body {
   @apply bg-base-200 text-base-content;
 }
 
+/**
+ * Modales a pantalla completa de la ventana Tauri.
+ * DaisyUI reserva scrollbar-gutter en :root al abrir un modal; aquí el scroll
+ * está en <main>, así que ese gutter deja una franja sin backdrop (derecha).
+ */
+:root:has(:is(.modal-open, .modal:target, .modal-toggle:checked + .modal, .modal[open])) {
+  overflow: hidden;
+  scrollbar-gutter: unset;
+}
+
+.modal.modal-open,
+.modal[open] {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  transform: none;
+}
+
 @media print {
   @page {
     margin: 12mm;

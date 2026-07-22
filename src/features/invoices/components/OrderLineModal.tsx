@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ModalPortal } from "@/components/common/ModalPortal";
 import {
   draftLineSubtotal,
   formatOptionsForCategory,
@@ -320,7 +321,8 @@ export function OrderLineModal(props: OrderLineModalProps) {
   const manualPrice = draft.services[0]?.unitPrice ?? "";
 
   return (
-    <dialog className="modal modal-open">
+    <ModalPortal>
+      <dialog className="modal modal-open">
       <div className="modal-box max-w-lg">
         <h3 className="font-bold text-lg">{editing ? "Editar línea" : "Nueva línea"}</h3>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -455,6 +457,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
         </div>
       </div>
       <button type="button" className="modal-backdrop bg-transparent" aria-label="Cerrar" onClick={onClose} />
-    </dialog>
+      </dialog>
+    </ModalPortal>
   );
 }

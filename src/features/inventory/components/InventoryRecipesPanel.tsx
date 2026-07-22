@@ -8,6 +8,7 @@ import {
   fetchInventoryItems,
   fetchInventoryRecipes,
 } from "@/db/queries/inventory";
+import { ModalPortal } from "@/components/common/ModalPortal";
 import { pushFlashMessage } from "@/lib/flash-message";
 
 /**
@@ -168,7 +169,8 @@ export function InventoryRecipesPanel() {
       )}
 
       {showModal && (
-        <dialog className="modal modal-open">
+        <ModalPortal>
+          <dialog className="modal modal-open">
           <div className="modal-box max-w-lg">
             <h3 className="text-lg font-bold">Nueva norma de consumo</h3>
             <div className="mt-4 space-y-3">
@@ -244,7 +246,8 @@ export function InventoryRecipesPanel() {
               cerrar
             </button>
           </form>
-        </dialog>
+          </dialog>
+        </ModalPortal>
       )}
     </div>
   );

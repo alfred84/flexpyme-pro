@@ -9,6 +9,8 @@ const config: Config = {
   plugins: [daisyui],
   daisyui: {
     themes: ["business", "light"],
+    // Evita el hueco del backdrop a la derecha: el scroll vive en <main>, no en :root.
+    exclude: ["rootscrollgutter"],
   },
 };
 

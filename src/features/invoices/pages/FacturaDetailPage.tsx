@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { useState } from "react";
+import { ModalPortal } from "@/components/common/ModalPortal";
 import {
   cancelInvoice,
   fetchInvoiceDetail,
@@ -175,7 +176,8 @@ export function FacturaDetailPage() {
       )}
 
       {showCancel && (
-        <dialog className="modal modal-open">
+        <ModalPortal>
+          <dialog className="modal modal-open">
           <div className="modal-box">
             <h3 className="font-bold text-lg">Anular factura</h3>
             <p className="py-2 text-sm">Se revertirán los pagos parciales en caja. Indica el motivo.</p>
@@ -204,7 +206,8 @@ export function FacturaDetailPage() {
             </div>
           </div>
           <button type="button" className="modal-backdrop bg-transparent" aria-label="Cerrar" onClick={() => setShowCancel(false)} />
-        </dialog>
+          </dialog>
+        </ModalPortal>
       )}
     </section>
   );

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { Pencil, Plus, Power, RotateCcw } from "lucide-react";
+import { ModalPortal } from "@/components/common/ModalPortal";
 import { isSinFormatoLabel } from "@/lib/formats";
 
 interface FormatDto {
@@ -201,7 +202,8 @@ export function FormatsTab() {
       </div>
 
       {showModal && (
-        <dialog className="modal modal-open">
+        <ModalPortal>
+          <dialog className="modal modal-open">
           <div className="modal-box max-w-md">
             <h3 className="text-lg font-bold">{editing ? "Editar formato" : "Nuevo formato"}</h3>
             <p className="mt-1 text-sm text-base-content/60">
@@ -275,7 +277,8 @@ export function FormatsTab() {
             aria-label="Cerrar"
             onClick={closeModal}
           />
-        </dialog>
+          </dialog>
+        </ModalPortal>
       )}
     </div>
   );

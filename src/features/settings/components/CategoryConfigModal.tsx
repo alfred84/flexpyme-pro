@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useMemo } from "react";
 import { X } from "lucide-react";
+import { ModalPortal } from "@/components/common/ModalPortal";
 import {
   addCategoryFinish,
   addCategoryFormat,
@@ -191,7 +192,8 @@ export function CategoryConfigModal(props: CategoryConfigModalProps) {
     null;
 
   return (
-    <dialog className="modal modal-open">
+    <ModalPortal>
+      <dialog className="modal modal-open">
       <div className="modal-box max-w-3xl">
         <h3 className="text-lg font-bold">Configurar: {category.name}</h3>
         <p className="mt-1 text-sm text-base-content/60">
@@ -470,6 +472,7 @@ export function CategoryConfigModal(props: CategoryConfigModalProps) {
         aria-label="Cerrar"
         onClick={onClose}
       />
-    </dialog>
+      </dialog>
+    </ModalPortal>
   );
 }
