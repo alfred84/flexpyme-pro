@@ -72,6 +72,18 @@ const clientEditRoute = createRoute({
 const pricesListRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "precios",
+  validateSearch: (search: Record<string, unknown>) => {
+    const raw = search.categoria;
+    const n =
+      typeof raw === "number"
+        ? raw
+        : typeof raw === "string" && /^\d+$/.test(raw)
+          ? Number(raw)
+          : undefined;
+    return {
+      categoria: n !== undefined && Number.isFinite(n) && n > 0 ? n : undefined,
+    };
+  },
   component: PricesListPage,
 });
 
@@ -80,7 +92,7 @@ const costsListRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "costos",
   beforeLoad: () => {
-    throw redirect({ to: "/precios" });
+    throw redirect({ to: "/precios", search: { categoria: undefined } });
   },
 });
 

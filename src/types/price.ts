@@ -32,6 +32,20 @@ export interface PriceRowDto {
 }
 
 /**
+ * Payload for creating a price row (sale price + payment tariff).
+ */
+export interface CreatePricePayload {
+  categoryId: number;
+  formatId: number | null;
+  finish: string | null;
+  service: string;
+  price: number;
+  /** Tarifa de pago al trabajador (CUP); default 0. */
+  cost: number | null;
+  isActive: boolean;
+}
+
+/**
  * Payload for updating a price row (sale price + payment tariff).
  */
 export interface UpdatePricePayload {

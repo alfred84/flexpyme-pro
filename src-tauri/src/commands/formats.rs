@@ -24,14 +24,19 @@ pub struct UpdateFormatPayload {
     pub height_inches: f64,
 }
 
-/// Lists formats; optionally only active.
+/// Lists formats; optionally only active. «Sin formato» appears first.
 #[tauri::command]
 pub fn get_formats(active_only: Option<bool>) -> Result<Vec<FormatDto>, String> {
     let conn = db::open_connection()?;
     let sql = if active_only.unwrap_or(false) {
-        "SELECT id, label, width_inches, height_inches, is_active, is_system FROM formats WHERE is_active = 1 ORDER BY label"
+        "SELECT id, label, width_inches, height_inches, is_active, is_system FROM formats
+         WHERE is_active = 1
+         ORDER BY CASE WHEN lower(label) = lower('Sin formato') THEN 0 ELSE 1 END, label COLLATE NOCASE"
     } else {
-        "SELECT id, label, width_inches, height_inches, is_active, is_system FROM formats ORDER BY is_active DESC, label"
+        "SELECT id, label, width_inches, height_inches, is_active, is_system FROM formats
+         ORDER BY is_active DESC,
+           CASE WHEN lower(label) = lower('Sin formato') THEN 0 ELSE 1 END,
+           label COLLATE NOCASE"
     };
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
@@ -49,12 +54,15 @@ pub fn get_formats(active_only: Option<bool>) -> Result<Vec<FormatDto>, String> 
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
-/// Creates a custom format.
+/// Creates a custom format (dimensions must be greater than zero).
 #[tauri::command]
 pub fn create_format(label: String, width: f64, height: f64) -> Result<FormatDto, String> {
     let label = label.trim().to_string();
     if label.is_empty() || width <= 0.0 || height <= 0.0 {
-        return Err("Etiqueta y dimensiones deben ser válidas".to_string());
+        return Err("Etiqueta y dimensiones deben ser válidas (mayores que cero)".to_string());
+    }
+    if label.eq_ignore_ascii_case("Sin formato") {
+        return Err("«Sin formato» es un formato base del sistema".to_string());
     }
     let conn = db::open_connection()?;
     conn.execute(
@@ -80,13 +88,31 @@ pub fn create_format(label: String, width: f64, height: f64) -> Result<FormatDto
 }
 
 /// Updates a format label and dimensions (system formats included; history uses snapshots).
+/// «Sin formato» may keep 0×0; other formats require dimensions > 0.
 #[tauri::command]
 pub fn update_format(id: i64, data: UpdateFormatPayload) -> Result<FormatDto, String> {
     let label = data.label.trim().to_string();
-    if label.is_empty() || data.width_inches <= 0.0 || data.height_inches <= 0.0 {
-        return Err("Etiqueta y dimensiones deben ser válidas".to_string());
+    if label.is_empty() {
+        return Err("La etiqueta es obligatoria".to_string());
+    }
+    if data.width_inches < 0.0 || data.height_inches < 0.0 {
+        return Err("Las dimensiones no pueden ser negativas".to_string());
     }
     let conn = db::open_connection()?;
+    let (old_label, is_system): (String, i64) = conn
+        .query_row(
+            "SELECT label, is_system FROM formats WHERE id = ?1",
+            params![id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Formato no encontrado".to_string())?;
+    let is_sin_formato = old_label.eq_ignore_ascii_case("Sin formato") && is_system != 0;
+    if is_sin_formato && !label.eq_ignore_ascii_case("Sin formato") {
+        return Err("No se puede renombrar el formato base «Sin formato»".to_string());
+    }
+    if !is_sin_formato && (data.width_inches <= 0.0 || data.height_inches <= 0.0) {
+        return Err("Etiqueta y dimensiones deben ser válidas (mayores que cero)".to_string());
+    }
     let updated = conn
         .execute(
             "UPDATE formats SET label = ?1, width_inches = ?2, height_inches = ?3 WHERE id = ?4",

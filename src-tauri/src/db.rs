@@ -96,6 +96,8 @@ const EMBEDDED_CATEGORY_FORMATS_SCHEMA: &str =
     include_str!("../../src/db/migrations/0020_category_formats.sql");
 const EMBEDDED_FINISHES_CATALOG_SCHEMA: &str =
     include_str!("../../src/db/migrations/0021_finishes_catalog.sql");
+const EMBEDDED_SIN_FORMATO_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0022_sin_formato.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -314,6 +316,17 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
              WHERE finish_id IS NULL AND finish IS NOT NULL AND trim(finish) <> '';",
         )
         .map_err(|e| format!("No se pudo vincular category_finishes.finish_id: {}", e))?;
+    }
+    // Base format for categories without print sizes.
+    let sin_formato_exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM formats WHERE lower(label) = lower('Sin formato')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    if sin_formato_exists == 0 {
+        execute_migration(conn, EMBEDDED_SIN_FORMATO_SCHEMA, "0022_sin_formato")?;
     }
     Ok(())
 }

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { Pencil, Plus, Power, RotateCcw } from "lucide-react";
+import { isSinFormatoLabel } from "@/lib/formats";
 
 interface FormatDto {
   id: number;
@@ -37,11 +38,15 @@ export function FormatsTab() {
       if (!label.trim()) {
         throw new Error("La etiqueta es obligatoria");
       }
-      if (!Number.isFinite(widthInches) || widthInches <= 0) {
-        throw new Error("El ancho debe ser un número mayor que cero");
+      if (!Number.isFinite(widthInches) || widthInches < 0) {
+        throw new Error("El ancho debe ser un número mayor o igual que cero");
       }
-      if (!Number.isFinite(heightInches) || heightInches <= 0) {
-        throw new Error("El alto debe ser un número mayor que cero");
+      if (!Number.isFinite(heightInches) || heightInches < 0) {
+        throw new Error("El alto debe ser un número mayor o igual que cero");
+      }
+      const editingSinFormato = editing != null && isSinFormatoLabel(editing.label);
+      if (!editingSinFormato && (widthInches <= 0 || heightInches <= 0)) {
+        throw new Error("El ancho y el alto deben ser mayores que cero");
       }
       if (editing) {
         return invoke<FormatDto>("update_format", {
@@ -110,6 +115,8 @@ export function FormatsTab() {
     saveMutation.reset();
   };
 
+  const editingSinFormato = editing != null && isSinFormatoLabel(editing.label);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -119,8 +126,8 @@ export function FormatsTab() {
         </button>
       </div>
       <p className="text-xs text-base-content/60">
-        Puedes editar la etiqueta y las dimensiones. Los formatos desactivados no aparecen en nuevos
-        pedidos; el historial conserva la etiqueta guardada en cada pedido.
+        Incluye el formato base «Sin formato» (0×0) para categorías sin medidas. Los formatos
+        desactivados no aparecen en nuevos pedidos; el historial conserva la etiqueta guardada.
       </p>
       <div className="overflow-x-auto rounded-lg border border-base-300">
         <table className="table table-sm">
@@ -198,7 +205,9 @@ export function FormatsTab() {
           <div className="modal-box max-w-md">
             <h3 className="text-lg font-bold">{editing ? "Editar formato" : "Nuevo formato"}</h3>
             <p className="mt-1 text-sm text-base-content/60">
-              Indica la etiqueta (ej. 8x10) y las dimensiones en pulgadas.
+              {editingSinFormato
+                ? "Formato base para categorías sin medidas. La etiqueta no se puede cambiar."
+                : "Indica la etiqueta (ej. 8x10) y las dimensiones en pulgadas."}
             </p>
             <div className="mt-4 space-y-3">
               <label className="form-control">
@@ -209,6 +218,7 @@ export function FormatsTab() {
                   autoComplete="off"
                   onChange={(e) => setLabel(e.target.value)}
                   placeholder="Ej. 8x10"
+                  disabled={editingSinFormato}
                 />
               </label>
               <div className="grid grid-cols-2 gap-3">
@@ -219,7 +229,7 @@ export function FormatsTab() {
                     inputMode="decimal"
                     value={width}
                     onChange={(e) => setWidth(e.target.value)}
-                    placeholder="8"
+                    placeholder={editingSinFormato ? "0" : "8"}
                   />
                 </label>
                 <label className="form-control">
@@ -229,7 +239,7 @@ export function FormatsTab() {
                     inputMode="decimal"
                     value={height}
                     onChange={(e) => setHeight(e.target.value)}
-                    placeholder="10"
+                    placeholder={editingSinFormato ? "0" : "10"}
                   />
                 </label>
               </div>

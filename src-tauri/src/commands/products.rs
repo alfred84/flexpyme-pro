@@ -45,6 +45,19 @@ pub struct PricesListArgs {
     pub include_inactive: bool,
 }
 
+/// Payload for creating a price list row.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatePricePayload {
+    pub category_id: i64,
+    pub format_id: Option<i64>,
+    pub finish: Option<String>,
+    pub service: String,
+    pub price: f64,
+    pub cost: Option<f64>,
+    pub is_active: bool,
+}
+
 /// Payload for updating a price list row.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -75,12 +88,16 @@ pub fn product_categories_list() -> Result<Vec<CategoryDto>, String> {
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
-/// Lists all formats.
+/// Lists all formats («Sin formato» first).
 #[tauri::command]
 pub fn formats_list() -> Result<Vec<FormatDto>, String> {
     let conn = db::open_connection()?;
     let mut stmt = conn
-        .prepare("SELECT id, label FROM formats WHERE is_active = 1 ORDER BY label COLLATE NOCASE")
+        .prepare(
+            "SELECT id, label FROM formats WHERE is_active = 1
+             ORDER BY CASE WHEN lower(label) = lower('Sin formato') THEN 0 ELSE 1 END,
+               label COLLATE NOCASE",
+        )
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |row| {
@@ -176,40 +193,160 @@ pub fn prices_update(payload: UpdatePricePayload) -> Result<(), String> {
         return Err("Precio no encontrado".to_string());
     }
 
-    // Sync employee pay rate (cost_list) when we can resolve work type + format.
     if let Some(ref service_name) = service {
-        if let Some(fid) = format_id {
-            if let Ok(work_code) = resolve_work_type_code(&tx, service_name) {
-                let synced = tx
-                    .execute(
-                        "UPDATE cost_list SET unit_cost = ?1, is_active = ?2
-                         WHERE work_type = ?3 AND format_id = ?4",
-                        params![
-                            tarifa,
-                            if payload.is_active { 1i64 } else { 0i64 },
-                            work_code,
-                            fid
-                        ],
-                    )
-                    .map_err(|e| e.to_string())?;
-                if synced == 0 {
-                    // Insert if the pair did not exist yet.
-                    let _ = tx.execute(
-                        "INSERT INTO cost_list (work_type, format_id, unit_cost, is_active)
-                         VALUES (?1, ?2, ?3, ?4)",
-                        params![
-                            work_code,
-                            fid,
-                            tarifa,
-                            if payload.is_active { 1i64 } else { 0i64 }
-                        ],
-                    );
-                }
-            }
-        }
+        sync_cost_list_for_service(&tx, service_name, format_id, tarifa, payload.is_active)?;
     }
 
     tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Creates a new price list row and syncs the matching employee pay tariff.
+#[tauri::command]
+pub fn prices_create(payload: CreatePricePayload) -> Result<PriceRowDto, String> {
+    if payload.price <= 0.0 {
+        return Err("El precio debe ser mayor que cero".to_string());
+    }
+    let tarifa = payload.cost.unwrap_or(0.0);
+    if tarifa < 0.0 {
+        return Err("La tarifa de pago no puede ser negativa".to_string());
+    }
+    if tarifa > payload.price {
+        return Err("La tarifa de pago no puede ser mayor que el precio de venta".to_string());
+    }
+    let service = payload.service.trim().to_string();
+    if service.is_empty() {
+        return Err("El tipo de trabajo es obligatorio".to_string());
+    }
+    let finish = payload.finish.and_then(|f| {
+        let t = f.trim().to_string();
+        if t.is_empty() {
+            None
+        } else {
+            Some(t)
+        }
+    });
+
+    let mut conn = db::open_connection()?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let category_ok: i64 = tx
+        .query_row(
+            "SELECT COUNT(*) FROM product_categories WHERE id = ?1",
+            params![payload.category_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if category_ok == 0 {
+        return Err("Categoría no encontrada".to_string());
+    }
+    if let Some(fid) = payload.format_id {
+        let format_ok: i64 = tx
+            .query_row(
+                "SELECT COUNT(*) FROM formats WHERE id = ?1",
+                params![fid],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if format_ok == 0 {
+            return Err("Formato no encontrado".to_string());
+        }
+    }
+
+    tx.execute(
+        "INSERT INTO price_list (category_id, format_id, finish, service, price, cost, is_active)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            payload.category_id,
+            payload.format_id,
+            finish,
+            service,
+            payload.price,
+            tarifa,
+            if payload.is_active { 1i64 } else { 0i64 }
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let id = tx.last_insert_rowid();
+    sync_cost_list_for_service(
+        &tx,
+        &service,
+        payload.format_id,
+        tarifa,
+        payload.is_active,
+    )?;
+
+    let row = tx
+        .query_row(
+            "SELECT p.id, p.category_id, c.name, p.format_id, f.label, p.finish, p.service,
+                    p.price, p.cost, p.valid_from, p.is_active
+             FROM price_list p
+             JOIN product_categories c ON c.id = p.category_id
+             LEFT JOIN formats f ON f.id = p.format_id
+             WHERE p.id = ?1",
+            params![id],
+            |row| {
+                let is_active_i: i64 = row.get(10)?;
+                Ok(PriceRowDto {
+                    id: row.get(0)?,
+                    category_id: row.get(1)?,
+                    category_name: row.get(2)?,
+                    format_id: row.get(3)?,
+                    format_label: row.get(4)?,
+                    finish: row.get(5)?,
+                    service: row.get(6)?,
+                    price: row.get(7)?,
+                    cost: row.get(8)?,
+                    valid_from: row.get(9)?,
+                    is_active: is_active_i != 0,
+                })
+            },
+        )
+        .map_err(|e| e.to_string())?;
+
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(row)
+}
+
+/// Syncs `cost_list.unit_cost` for a work type + format pair.
+fn sync_cost_list_for_service(
+    conn: &rusqlite::Connection,
+    service: &str,
+    format_id: Option<i64>,
+    tarifa: f64,
+    is_active: bool,
+) -> Result<(), String> {
+    let Some(fid) = format_id else {
+        return Ok(());
+    };
+    let Ok(work_code) = resolve_work_type_code(conn, service) else {
+        return Ok(());
+    };
+    let synced = conn
+        .execute(
+            "UPDATE cost_list SET unit_cost = ?1, is_active = ?2
+             WHERE work_type = ?3 AND format_id = ?4",
+            params![
+                tarifa,
+                if is_active { 1i64 } else { 0i64 },
+                work_code,
+                fid
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    if synced == 0 {
+        let _ = conn.execute(
+            "INSERT INTO cost_list (work_type, format_id, unit_cost, is_active)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                work_code,
+                fid,
+                tarifa,
+                if is_active { 1i64 } else { 0i64 }
+            ],
+        );
+    }
     Ok(())
 }
 
@@ -224,7 +361,6 @@ fn resolve_work_type_code(conn: &rusqlite::Connection, service: &str) -> Result<
         |row| row.get(0),
     )
     .or_else(|_| {
-        // Fuzzy: strip accents not available in SQLite; try contains via LIKE.
         conn.query_row(
             "SELECT code FROM work_types
              WHERE lower(name) LIKE '%' || ?1 || '%' OR lower(code) LIKE '%' || ?1 || '%'

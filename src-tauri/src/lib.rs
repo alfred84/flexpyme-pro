@@ -71,6 +71,7 @@ pub fn run() {
             commands::products::formats_list,
             commands::products::prices_list,
             commands::products::prices_update,
+            commands::products::prices_create,
             commands::products::prices_lookup,
             commands::invoices::invoices_list,
             commands::invoices::invoices_financial_list,

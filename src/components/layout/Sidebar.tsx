@@ -4,6 +4,7 @@ import { BusinessLogo } from "@/components/common/BusinessLogo";
 import { PRIMARY_NAV, SECONDARY_NAV, type NavItem } from "@/config/navigation";
 import { useSidebarBadges } from "@/hooks/use-sidebar-badges";
 import { pedidosListSearch } from "@/lib/pedidos-search";
+import { preciosListSearch } from "@/lib/precios-search";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -70,6 +71,22 @@ interface SidebarLinkProps {
 }
 
 /**
+ * Resuelve los search params del enlace del sidebar.
+ *
+ * @param to - Ruta destino.
+ * @returns Search params o `undefined`.
+ */
+function sidebarSearchFor(to: string): Record<string, unknown> | undefined {
+  if (to === "/pedidos") {
+    return pedidosListSearch;
+  }
+  if (to === "/precios") {
+    return preciosListSearch;
+  }
+  return undefined;
+}
+
+/**
  * Enlace individual del sidebar con icono, etiqueta opcional y badge.
  *
  * @param props - Ítem de navegación, estado de colapso y contador del badge.
@@ -78,11 +95,12 @@ interface SidebarLinkProps {
 function SidebarLink(props: SidebarLinkProps) {
   const { item, collapsed, count } = props;
   const Icon = item.icon;
+  const search = sidebarSearchFor(item.to);
 
   return (
     <Link
       to={item.to}
-      search={item.to === "/pedidos" ? pedidosListSearch : undefined}
+      search={search}
       activeOptions={{ exact: item.exact ?? false }}
       className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-base-content/80 transition-colors hover:bg-base-300"
       activeProps={{ className: "bg-primary/15 text-primary font-medium" }}

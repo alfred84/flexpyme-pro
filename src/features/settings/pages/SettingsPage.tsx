@@ -81,7 +81,7 @@ export function SettingsPage() {
 
   useEffect(() => {
     if (initialTab === "precios" || initialTab === "costos") {
-      void navigate({ to: "/precios" });
+      void navigate({ to: "/precios", search: { categoria: undefined } });
       return;
     }
     if (initialTab) {

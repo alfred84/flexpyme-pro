@@ -8,15 +8,24 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchAllCategoryWorkTypes, fetchCategories } from "@/db/queries/categories";
-import { fetchPrices, updatePrice } from "@/db/queries/prices";
-import { serviceMatchesWorkType } from "@/features/invoices/lib/work-type-match";
+import {
+  fetchAllCategoryFormats,
+  fetchAllCategoryWorkTypes,
+  fetchCategories,
+  fetchCategoryFinishes,
+} from "@/db/queries/categories";
+import { createPrice, fetchFormats, fetchPrices, updatePrice } from "@/db/queries/prices";
+import {
+  buildPriceTableRows,
+  type PriceTableRow,
+} from "@/features/products/lib/price-table-rows";
 import { categoryMosaicTone, resolveCategoryIcon } from "@/lib/category-icons";
 import { formatMoney } from "@/lib/format-money";
+import { isSinFormatoLabel, SIN_FORMATO_LABEL } from "@/lib/formats";
 import type { CategoryWorkTypeDto, ProductCategoryDto } from "@/types/category";
-import type { PriceRowDto } from "@/types/price";
 
 /**
  * Formatea un importe CUP o muestra guión si no hay valor.
@@ -33,17 +42,20 @@ function formatCell(value: number | null | undefined): string {
 
 /**
  * Precios: mosaico por categoría → tipos de trabajo → tabla con precio y tarifa de pago.
+ * La categoría activa vive en `?categoria=` para que el sidebar vuelva siempre al mosaico.
  *
  * @returns Pantalla de administración de precios.
  */
 export function PricesListPage() {
   const queryClient = useQueryClient();
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const navigate = useNavigate({ from: "/precios" });
+  const { categoria: selectedCategoryId } = useSearch({ from: "/precios" });
+
   const [selectedWorkTypeId, setSelectedWorkTypeId] = useState<number | null>(null);
   const [includeInactive, setIncludeInactive] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [editing, setEditing] = useState<PriceRowDto | null>(null);
+  const [editing, setEditing] = useState<PriceTableRow | null>(null);
   const [editPrice, setEditPrice] = useState("");
   const [editTarifa, setEditTarifa] = useState("0");
   const [editActive, setEditActive] = useState(true);
@@ -59,14 +71,55 @@ export function PricesListPage() {
     queryFn: fetchAllCategoryWorkTypes,
   });
 
+  const categoryFormatsQuery = useQuery({
+    queryKey: ["category-formats", "all"],
+    queryFn: fetchAllCategoryFormats,
+    enabled: selectedCategoryId != null,
+  });
+
+  const categoryFinishesQuery = useQuery({
+    queryKey: ["category-finishes", "all"],
+    queryFn: fetchCategoryFinishes,
+    enabled: selectedCategoryId != null,
+  });
+
+  const formatsQuery = useQuery({
+    queryKey: ["formats", "active"],
+    queryFn: fetchFormats,
+    enabled: selectedCategoryId != null,
+  });
+
   const pricesQuery = useQuery({
     queryKey: ["prices", "list", includeInactive],
     queryFn: () => fetchPrices(includeInactive),
     enabled: selectedCategoryId != null,
   });
 
-  const updateMutation = useMutation({
-    mutationFn: updatePrice,
+  const saveMutation = useMutation({
+    mutationFn: async (input: {
+      draft: PriceTableRow;
+      price: number;
+      cost: number;
+      isActive: boolean;
+    }) => {
+      if (input.draft.isDraft) {
+        return createPrice({
+          categoryId: input.draft.categoryId,
+          formatId: input.draft.formatId,
+          finish: input.draft.finish,
+          service: input.draft.service ?? "",
+          price: input.price,
+          cost: input.cost,
+          isActive: input.isActive,
+        });
+      }
+      return updatePrice({
+        id: input.draft.id,
+        price: input.price,
+        cost: input.cost,
+        isActive: input.isActive,
+      });
+    },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["prices"] }),
@@ -104,6 +157,11 @@ export function PricesListPage() {
     [categoryWorkTypes, selectedWorkTypeId],
   );
 
+  const sinFormato = useMemo(() => {
+    const found = (formatsQuery.data ?? []).find((f) => isSinFormatoLabel(f.label));
+    return found ? { id: found.id, label: found.label } : null;
+  }, [formatsQuery.data]);
+
   useEffect(() => {
     if (categoryWorkTypes.length === 0) {
       setSelectedWorkTypeId(null);
@@ -117,18 +175,29 @@ export function PricesListPage() {
     });
   }, [categoryWorkTypes]);
 
-  const filteredRows = useMemo(() => {
+  const tableRows = useMemo(() => {
     if (!selectedCategory || !selectedWorkType) {
-      return [] as PriceRowDto[];
+      return [] as PriceTableRow[];
     }
-    return (pricesQuery.data ?? []).filter(
-      (row) =>
-        row.categoryId === selectedCategory.id &&
-        serviceMatchesWorkType(row.service, selectedWorkType.workTypeCode, selectedWorkType.workTypeName),
-    );
-  }, [pricesQuery.data, selectedCategory, selectedWorkType]);
+    return buildPriceTableRows({
+      categoryId: selectedCategory.id,
+      categoryName: selectedCategory.name,
+      workType: selectedWorkType,
+      categoryFormats: categoryFormatsQuery.data ?? [],
+      categoryFinishes: categoryFinishesQuery.data ?? [],
+      prices: pricesQuery.data ?? [],
+      sinFormato,
+    });
+  }, [
+    selectedCategory,
+    selectedWorkType,
+    categoryFormatsQuery.data,
+    categoryFinishesQuery.data,
+    pricesQuery.data,
+    sinFormato,
+  ]);
 
-  const openEdit = useCallback((row: PriceRowDto) => {
+  const openEdit = useCallback((row: PriceTableRow) => {
     setEditing(row);
     setEditPrice(String(row.price));
     setEditTarifa(row.cost === null || row.cost === undefined ? "0" : String(row.cost));
@@ -136,12 +205,12 @@ export function PricesListPage() {
     setFormError(null);
   }, []);
 
-  const columns = useMemo<ColumnDef<PriceRowDto>[]>(
+  const columns = useMemo<ColumnDef<PriceTableRow>[]>(
     () => [
       {
         accessorKey: "formatLabel",
         header: "Formato",
-        cell: (info) => info.getValue<string | null>() ?? "—",
+        cell: (info) => info.getValue<string | null>() ?? SIN_FORMATO_LABEL,
       },
       {
         accessorKey: "finish",
@@ -161,7 +230,14 @@ export function PricesListPage() {
       {
         accessorKey: "isActive",
         header: "Activo",
-        cell: (info) => (info.getValue<boolean>() ? "Sí" : "No"),
+        cell: ({ row }) =>
+          row.original.isDraft ? (
+            <span className="badge badge-ghost badge-sm">Pendiente</span>
+          ) : row.original.isActive ? (
+            "Sí"
+          ) : (
+            "No"
+          ),
       },
       {
         id: "actions",
@@ -169,7 +245,7 @@ export function PricesListPage() {
         enableSorting: false,
         cell: ({ row }) => (
           <button type="button" className="btn btn-xs btn-outline" onClick={() => openEdit(row.original)}>
-            Editar
+            {row.original.isDraft ? "Definir" : "Editar"}
           </button>
         ),
       },
@@ -179,7 +255,7 @@ export function PricesListPage() {
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table API is intentionally imperative
   const table = useReactTable({
-    data: filteredRows,
+    data: tableRows,
     columns,
     state: { globalFilter, sorting },
     onGlobalFilterChange: setGlobalFilter,
@@ -191,17 +267,17 @@ export function PricesListPage() {
   });
 
   const handleSelectCategory = (category: ProductCategoryDto) => {
-    setSelectedCategoryId(category.id);
     setSelectedWorkTypeId(null);
     setGlobalFilter("");
     setSorting([]);
+    void navigate({ search: { categoria: category.id } });
   };
 
   const handleBackToMosaic = () => {
-    setSelectedCategoryId(null);
     setSelectedWorkTypeId(null);
     setGlobalFilter("");
     setEditing(null);
+    void navigate({ search: { categoria: undefined } });
   };
 
   const handleSaveEdit = () => {
@@ -223,8 +299,8 @@ export function PricesListPage() {
       return;
     }
     setFormError(null);
-    void updateMutation.mutateAsync({
-      id: editing.id,
+    void saveMutation.mutateAsync({
+      draft: editing,
       price,
       cost: tarifa,
       isActive: editActive,
@@ -274,6 +350,12 @@ export function PricesListPage() {
     );
   }
 
+  const catalogLoading =
+    pricesQuery.isLoading ||
+    categoryFormatsQuery.isLoading ||
+    categoryFinishesQuery.isLoading ||
+    formatsQuery.isLoading;
+
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -285,7 +367,8 @@ export function PricesListPage() {
           <div>
             <h1 className="text-2xl font-bold">{selectedCategory.name}</h1>
             <p className="text-sm text-base-content/70">
-              Precio de venta y tarifa de pago por formato según el tipo de trabajo.
+              Precio de venta y tarifa de pago por formato según el tipo de trabajo. Las filas
+              pendientes aparecen en 0 hasta que las definas.
             </p>
           </div>
         </div>
@@ -310,7 +393,8 @@ export function PricesListPage() {
       {!workTypesQuery.isLoading && categoryWorkTypes.length === 0 && (
         <div className="alert alert-warning">
           <span>
-            Esta categoría no tiene tipos de trabajo asociados. Configúralos en Configuración → Categorías.
+            Esta categoría no tiene tipos de trabajo asociados. Configúralos en Configuración →
+            Categorías.
           </span>
         </div>
       )}
@@ -340,14 +424,17 @@ export function PricesListPage() {
 
       {selectedWorkType && (
         <>
-          {pricesQuery.isLoading && <p>Cargando precios...</p>}
-          {pricesQuery.isError && (
+          {catalogLoading && <p>Cargando precios...</p>}
+          {(pricesQuery.isError ||
+            categoryFormatsQuery.isError ||
+            categoryFinishesQuery.isError ||
+            formatsQuery.isError) && (
             <div className="alert alert-error">
-              <span>No se pudieron cargar los precios.</span>
+              <span>No se pudieron cargar los precios o la configuración de la categoría.</span>
             </div>
           )}
 
-          {pricesQuery.data && (
+          {!catalogLoading && pricesQuery.data && (
             <>
               <input
                 type="search"
@@ -394,7 +481,7 @@ export function PricesListPage() {
                       </tr>
                     ) : (
                       table.getRowModel().rows.map((row) => (
-                        <tr key={row.id}>
+                        <tr key={row.id} className={row.original.isDraft ? "opacity-80" : undefined}>
                           {row.getVisibleCells().map((cell) => (
                             <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
                           ))}
@@ -412,11 +499,13 @@ export function PricesListPage() {
       {editing && (
         <dialog className="modal modal-open">
           <div className="modal-box max-w-lg">
-            <h3 className="text-lg font-bold">Editar precio</h3>
+            <h3 className="text-lg font-bold">
+              {editing.isDraft ? "Definir precio" : "Editar precio"}
+            </h3>
             <p className="py-1 text-sm text-base-content/70">
               {selectedCategory.name}
               {selectedWorkType ? ` · ${selectedWorkType.workTypeName}` : ""}
-              {editing.formatLabel ? ` · ${editing.formatLabel}` : ""}
+              {` · ${editing.formatLabel ?? SIN_FORMATO_LABEL}`}
               {editing.finish ? ` · ${editing.finish}` : ""}
             </p>
             <div className="form-control py-2">
@@ -468,10 +557,10 @@ export function PricesListPage() {
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={updateMutation.isPending}
+                disabled={saveMutation.isPending}
                 onClick={handleSaveEdit}
               >
-                {updateMutation.isPending ? <span className="loading loading-spinner loading-sm" /> : "Guardar"}
+                {saveMutation.isPending ? <span className="loading loading-spinner loading-sm" /> : "Guardar"}
               </button>
             </div>
           </div>

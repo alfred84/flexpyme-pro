@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { CategoryDto, FormatDto, PriceRowDto, UpdatePricePayload } from "@/types/price";
+import type {
+  CategoryDto,
+  CreatePricePayload,
+  FormatDto,
+  PriceRowDto,
+  UpdatePricePayload,
+} from "@/types/price";
 
 /**
  * Loads product categories (catalog).
@@ -20,6 +26,13 @@ export async function fetchFormats(): Promise<FormatDto[]> {
  */
 export async function fetchPrices(includeInactive: boolean): Promise<PriceRowDto[]> {
   return invoke<PriceRowDto[]>("prices_list", { args: { includeInactive } });
+}
+
+/**
+ * Creates a new price list row.
+ */
+export async function createPrice(payload: CreatePricePayload): Promise<PriceRowDto> {
+  return invoke<PriceRowDto>("prices_create", { payload });
 }
 
 /**

@@ -125,7 +125,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Categorías** de productos (CRUD con `is_system`, snapshot en pedidos)
 - **Tipos de trabajo, formatos y acabados por categoría**: tablas `category_work_types`, `category_formats` y `category_finishes` (vinculadas a los catálogos `work_types`, `formats` y `finishes`). Catálogo global de acabados en Configuración → Acabados. Al crear líneas se preseleccionan tipos y acabados «por defecto», se limitan formatos asociados y cada tipo se expande en un `invoice_item`.
 - **Unidades** de medida (CRUD con tipo, snapshot en inventario)
-- Formatos disponibles (alta, edición y baja de formatos)
+- Formatos disponibles (alta, edición y baja de formatos). Incluye formato base **Sin formato** (0×0) para categorías sin medidas.
 - Backup y restauración de la base de datos
 - Preferencias de la aplicación
 
@@ -331,6 +331,8 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - **Costos** retirado del sidebar; gestión unificada en **Precios** (ruta `/costos` → `/precios`).
 - **UX Precios**: mosaico por categoría → pestañas por tipo de trabajo de la categoría → tabla (formato, acabado, precio, tarifa de pago).
 - Columna/modal **Tarifa de Pago** (obligatoria, default 0); al guardar se sincroniza `cost_list` para salarios.
+- Formato base **Sin formato** (0×0); filas pendientes en Precios cuando hay tipos de trabajo sin precio definido.
+- Click en Precios del sidebar limpia `?categoria=` y vuelve al mosaico.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

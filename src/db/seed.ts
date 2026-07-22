@@ -71,6 +71,12 @@ async function main() {
     sqlite.prepare("INSERT OR IGNORE INTO formats (label) VALUES (?)").run(formatLabel);
   });
 
+  sqlite
+    .prepare(
+      "INSERT OR IGNORE INTO formats (label, width_inches, height_inches, is_active, is_system) VALUES (?, 0, 0, 1, 1)",
+    )
+    .run("Sin formato");
+
   const formatRows = await db.select().from(formats);
   sqlite.prepare("DELETE FROM price_list").run();
 

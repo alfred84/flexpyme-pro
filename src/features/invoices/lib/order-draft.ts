@@ -1,3 +1,4 @@
+import { SIN_FORMATO_LABEL } from "@/lib/formats";
 import type { CreateInvoiceItemPayload } from "@/types/invoice";
 import type { PriceRowDto } from "@/types/price";
 
@@ -123,7 +124,12 @@ export function formatOptionsForCategory(
       .map((row) => row.formatId)
       .filter((id): id is number => id !== null),
   );
-  return allFormats.filter((f) => ids.has(f.id));
+  const fromPrices = allFormats.filter((f) => ids.has(f.id));
+  if (fromPrices.length > 0) {
+    return fromPrices.sort((a, b) => a.label.localeCompare(b.label, "es"));
+  }
+  const sinFormato = allFormats.find((f) => f.label.trim().toLowerCase() === SIN_FORMATO_LABEL.toLowerCase());
+  return sinFormato ? [sinFormato] : [];
 }
 
 /**
