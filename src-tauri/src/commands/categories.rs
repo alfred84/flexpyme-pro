@@ -508,6 +508,121 @@ pub fn category_work_type_remove(id: i64) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryFormatDto {
+    pub id: i64,
+    pub category_id: i64,
+    pub format_id: i64,
+    pub format_label: String,
+    pub format_active: bool,
+}
+
+/// Lists formats linked to a category.
+#[tauri::command]
+pub fn category_formats_list(category_id: i64) -> Result<Vec<CategoryFormatDto>, String> {
+    let conn = db::open_connection()?;
+    list_category_formats(&conn, Some(category_id))
+}
+
+/// Lists all category ↔ format links (for order forms).
+#[tauri::command]
+pub fn category_formats_all() -> Result<Vec<CategoryFormatDto>, String> {
+    let conn = db::open_connection()?;
+    list_category_formats(&conn, None)
+}
+
+fn list_category_formats(
+    conn: &rusqlite::Connection,
+    category_id: Option<i64>,
+) -> Result<Vec<CategoryFormatDto>, String> {
+    let sql = if category_id.is_some() {
+        "SELECT cf.id, cf.category_id, cf.format_id, f.label, f.is_active
+         FROM category_formats cf
+         JOIN formats f ON f.id = cf.format_id
+         WHERE cf.category_id = ?1
+         ORDER BY f.label COLLATE NOCASE"
+    } else {
+        "SELECT cf.id, cf.category_id, cf.format_id, f.label, f.is_active
+         FROM category_formats cf
+         JOIN formats f ON f.id = cf.format_id
+         ORDER BY cf.category_id, f.label COLLATE NOCASE"
+    };
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let map_row = |row: &rusqlite::Row<'_>| {
+        Ok(CategoryFormatDto {
+            id: row.get(0)?,
+            category_id: row.get(1)?,
+            format_id: row.get(2)?,
+            format_label: row.get(3)?,
+            format_active: row.get::<_, i64>(4)? != 0,
+        })
+    };
+    let rows = if let Some(id) = category_id {
+        stmt.query_map(params![id], map_row)
+    } else {
+        stmt.query_map([], map_row)
+    }
+    .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Links a format to a category (idempotent).
+#[tauri::command]
+pub fn category_format_add(category_id: i64, format_id: i64) -> Result<CategoryFormatDto, String> {
+    let conn = db::open_connection()?;
+    let (label, is_active): (String, i64) = conn
+        .query_row(
+            "SELECT label, is_active FROM formats WHERE id = ?1",
+            params![format_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Formato no válido".to_string())?;
+    let category_exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM product_categories WHERE id = ?1",
+            params![category_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if category_exists == 0 {
+        return Err("Categoría no encontrada".to_string());
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO category_formats (category_id, format_id)
+         VALUES (?1, ?2)",
+        params![category_id, format_id],
+    )
+    .map_err(|e| e.to_string())?;
+    let id: i64 = conn
+        .query_row(
+            "SELECT id FROM category_formats WHERE category_id = ?1 AND format_id = ?2",
+            params![category_id, format_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(CategoryFormatDto {
+        id,
+        category_id,
+        format_id,
+        format_label: label,
+        format_active: is_active != 0,
+    })
+}
+
+/// Unlinks a format from a category by assignment id.
+#[tauri::command]
+pub fn category_format_remove(id: i64) -> Result<(), String> {
+    let conn = db::open_connection()?;
+    let removed = conn
+        .execute("DELETE FROM category_formats WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    if removed == 0 {
+        return Err("Asignación de formato no encontrada".to_string());
+    }
+    Ok(())
+}
+
 /// Resolves the display label stored in invoice item snapshots.
 pub fn category_display_name(conn: &rusqlite::Connection, category_id: i64) -> Result<String, String> {
     conn.query_row(

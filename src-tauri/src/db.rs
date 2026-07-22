@@ -92,6 +92,8 @@ const EMBEDDED_EXPENSE_TYPES_SCHEMA: &str =
     include_str!("../../src/db/migrations/0018_expense_types.sql");
 const EMBEDDED_CATEGORY_WORK_TYPES_SCHEMA: &str =
     include_str!("../../src/db/migrations/0019_category_work_types.sql");
+const EMBEDDED_CATEGORY_FORMATS_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0020_category_formats.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -272,6 +274,13 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             conn,
             EMBEDDED_CATEGORY_WORK_TYPES_SCHEMA,
             "0019_category_work_types",
+        )?;
+    }
+    if !table_exists(conn, "category_formats") {
+        execute_migration(
+            conn,
+            EMBEDDED_CATEGORY_FORMATS_SCHEMA,
+            "0020_category_formats",
         )?;
     }
     Ok(())

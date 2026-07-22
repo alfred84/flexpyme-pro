@@ -65,3 +65,14 @@ export interface CategoryWorkTypeDto {
   workTypeName: string;
   workTypeActive: boolean;
 }
+
+/**
+ * Formato vinculado a una categoría.
+ */
+export interface CategoryFormatDto {
+  id: number;
+  categoryId: number;
+  formatId: number;
+  formatLabel: string;
+  formatActive: boolean;
+}

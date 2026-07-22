@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   CategoryFinishDto,
+  CategoryFormatDto,
   CategoryServiceDto,
   CategoryWorkTypeDto,
   CreateCategoryPayload,
@@ -136,4 +137,35 @@ export async function addCategoryWorkType(
  */
 export async function removeCategoryWorkType(id: number): Promise<void> {
   return invoke<void>("category_work_type_remove", { id });
+}
+
+/**
+ * Lista los formatos vinculados a una categoría.
+ */
+export async function fetchCategoryFormats(categoryId: number): Promise<CategoryFormatDto[]> {
+  return invoke<CategoryFormatDto[]>("category_formats_list", { categoryId });
+}
+
+/**
+ * Lista todos los vínculos categoría ↔ formato (formularios de pedido).
+ */
+export async function fetchAllCategoryFormats(): Promise<CategoryFormatDto[]> {
+  return invoke<CategoryFormatDto[]>("category_formats_all");
+}
+
+/**
+ * Vincula un formato a una categoría.
+ */
+export async function addCategoryFormat(
+  categoryId: number,
+  formatId: number,
+): Promise<CategoryFormatDto> {
+  return invoke<CategoryFormatDto>("category_format_add", { categoryId, formatId });
+}
+
+/**
+ * Desvincula un formato de una categoría.
+ */
+export async function removeCategoryFormat(id: number): Promise<void> {
+  return invoke<void>("category_format_remove", { id });
 }

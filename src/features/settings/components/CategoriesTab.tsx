@@ -171,7 +171,7 @@ export function CategoriesTab() {
                     <button
                       type="button"
                       className="btn btn-ghost btn-xs"
-                      title="Configurar tipos de trabajo y acabados"
+                      title="Configurar tipos de trabajo, formatos y acabados"
                       onClick={() => setConfiguring(row)}
                     >
                       <Settings2 className="h-3 w-3" />

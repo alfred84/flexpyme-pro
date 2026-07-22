@@ -123,7 +123,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Tasa de cambio USD → CUP (actualizable desde cabecera o Configuración; histórico de cambios)
 - **Precios** y **Costos** como entradas del sidebar (debajo de Flujo de Caja), no como tabs de Configuración
 - **Categorías** de productos (CRUD con `is_system`, snapshot en pedidos)
-- **Tipos de trabajo y acabados por categoría**: tabla `category_work_types` (tipos del catálogo asociados a la categoría) y `category_finishes` (acabados propios). Al crear líneas de pedido se preseleccionan los tipos vinculados (desmarcables) y se expanden en un `invoice_item` por tipo (`invoice_items.service` = nombre del tipo). La tabla legacy `category_services` ya no se usa en la UI.
+- **Tipos de trabajo, formatos y acabados por categoría**: tablas `category_work_types` y `category_formats` (catálogos asociados a la categoría) y `category_finishes` (acabados propios). Al crear líneas de pedido se preseleccionan los tipos vinculados (desmarcables), se limitan los formatos asociados y se expanden en un `invoice_item` por tipo (`invoice_items.service` = nombre del tipo). La tabla legacy `category_services` ya no se usa en la UI.
 - **Unidades** de medida (CRUD con tipo, snapshot en inventario)
 - Formatos disponibles (alta, edición y baja de formatos)
 - Backup y restauración de la base de datos
@@ -319,7 +319,7 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 ### v2.5 — Reenfoque a producción (2026-07-16)
 - **Fechas UI**: `dd/mm/aaaa` vía `formatDate` / `formatDateTime`; regla Cursor `.cursor/rules/fechas.mdc`.
 - **Denominaciones USD** + `DenominationGrid` reutilizable (CUP/USD) en cobros, caja y otros gastos; vuelto con desglose que afecta el neto en caja.
-- **Config por categoría**: `category_work_types` / `category_finishes`; preselección de tipos de trabajo al crear líneas; expansión a un `invoice_item` por tipo.
+- **Config por categoría**: `category_work_types` / `category_formats` / `category_finishes`; preselección de tipos de trabajo y formatos al crear líneas; expansión a un `invoice_item` por tipo.
 - **Caja**: KPIs de flujo neto del día y de los últimos 30 días; cuadrículas de denominaciones en movimientos nuevos.
 - **Reportes de producción**: `/reportes-produccion` por Área/día/formato (Realizado vs Pendiente) + Factura vs Salario.
 - **Inventario**: descuento por línea concluida; déficit permitido con bandera `resource_missing`.

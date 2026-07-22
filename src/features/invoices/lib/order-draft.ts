@@ -88,18 +88,36 @@ function uniqueValues(rows: PriceRowDto[], field: "service" | "finish"): string[
 }
 
 /**
- * Formatos disponibles en lista de precios para una categoría.
+ * Formatos disponibles para una categoría.
+ * Prioriza `category_formats`; si no hay, cae a los formatos con precio en la lista.
  *
  * @param prices - Lista de precios.
  * @param categoryId - Categoría a filtrar.
  * @param allFormats - Todos los formatos con su etiqueta.
- * @returns Formatos con precios definidos para la categoría.
+ * @param categoryFormats - Formatos vinculados por categoría (opcional).
+ * @returns Formatos disponibles para la categoría.
  */
 export function formatOptionsForCategory(
   prices: PriceRowDto[],
   categoryId: number,
   allFormats: { id: number; label: string }[],
+  categoryFormats?: {
+    categoryId: number;
+    formatId: number;
+    formatLabel: string;
+    formatActive: boolean;
+  }[],
 ): { id: number; label: string }[] {
+  if (categoryFormats) {
+    const configured = categoryFormats.filter(
+      (row) => row.categoryId === categoryId && row.formatActive,
+    );
+    if (configured.length > 0) {
+      return configured
+        .map((row) => ({ id: row.formatId, label: row.formatLabel }))
+        .sort((a, b) => a.label.localeCompare(b.label, "es"));
+    }
+  }
   const ids = new Set(
     filterPricesByCategory(prices, categoryId, null)
       .map((row) => row.formatId)

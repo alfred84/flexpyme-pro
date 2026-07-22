@@ -188,6 +188,29 @@ export const categoryWorkTypes = sqliteTable(
   }),
 );
 
+/**
+ * Formatos asociados a una categoría (selección múltiple en Configuración).
+ */
+export const categoryFormats = sqliteTable(
+  "category_formats",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    categoryId: integer("category_id")
+      .notNull()
+      .references(() => productCategories.id, { onDelete: "cascade" }),
+    formatId: integer("format_id")
+      .notNull()
+      .references(() => formats.id, { onDelete: "cascade" }),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    uniqueCategoryFormat: uniqueIndex("category_formats_unique").on(
+      table.categoryId,
+      table.formatId,
+    ),
+  }),
+);
+
 export const productionBatches = sqliteTable("production_batches", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   workTypeId: integer("work_type_id").references(() => workTypes.id),

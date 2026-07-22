@@ -8,7 +8,12 @@ import {
   type DraftLineService,
 } from "@/features/invoices/lib/order-draft";
 import { formatMoney } from "@/lib/format-money";
-import type { CategoryFinishDto, CategoryWorkTypeDto, ProductCategoryDto } from "@/types/category";
+import type {
+  CategoryFinishDto,
+  CategoryFormatDto,
+  CategoryWorkTypeDto,
+  ProductCategoryDto,
+} from "@/types/category";
 import type { FormatDto, PriceRowDto } from "@/types/price";
 
 interface OrderLineModalProps {
@@ -20,6 +25,8 @@ interface OrderLineModalProps {
   prices: PriceRowDto[];
   /** Tipos de trabajo asociados a cada categoría. */
   categoryWorkTypes: CategoryWorkTypeDto[];
+  /** Formatos asociados a cada categoría. */
+  categoryFormats: CategoryFormatDto[];
   categoryFinishes: CategoryFinishDto[];
   onClose: () => void;
   onSave: (line: DraftLine) => void;
@@ -101,6 +108,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
     formats,
     prices,
     categoryWorkTypes,
+    categoryFormats,
     categoryFinishes,
     onClose,
     onSave,
@@ -149,8 +157,8 @@ export function OrderLineModal(props: OrderLineModalProps) {
     if (!draft) {
       return [];
     }
-    return formatOptionsForCategory(prices, draft.categoryId, formats);
-  }, [draft, prices, formats]);
+    return formatOptionsForCategory(prices, draft.categoryId, formats, categoryFormats);
+  }, [draft, prices, formats, categoryFormats]);
 
   const workTypeOptions = useMemo(() => {
     if (!draft) {
@@ -186,10 +194,18 @@ export function OrderLineModal(props: OrderLineModalProps) {
         return prev;
       }
       const { defaultFinish } = finishOptionsFor(categoryFinishes, prices, categoryId, null);
+      const allowedFormats = formatOptionsForCategory(
+        prices,
+        categoryId,
+        formats,
+        categoryFormats,
+      );
+      const formatStillValid =
+        prev.formatId != null && allowedFormats.some((f) => f.id === prev.formatId);
       return {
         ...prev,
         categoryId,
-        formatId: null,
+        formatId: formatStillValid ? prev.formatId : null,
         finish: defaultFinish,
         services: buildDefaultWorkTypes(categoryId, null, defaultFinish),
       };
