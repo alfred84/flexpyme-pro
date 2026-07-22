@@ -37,7 +37,7 @@ export interface NavItem {
  * Navegación principal del taller (sidebar). Orden según REQUIREMENTS §5.
  */
 export const PRIMARY_NAV: NavItem[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/", label: "Inicio", icon: LayoutDashboard, exact: true },
   { to: "/pedidos", label: "Pedidos", icon: ShoppingCart, badge: "pedidosAtencion" },
   { to: "/reportes-produccion", label: "Reportes producción", icon: Factory },
   { to: "/facturas", label: "Facturas", icon: FileText, badge: "facturasPendientes" },

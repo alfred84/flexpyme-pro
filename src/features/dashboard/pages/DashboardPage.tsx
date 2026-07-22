@@ -69,9 +69,9 @@ function KpiCard(props: {
 }
 
 /**
- * Dashboard principal: KPIs del mes, ingresos por categoría, pedidos recientes y alertas.
+ * Pantalla de Inicio: KPIs del mes, ingresos por categoría, pedidos recientes y alertas.
  *
- * @returns Página de dashboard.
+ * @returns Página de inicio.
  */
 export function DashboardPage() {
   const settings = useAppSettings();

@@ -27,7 +27,7 @@ function resolvePageTitle(pathname: string): string {
   const prefix = all
     .filter((item) => item.to !== "/" && pathname.startsWith(item.to))
     .sort((a, b) => b.to.length - a.to.length)[0];
-  return prefix?.label ?? "Dashboard";
+  return prefix?.label ?? "Inicio";
 }
 
 /**

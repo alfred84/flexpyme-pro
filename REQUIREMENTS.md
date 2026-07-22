@@ -45,7 +45,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 
 ## 3. Módulos del Sistema
 
-### 3.1 Dashboard
+### 3.1 Inicio
 - KPIs: facturación del día/mes, pedidos pendientes, cobros pendientes
 - Gráfico de ingresos por categoría de producto (Recharts)
 - Lista de pedidos recientes con estado
@@ -167,7 +167,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Backups manuales y programados se guardan en `backups/` junto a `flexpyme.db`.
 - Nombre de backups: `flexpyme-backup-<tipo>-YYYYMMDD-HHMMSS.db`.
 - Backup programado configurable por usuario; valor por defecto: 5 días.
-- Dashboard y Configuración > Backup muestran el histórico de los 5 últimos backups.
+- Inicio y Configuración > Backup muestran el histórico de los 5 últimos backups.
 - La restauración manual permite seleccionar un fichero `.db` compatible, valida integridad/esquema, crea un backup de seguridad previo y reemplaza la BD activa conservando el nombre `flexpyme.db`.
 
 ---
@@ -188,7 +188,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 
 - **Estilo**: Dashboard profesional, limpio, moderno — inspirado en Odoo/FacturaScript
 - **Modo**: Dark mode por defecto (con opción de light mode en Configuración)
-- **Sidebar**: Dashboard, Pedidos, Reportes producción, Facturas, Clientes, Empleados, Inventario, Caja, Precios, Otros gastos, Reportes, Configuración
+- **Sidebar**: Inicio, Pedidos, Reportes producción, Facturas, Clientes, Empleados, Inventario, Caja, Precios, Otros gastos, Reportes, Configuración
 - **Fechas en UI (v2.5)**: siempre `dd/mm/aaaa` vía `formatDate` / `formatDateTime` (`src/lib/format-date.ts`)
 - **Iconos**: Lucide React en todos los menús, botones y acciones
 - **Tipografía**: moderna y legible
@@ -253,7 +253,7 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 | Schema Drizzle v2 | hecho |
 | Migración + Seed v2 | hecho |
 | Layout sidebar + dark + Lucide | hecho |
-| Dashboard KPIs | hecho |
+| Inicio (KPIs) | hecho |
 | Pedidos (UI /pedidos, tablas invoices) | hecho |
 | Clientes (ajustes v2) | base v1 (sin cambios) |
 | Empleados + lotes + salarios | hecho |
@@ -290,7 +290,7 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 - **BD portable**: release crea/carga `flexpyme.db` junto al ejecutable.
 - **Backup manual**: genera copias fechadas en la carpeta `backups`.
 - **Backup programado**: intervalo configurable en días, por defecto 5.
-- **Histórico**: Configuración > Backup y Dashboard muestran los últimos 5 backups.
+- **Histórico**: Configuración > Backup e Inicio muestran los últimos 5 backups.
 - **Restauración**: importa una BD compatible, valida integridad/esquema, crea backup de seguridad y reemplaza `flexpyme.db`.
 
 ### Catálogos del sistema y snapshots (v2.2)

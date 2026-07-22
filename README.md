@@ -5,7 +5,7 @@ La fuente de verdad de requisitos es [`REQUIREMENTS.md`](./REQUIREMENTS.md) (**v
 
 ## Módulos (v2.5)
 
-- **Dashboard**: KPIs del mes, ingresos por categoría (Recharts), pedidos recientes y alertas.
+- **Inicio**: KPIs del mes, ingresos por categoría (Recharts), pedidos recientes y alertas.
 - **Pedidos** (`/pedidos`): alta multi-producto con servicios auto-seleccionados por categoría (línea → varios `invoice_items`), detalle con registro de trabajo, impresión, cobro integrado (CUP/USD + vuelto) y filtros (en producción, listos, pendiente cobro). `/stock` redirige al filtro listos.
 - **Reportes de producción** (`/reportes-produccion`): por Área/día/formato (Realizado vs Pendiente) y comparativa Factura vs Salario.
 - **Facturas** (`/facturas`): vista financiera sobre los mismos pedidos (cobrada/parcial/pendiente/anulada).
@@ -119,7 +119,7 @@ En **Configuración > Backup**:
 
 - Crear respaldo manual con nombre `flexpyme-backup-manual-YYYYMMDD-HHMMSS.db`.
 - Configurar backup automático cada N días (por defecto 5).
-- Ver los últimos 5 backups también visibles desde Dashboard.
+- Ver los últimos 5 backups también visibles desde Inicio.
 - Restaurar/importar una BD `.db` compatible. La app valida integridad y esquema, crea un respaldo previo y reemplaza la BD activa conservando el nombre `flexpyme.db`.
 
 ## Clientes
