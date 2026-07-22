@@ -216,15 +216,17 @@ pub struct CategoryServiceDto {
     pub sort_order: i64,
 }
 
-/// Finish configured for a category (e.g. Brillo, 3D, Diamantado).
+/// Finish linked to a category (from the global finishes catalog).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CategoryFinishDto {
     pub id: i64,
     pub category_id: i64,
+    pub finish_id: Option<i64>,
     pub finish: String,
     pub is_default: bool,
     pub sort_order: i64,
+    pub finish_active: bool,
 }
 
 /// Lists all configured category services (all categories).
@@ -316,8 +318,13 @@ pub fn category_finishes_all() -> Result<Vec<CategoryFinishDto>, String> {
     let conn = db::open_connection()?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, category_id, finish, is_default, sort_order
-             FROM category_finishes ORDER BY category_id, sort_order, finish",
+            "SELECT cf.id, cf.category_id, cf.finish_id,
+                    COALESCE(f.name, cf.finish) AS finish_label,
+                    cf.is_default, cf.sort_order,
+                    COALESCE(f.is_active, 1) AS finish_active
+             FROM category_finishes cf
+             LEFT JOIN finishes f ON f.id = cf.finish_id
+             ORDER BY cf.category_id, cf.sort_order, finish_label COLLATE NOCASE",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
@@ -325,16 +332,86 @@ pub fn category_finishes_all() -> Result<Vec<CategoryFinishDto>, String> {
             Ok(CategoryFinishDto {
                 id: row.get(0)?,
                 category_id: row.get(1)?,
-                finish: row.get(2)?,
-                is_default: row.get::<_, i64>(3)? != 0,
-                sort_order: row.get(4)?,
+                finish_id: row.get(2)?,
+                finish: row.get(3)?,
+                is_default: row.get::<_, i64>(4)? != 0,
+                sort_order: row.get(5)?,
+                finish_active: row.get::<_, i64>(6)? != 0,
             })
         })
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
-/// Adds a finish to a category.
+/// Links a catalog finish to a category (idempotent).
+#[tauri::command]
+pub fn category_finish_add(
+    category_id: i64,
+    finish_id: i64,
+    is_default: Option<bool>,
+) -> Result<CategoryFinishDto, String> {
+    let conn = db::open_connection()?;
+    let (name, is_active): (String, i64) = conn
+        .query_row(
+            "SELECT name, is_active FROM finishes WHERE id = ?1",
+            params![finish_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Acabado no válido".to_string())?;
+    let category_exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM product_categories WHERE id = ?1",
+            params![category_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if category_exists == 0 {
+        return Err("Categoría no encontrada".to_string());
+    }
+    let existing: Option<(i64, i64, i64)> = conn
+        .query_row(
+            "SELECT id, is_default, sort_order FROM category_finishes
+             WHERE category_id = ?1 AND (finish_id = ?2 OR lower(finish) = lower(?3))",
+            params![category_id, finish_id, name],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .ok();
+    if let Some((id, def, sort)) = existing {
+        conn.execute(
+            "UPDATE category_finishes SET finish_id = ?1, finish = ?2 WHERE id = ?3",
+            params![finish_id, name, id],
+        )
+        .map_err(|e| e.to_string())?;
+        return Ok(CategoryFinishDto {
+            id,
+            category_id,
+            finish_id: Some(finish_id),
+            finish: name,
+            is_default: def != 0,
+            sort_order: sort,
+            finish_active: is_active != 0,
+        });
+    }
+    let is_default = is_default.unwrap_or(false);
+    conn.execute(
+        "INSERT INTO category_finishes (category_id, finish, finish_id, is_default, sort_order)
+         VALUES (?1, ?2, ?3, ?4, 0)",
+        params![category_id, name, finish_id, if is_default { 1 } else { 0 }],
+    )
+    .map_err(|e| e.to_string())?;
+    let id = conn.last_insert_rowid();
+    Ok(CategoryFinishDto {
+        id,
+        category_id,
+        finish_id: Some(finish_id),
+        finish: name,
+        is_default,
+        sort_order: 0,
+        finish_active: is_active != 0,
+    })
+}
+
+/// Adds a finish to a category by free-text name (legacy; prefer category_finish_add).
 #[tauri::command]
 pub fn category_finish_create(
     category_id: i64,
@@ -346,30 +423,23 @@ pub fn category_finish_create(
         return Err("El nombre del acabado es obligatorio".to_string());
     }
     let conn = db::open_connection()?;
-    let exists: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM category_finishes WHERE category_id = ?1 AND lower(finish) = lower(?2)",
-            params![category_id, finish],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
-    if exists > 0 {
-        return Err("Ese acabado ya está configurado para la categoría".to_string());
-    }
-    conn.execute(
-        "INSERT INTO category_finishes (category_id, finish, is_default, sort_order)
-         VALUES (?1, ?2, ?3, 0)",
-        params![category_id, finish, if is_default { 1 } else { 0 }],
-    )
-    .map_err(|e| e.to_string())?;
-    let id = conn.last_insert_rowid();
-    Ok(CategoryFinishDto {
-        id,
-        category_id,
-        finish,
-        is_default,
-        sort_order: 0,
-    })
+    let finish_id: i64 = match conn.query_row(
+        "SELECT id FROM finishes WHERE lower(name) = lower(?1)",
+        params![finish],
+        |row| row.get(0),
+    ) {
+        Ok(id) => id,
+        Err(_) => {
+            conn.execute(
+                "INSERT INTO finishes (name, is_active, is_system) VALUES (?1, 1, 0)",
+                params![finish],
+            )
+            .map_err(|e| e.to_string())?;
+            conn.last_insert_rowid()
+        }
+    };
+    drop(conn);
+    category_finish_add(category_id, finish_id, Some(is_default))
 }
 
 /// Toggles the default-selected flag of a category finish.

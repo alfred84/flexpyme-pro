@@ -94,6 +94,8 @@ const EMBEDDED_CATEGORY_WORK_TYPES_SCHEMA: &str =
     include_str!("../../src/db/migrations/0019_category_work_types.sql");
 const EMBEDDED_CATEGORY_FORMATS_SCHEMA: &str =
     include_str!("../../src/db/migrations/0020_category_formats.sql");
+const EMBEDDED_FINISHES_CATALOG_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0021_finishes_catalog.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -282,6 +284,36 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             EMBEDDED_CATEGORY_FORMATS_SCHEMA,
             "0020_category_formats",
         )?;
+    }
+    if !table_exists(conn, "finishes") {
+        execute_migration(conn, EMBEDDED_FINISHES_CATALOG_SCHEMA, "0021_finishes_catalog")?;
+    }
+    if table_exists(conn, "category_finishes")
+        && !column_exists(conn, "category_finishes", "finish_id")
+    {
+        conn.execute(
+            "ALTER TABLE category_finishes ADD COLUMN finish_id integer REFERENCES finishes(id)",
+            [],
+        )
+        .map_err(|e| format!("No se pudo añadir finish_id a category_finishes: {}", e))?;
+        // Import any leftover free-text finishes into the catalog.
+        conn.execute_batch(
+            "INSERT OR IGNORE INTO finishes (name, is_active, is_system)
+             SELECT DISTINCT trim(cf.finish), 1, 0
+             FROM category_finishes cf
+             WHERE cf.finish IS NOT NULL AND trim(cf.finish) <> ''
+               AND NOT EXISTS (
+                 SELECT 1 FROM finishes f WHERE lower(f.name) = lower(trim(cf.finish))
+               );
+             UPDATE category_finishes
+             SET finish_id = (
+               SELECT f.id FROM finishes f
+               WHERE lower(f.name) = lower(trim(category_finishes.finish))
+               LIMIT 1
+             )
+             WHERE finish_id IS NULL AND finish IS NOT NULL AND trim(finish) <> '';",
+        )
+        .map_err(|e| format!("No se pudo vincular category_finishes.finish_id: {}", e))?;
     }
     Ok(())
 }

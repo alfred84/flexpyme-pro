@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Building2, DatabaseBackup, DollarSign, HardDriveDownload, Hammer, Layers, RotateCcw, Ruler, Scale, Trash2, Upload, Users } from "lucide-react";
+import { Building2, DatabaseBackup, DollarSign, HardDriveDownload, Hammer, Layers, RotateCcw, Ruler, Scale, Sparkles, Trash2, Upload, Users } from "lucide-react";
 import { CategoriesTab } from "@/features/settings/components/CategoriesTab";
+import { FinishesTab } from "@/features/settings/components/FinishesTab";
 import { formatDateTime } from "@/lib/format-date";
 import { UnitsTab } from "@/features/settings/components/UnitsTab";
 import { BusinessLogo } from "@/components/common/BusinessLogo";
@@ -29,6 +30,7 @@ type TabKey =
   | "tasa-de-cambio"
   | "roles"
   | "categorias"
+  | "acabados"
   | "unidades"
   | "formatos"
   | "tipos-trabajo"
@@ -39,6 +41,7 @@ const TABS: { key: TabKey; label: string; icon: typeof Building2 }[] = [
   { key: "tasa-de-cambio", label: "Tasa de cambio", icon: DollarSign },
   { key: "roles", label: "Roles", icon: Users },
   { key: "categorias", label: "Categorías", icon: Layers },
+  { key: "acabados", label: "Acabados", icon: Sparkles },
   { key: "unidades", label: "Unidades", icon: Scale },
   { key: "formatos", label: "Formatos", icon: Ruler },
   { key: "tipos-trabajo", label: "Tipos de Trabajo", icon: Hammer },
@@ -54,6 +57,7 @@ function resolveSettingsTab(tab: string | undefined): TabKey {
     "tasa-de-cambio",
     "roles",
     "categorias",
+    "acabados",
     "unidades",
     "formatos",
     "tipos-trabajo",
@@ -123,6 +127,7 @@ export function SettingsPage() {
       {tab === "tasa-de-cambio" && <ExchangeRateTab />}
       {tab === "roles" && <EmployeeRolesTab />}
       {tab === "categorias" && <CategoriesTab />}
+      {tab === "acabados" && <FinishesTab />}
       {tab === "unidades" && <UnitsTab />}
       {tab === "formatos" && <FormatsTab />}
       {tab === "tipos-trabajo" && <WorkTypesTab />}

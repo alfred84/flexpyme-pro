@@ -83,7 +83,9 @@ function finishOptionsFor(
   categoryId: number,
   formatId: number | null,
 ): { finishes: string[]; defaultFinish: string } {
-  const configured = categoryFinishes.filter((f) => f.categoryId === categoryId);
+  const configured = categoryFinishes.filter(
+    (f) => f.categoryId === categoryId && (f.finishActive ?? true),
+  );
   if (configured.length > 0) {
     const def = configured.find((f) => f.isDefault);
     return { finishes: configured.map((f) => f.finish), defaultFinish: def?.finish ?? "" };

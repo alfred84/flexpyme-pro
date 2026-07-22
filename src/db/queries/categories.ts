@@ -84,7 +84,7 @@ export async function fetchCategoryFinishes(): Promise<CategoryFinishDto[]> {
 }
 
 /**
- * Añade un acabado a una categoría.
+ * Añade un acabado a una categoría (texto libre; crea entrada en catálogo si hace falta).
  */
 export async function createCategoryFinish(
   categoryId: number,
@@ -92,6 +92,21 @@ export async function createCategoryFinish(
   isDefault: boolean,
 ): Promise<CategoryFinishDto> {
   return invoke<CategoryFinishDto>("category_finish_create", { categoryId, finish, isDefault });
+}
+
+/**
+ * Vincula un acabado del catálogo a una categoría.
+ */
+export async function addCategoryFinish(
+  categoryId: number,
+  finishId: number,
+  isDefault = false,
+): Promise<CategoryFinishDto> {
+  return invoke<CategoryFinishDto>("category_finish_add", {
+    categoryId,
+    finishId,
+    isDefault,
+  });
 }
 
 /**

@@ -50,9 +50,11 @@ export interface CategoryServiceDto {
 export interface CategoryFinishDto {
   id: number;
   categoryId: number;
+  finishId: number | null;
   finish: string;
   isDefault: boolean;
   sortOrder: number;
+  finishActive: boolean;
 }
 
 /**

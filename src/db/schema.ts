@@ -59,6 +59,25 @@ export const formats = sqliteTable("formats", {
 });
 
 /**
+ * Catálogo global de acabados (Brillo, 3D, Diamantado…).
+ * Se asocian a categorías desde Configuración → Categorías.
+ */
+export const finishes = sqliteTable(
+  "finishes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    description: text("description"),
+    isActive: integer("is_active").notNull().default(1),
+    isSystem: integer("is_system").notNull().default(0),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    nameUnique: uniqueIndex("finishes_name_unique").on(table.name),
+  }),
+);
+
+/**
  * Legacy: servicios/áreas por categoría (sustituido por `category_work_types` en la UI).
  * Se conserva el esquema por compatibilidad con bases existentes.
  */
@@ -74,15 +93,17 @@ export const categoryServices = sqliteTable("category_services", {
 });
 
 /**
- * Acabados configurables por categoría (Brillo, 3D, Diamantado, Cuero Acrílico...).
- * Opcionales aunque estén definidos.
+ * Acabados asociados a una categoría (catálogo `finishes`).
+ * Opcionales en el pedido; `isDefault` preselecciona al crear la línea.
  */
 export const categoryFinishes = sqliteTable("category_finishes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   categoryId: integer("category_id")
     .notNull()
     .references(() => productCategories.id, { onDelete: "cascade" }),
+  /** Snapshot del nombre; preferir finishId para el vínculo. */
   finish: text("finish").notNull(),
+  finishId: integer("finish_id").references(() => finishes.id, { onDelete: "set null" }),
   isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),

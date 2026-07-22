@@ -5,6 +5,7 @@ pub mod clients;
 pub mod employee_roles;
 pub mod employees;
 pub mod formats;
+pub mod finishes;
 pub mod work_types;
 pub mod units;
 pub mod stock;

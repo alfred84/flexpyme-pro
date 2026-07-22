@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { useMemo, useState } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { useMemo } from "react";
+import { X } from "lucide-react";
 import {
+  addCategoryFinish,
   addCategoryFormat,
   addCategoryWorkType,
-  createCategoryFinish,
   deleteCategoryFinish,
   fetchCategoryFinishes,
   fetchCategoryFormats,
@@ -14,6 +14,7 @@ import {
   removeCategoryWorkType,
   setCategoryFinishDefault,
 } from "@/db/queries/categories";
+import { fetchFinishes } from "@/db/queries/finishes";
 import type { ProductCategoryDto } from "@/types/category";
 
 interface WorkTypeOption {
@@ -40,8 +41,8 @@ interface CategoryConfigModalProps {
 /**
  * Modal para configurar tipos de trabajo, formatos y acabados de una categoría.
  *
- * Tipos y formatos se eligen de los catálogos de Configuración; los acabados
- * son texto propio de la categoría.
+ * Los tres catálogos se eligen desde Configuración (Tipos de trabajo, Formatos,
+ * Acabados). Los acabados siguen siendo opcionales en el pedido.
  *
  * @param props - Categoría y callback de cierre.
  * @returns Modal de configuración de categoría.
@@ -49,11 +50,14 @@ interface CategoryConfigModalProps {
 export function CategoryConfigModal(props: CategoryConfigModalProps) {
   const { category, onClose } = props;
   const queryClient = useQueryClient();
-  const [newFinish, setNewFinish] = useState("");
 
-  const finishesQuery = useQuery({
+  const linkedFinishesQuery = useQuery({
     queryKey: ["category-finishes"],
     queryFn: fetchCategoryFinishes,
+  });
+  const finishesCatalogQuery = useQuery({
+    queryKey: ["finishes", "manage"],
+    queryFn: () => fetchFinishes(false),
   });
   const workTypesCatalogQuery = useQuery({
     queryKey: ["work-types"],
@@ -72,7 +76,9 @@ export function CategoryConfigModal(props: CategoryConfigModalProps) {
     queryFn: () => fetchCategoryFormats(category.id),
   });
 
-  const finishes = (finishesQuery.data ?? []).filter((f) => f.categoryId === category.id);
+  const linkedFinishes = (linkedFinishesQuery.data ?? []).filter(
+    (f) => f.categoryId === category.id,
+  );
   const linkedWorkTypes = linkedWorkTypesQuery.data ?? [];
   const linkedFormats = linkedFormatsQuery.data ?? [];
 
@@ -92,6 +98,16 @@ export function CategoryConfigModal(props: CategoryConfigModalProps) {
     return map;
   }, [linkedFormats]);
 
+  const linkedByFinishId = useMemo(() => {
+    const map = new Map<number, (typeof linkedFinishes)[number]>();
+    for (const row of linkedFinishes) {
+      if (row.finishId != null) {
+        map.set(row.finishId, row);
+      }
+    }
+    return map;
+  }, [linkedFinishes]);
+
   const selectableWorkTypes = useMemo(() => {
     const catalog = workTypesCatalogQuery.data ?? [];
     return catalog
@@ -106,6 +122,13 @@ export function CategoryConfigModal(props: CategoryConfigModalProps) {
       .sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
   }, [formatsCatalogQuery.data, linkedByFormatId]);
 
+  const selectableFinishes = useMemo(() => {
+    const catalog = finishesCatalogQuery.data ?? [];
+    return catalog
+      .filter((f) => f.isActive || linkedByFinishId.has(f.id))
+      .sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
+  }, [finishesCatalogQuery.data, linkedByFinishId]);
+
   const invalidateFinishes = () =>
     queryClient.invalidateQueries({ queryKey: ["category-finishes"] });
   const invalidateWorkTypes = async () => {
@@ -118,13 +141,10 @@ export function CategoryConfigModal(props: CategoryConfigModalProps) {
   };
 
   const addFinish = useMutation({
-    mutationFn: () => createCategoryFinish(category.id, newFinish.trim(), false),
-    onSuccess: async () => {
-      setNewFinish("");
-      await invalidateFinishes();
-    },
+    mutationFn: (finishId: number) => addCategoryFinish(category.id, finishId, false),
+    onSuccess: () => void invalidateFinishes(),
   });
-  const toggleFinish = useMutation({
+  const toggleFinishDefault = useMutation({
     mutationFn: (args: { id: number; isDefault: boolean }) =>
       setCategoryFinishDefault(args.id, args.isDefault),
     onSuccess: () => void invalidateFinishes(),
@@ -154,6 +174,8 @@ export function CategoryConfigModal(props: CategoryConfigModalProps) {
 
   const workTypeBusy = addWorkType.isPending || removeWorkType.isPending;
   const formatBusy = addFormat.isPending || removeFormat.isPending;
+  const finishBusy =
+    addFinish.isPending || removeFinish.isPending || toggleFinishDefault.isPending;
   const workTypeError =
     (addWorkType.error as Error | null)?.message ??
     (removeWorkType.error as Error | null)?.message ??
@@ -162,13 +184,18 @@ export function CategoryConfigModal(props: CategoryConfigModalProps) {
     (addFormat.error as Error | null)?.message ??
     (removeFormat.error as Error | null)?.message ??
     null;
+  const finishError =
+    (addFinish.error as Error | null)?.message ??
+    (removeFinish.error as Error | null)?.message ??
+    (toggleFinishDefault.error as Error | null)?.message ??
+    null;
 
   return (
     <dialog className="modal modal-open">
       <div className="modal-box max-w-3xl">
         <h3 className="text-lg font-bold">Configurar: {category.name}</h3>
         <p className="mt-1 text-sm text-base-content/60">
-          Asocia tipos de trabajo y formatos del catálogo, y define acabados propios (opcionales).
+          Asocia tipos de trabajo, formatos y acabados de los catálogos de Configuración.
         </p>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -336,68 +363,98 @@ export function CategoryConfigModal(props: CategoryConfigModalProps) {
           <section className="space-y-2 md:col-span-2">
             <h4 className="font-semibold">Acabados</h4>
             <p className="text-xs text-base-content/60">
-              Acabados propios de esta categoría (siempre opcionales en el pedido).
+              Selecciona uno o más del catálogo (Configuración → Acabados). Siguen siendo opcionales
+              en el pedido; «Por defecto» los preselecciona al crear la línea.
             </p>
-            <div className="flex max-w-md gap-1">
-              <input
-                className="input input-bordered input-sm flex-1"
-                placeholder="Ej. Brillo"
-                value={newFinish}
-                onChange={(e) => setNewFinish(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && newFinish.trim()) {
-                    void addFinish.mutateAsync();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                disabled={!newFinish.trim() || addFinish.isPending}
-                onClick={() => void addFinish.mutateAsync()}
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-            </div>
-            {addFinish.isError && (
-              <p className="text-xs text-error">{(addFinish.error as Error).message}</p>
-            )}
-            <ul className="max-w-md space-y-1">
-              {finishes.length === 0 && (
-                <li className="text-xs text-base-content/50">Sin acabados configurados.</li>
-              )}
-              {finishes.map((f) => (
-                <li
-                  key={f.id}
-                  className="flex items-center justify-between gap-2 rounded border border-base-300 px-2 py-1"
-                >
-                  <span className="text-sm">{f.finish}</span>
-                  <div className="flex items-center gap-2">
-                    <label className="flex cursor-pointer items-center gap-1 text-xs">
-                      <input
-                        type="checkbox"
-                        className="checkbox checkbox-xs"
-                        checked={f.isDefault}
-                        onChange={(e) =>
-                          void toggleFinish.mutateAsync({
-                            id: f.id,
-                            isDefault: e.target.checked,
-                          })
-                        }
-                      />
-                      Por defecto
-                    </label>
+
+            {linkedFinishes.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {linkedFinishes.map((row) => (
+                  <span
+                    key={row.id}
+                    className={`badge badge-sm gap-1 ${row.finishActive ? "badge-accent badge-outline" : "badge-ghost"}`}
+                  >
+                    {row.finish}
+                    {row.isDefault && <span className="opacity-70">· defecto</span>}
+                    {!row.finishActive && <span className="opacity-60">(inactivo)</span>}
                     <button
                       type="button"
-                      className="btn btn-ghost btn-xs text-error"
-                      onClick={() => void removeFinish.mutateAsync(f.id)}
+                      className="text-error"
+                      title="Quitar"
+                      disabled={finishBusy}
+                      onClick={() => void removeFinish.mutateAsync(row.id)}
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <X className="h-3 w-3" />
                     </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {finishesCatalogQuery.isLoading || linkedFinishesQuery.isLoading ? (
+              <p className="text-xs text-base-content/50">Cargando acabados…</p>
+            ) : selectableFinishes.length === 0 ? (
+              <p className="text-xs text-base-content/50">
+                No hay acabados activos. Créalos en la pestaña Acabados.
+              </p>
+            ) : (
+              <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-2 md:max-w-xl">
+                {selectableFinishes.map((finish) => {
+                  const linked = linkedByFinishId.get(finish.id);
+                  const checked = linked != null;
+                  return (
+                    <div
+                      key={finish.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded px-1 py-1 hover:bg-base-200"
+                    >
+                      <label className="label cursor-pointer justify-start gap-3 py-0">
+                        <input
+                          type="checkbox"
+                          className="checkbox checkbox-sm checkbox-accent"
+                          checked={checked}
+                          disabled={finishBusy}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              void addFinish.mutateAsync(finish.id);
+                            } else if (linked) {
+                              void removeFinish.mutateAsync(linked.id);
+                            }
+                          }}
+                        />
+                        <span className="label-text text-sm">
+                          {finish.name}
+                          {!finish.isActive && (
+                            <span className="ml-1 text-xs text-base-content/50">(inactivo)</span>
+                          )}
+                        </span>
+                      </label>
+                      {linked && (
+                        <label className="flex cursor-pointer items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-xs"
+                            checked={linked.isDefault}
+                            disabled={finishBusy}
+                            onChange={(e) =>
+                              void toggleFinishDefault.mutateAsync({
+                                id: linked.id,
+                                isDefault: e.target.checked,
+                              })
+                            }
+                          />
+                          Por defecto
+                        </label>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {finishError && <p className="text-xs text-error">{finishError}</p>}
+            {linkedFinishes.length === 0 && selectableFinishes.length > 0 && (
+              <p className="text-xs text-base-content/50">Ningún acabado seleccionado todavía.</p>
+            )}
           </section>
         </div>
 
