@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { fetchClients } from "@/db/queries/clients";
 import { createInvoice } from "@/db/queries/invoices";
-import { fetchCategories, fetchCategoryFinishes, fetchCategoryServices } from "@/db/queries/categories";
+import { fetchCategories, fetchCategoryFinishes, fetchAllCategoryWorkTypes } from "@/db/queries/categories";
 import { fetchFormats, fetchPrices } from "@/db/queries/prices";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 import {
@@ -45,9 +45,9 @@ export function InvoiceNewPage() {
   const categoriesQuery = useQuery({ queryKey: ["categories", "active"], queryFn: () => fetchCategories(true) });
   const formatsQuery = useQuery({ queryKey: ["formats"], queryFn: fetchFormats });
   const pricesQuery = useQuery({ queryKey: ["prices", "active"], queryFn: () => fetchPrices(false) });
-  const categoryServicesQuery = useQuery({
-    queryKey: ["category-services"],
-    queryFn: fetchCategoryServices,
+  const categoryWorkTypesQuery = useQuery({
+    queryKey: ["category-work-types"],
+    queryFn: fetchAllCategoryWorkTypes,
   });
   const categoryFinishesQuery = useQuery({
     queryKey: ["category-finishes"],
@@ -373,7 +373,7 @@ export function InvoiceNewPage() {
         categories={categoriesQuery.data ?? []}
         formats={formatsQuery.data ?? []}
         prices={pricesQuery.data ?? []}
-        categoryServices={categoryServicesQuery.data ?? []}
+        categoryWorkTypes={categoryWorkTypesQuery.data ?? []}
         categoryFinishes={categoryFinishesQuery.data ?? []}
         onClose={() => setLineModalOpen(false)}
         onSave={handleSaveLine}

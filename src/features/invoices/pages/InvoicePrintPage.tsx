@@ -187,7 +187,7 @@ export function InvoicePrintPage() {
                 <tr className="border-b print:break-inside-avoid">
                   <th className="text-left">Categoría</th>
                   <th className="text-left">Formato</th>
-                  <th className="text-left">Servicio</th>
+                  <th className="text-left">Tipo de trabajo</th>
                   <th className="text-left">Acabado</th>
                   <th className="text-right">Cant.</th>
                   <th className="text-right">P. unit.</th>

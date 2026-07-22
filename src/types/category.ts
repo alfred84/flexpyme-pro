@@ -54,3 +54,14 @@ export interface CategoryFinishDto {
   isDefault: boolean;
   sortOrder: number;
 }
+
+/**
+ * Tipo de trabajo vinculado a una categoría.
+ */
+export interface CategoryWorkTypeDto {
+  id: number;
+  categoryId: number;
+  workTypeId: number;
+  workTypeName: string;
+  workTypeActive: boolean;
+}

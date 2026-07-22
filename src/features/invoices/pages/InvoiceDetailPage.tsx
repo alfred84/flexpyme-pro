@@ -209,7 +209,7 @@ export function InvoiceDetailPage() {
                 <tr>
                   <th>Categoría</th>
                   <th>Formato</th>
-                  <th>Servicio</th>
+                  <th>Tipo de trabajo</th>
                   <th>Acabado</th>
                   <th className="text-right">Cant.</th>
                   <th className="text-right">Realizado</th>

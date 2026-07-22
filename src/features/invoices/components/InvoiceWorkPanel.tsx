@@ -80,7 +80,7 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
     setQuantities((prev) => {
       const next = { ...prev };
       for (const line of eligibleLines) {
-        if (serviceMatchesWorkType(line.service, selectedWorkType.code)) {
+        if (serviceMatchesWorkType(line.service, selectedWorkType.code, selectedWorkType.name)) {
           next[line.id] = String(line.quantity);
         } else if (next[line.id] === undefined) {
           next[line.id] = "";
@@ -272,7 +272,7 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
             <thead>
               <tr>
                 <th>Línea</th>
-                <th>Servicio</th>
+                <th>Tipo de trabajo</th>
                 <th className="text-right">Pedido</th>
                 <th className="text-right">Costo unit.</th>
                 <th className="w-28">Cant. trabajo</th>
@@ -284,7 +284,7 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
                 const qty = Number(quantities[line.id] ?? "0") || 0;
                 const unitCost = line.formatId ? (costByFormat.get(line.formatId) ?? null) : null;
                 const matches = selectedWorkType
-                  ? serviceMatchesWorkType(line.service, selectedWorkType.code)
+                  ? serviceMatchesWorkType(line.service, selectedWorkType.code, selectedWorkType.name)
                   : false;
                 return (
                   <tr key={line.id} className={matches ? "bg-primary/5" : ""}>

@@ -59,8 +59,8 @@ export const formats = sqliteTable("formats", {
 });
 
 /**
- * Servicios/áreas configurables por categoría (Impresión, Laminado, Enmarcado...).
- * `isDefault` marca los que se preseleccionan al crear una línea de pedido.
+ * Legacy: servicios/áreas por categoría (sustituido por `category_work_types` en la UI).
+ * Se conserva el esquema por compatibilidad con bases existentes.
  */
 export const categoryServices = sqliteTable("category_services", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -164,6 +164,29 @@ export const workTypes = sqliteTable("work_types", {
   isSystem: integer("is_system").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 });
+
+/**
+ * Tipos de trabajo asociados a una categoría (selección múltiple en Configuración).
+ */
+export const categoryWorkTypes = sqliteTable(
+  "category_work_types",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    categoryId: integer("category_id")
+      .notNull()
+      .references(() => productCategories.id, { onDelete: "cascade" }),
+    workTypeId: integer("work_type_id")
+      .notNull()
+      .references(() => workTypes.id, { onDelete: "cascade" }),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    uniqueCategoryWorkType: uniqueIndex("category_work_types_unique").on(
+      table.categoryId,
+      table.workTypeId,
+    ),
+  }),
+);
 
 export const productionBatches = sqliteTable("production_batches", {
   id: integer("id").primaryKey({ autoIncrement: true }),

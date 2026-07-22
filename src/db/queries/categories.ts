@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   CategoryFinishDto,
   CategoryServiceDto,
+  CategoryWorkTypeDto,
   CreateCategoryPayload,
   ProductCategoryDto,
   UpdateCategoryPayload,
@@ -104,4 +105,35 @@ export async function setCategoryFinishDefault(id: number, isDefault: boolean): 
  */
 export async function deleteCategoryFinish(id: number): Promise<void> {
   return invoke<void>("category_finish_delete", { id });
+}
+
+/**
+ * Lista los tipos de trabajo vinculados a una categoría.
+ */
+export async function fetchCategoryWorkTypes(categoryId: number): Promise<CategoryWorkTypeDto[]> {
+  return invoke<CategoryWorkTypeDto[]>("category_work_types_list", { categoryId });
+}
+
+/**
+ * Lista todos los vínculos categoría ↔ tipo de trabajo (formularios de pedido).
+ */
+export async function fetchAllCategoryWorkTypes(): Promise<CategoryWorkTypeDto[]> {
+  return invoke<CategoryWorkTypeDto[]>("category_work_types_all");
+}
+
+/**
+ * Vincula un tipo de trabajo a una categoría.
+ */
+export async function addCategoryWorkType(
+  categoryId: number,
+  workTypeId: number,
+): Promise<CategoryWorkTypeDto> {
+  return invoke<CategoryWorkTypeDto>("category_work_type_add", { categoryId, workTypeId });
+}
+
+/**
+ * Desvincula un tipo de trabajo de una categoría.
+ */
+export async function removeCategoryWorkType(id: number): Promise<void> {
+  return invoke<void>("category_work_type_remove", { id });
 }

@@ -2,9 +2,10 @@ import type { CreateInvoiceItemPayload } from "@/types/invoice";
 import type { PriceRowDto } from "@/types/price";
 
 /**
- * Servicio seleccionado dentro de una línea (producto+formato) con su precio.
+ * Servicio/tipo de trabajo seleccionado dentro de una línea con su precio.
  */
 export interface DraftLineService {
+  /** Nombre del tipo de trabajo (se guarda en `invoice_items.service`). */
   service: string;
   unitPrice: string;
 }
@@ -13,9 +14,9 @@ export interface DraftLineService {
  * Línea de borrador en el formulario de nuevo pedido.
  *
  * Una línea representa un producto (categoría) + formato + acabado con una
- * cantidad, y puede incluir varios servicios/áreas (Impresión, Laminado,
- * Enmarcado...). Al guardar el pedido, cada servicio se expande en un
- * `invoice_item` independiente (alineado con el Excel formato×servicio).
+ * cantidad, y uno o más tipos de trabajo (Impresión, Laminado, Enmarcado...).
+ * Al guardar el pedido, cada tipo se expande en un `invoice_item` independiente
+ * (el campo `service` almacena el nombre del tipo de trabajo).
  */
 export interface DraftLine {
   key: string;
@@ -23,6 +24,7 @@ export interface DraftLine {
   formatId: number | null;
   finish: string;
   quantity: string;
+  /** Tipos de trabajo seleccionados (persistidos como `invoice_items.service`). */
   services: DraftLineService[];
 }
 

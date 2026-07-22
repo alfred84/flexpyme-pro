@@ -8,7 +8,7 @@ import {
   type DraftLineService,
 } from "@/features/invoices/lib/order-draft";
 import { formatMoney } from "@/lib/format-money";
-import type { CategoryFinishDto, CategoryServiceDto, ProductCategoryDto } from "@/types/category";
+import type { CategoryFinishDto, CategoryWorkTypeDto, ProductCategoryDto } from "@/types/category";
 import type { FormatDto, PriceRowDto } from "@/types/price";
 
 interface OrderLineModalProps {
@@ -18,36 +18,43 @@ interface OrderLineModalProps {
   categories: ProductCategoryDto[];
   formats: FormatDto[];
   prices: PriceRowDto[];
-  categoryServices: CategoryServiceDto[];
+  /** Tipos de trabajo asociados a cada categoría. */
+  categoryWorkTypes: CategoryWorkTypeDto[];
   categoryFinishes: CategoryFinishDto[];
   onClose: () => void;
   onSave: (line: DraftLine) => void;
 }
 
-interface ServiceOption {
+interface WorkTypeOption {
   name: string;
+  /** Si true, se preselecciona al crear la línea. */
   isDefault: boolean;
 }
 
 /**
- * Deriva las opciones de servicio para una categoría: usa la configuración
- * (`category_services`) si existe; si no, cae a los servicios de la lista de precios.
+ * Deriva las opciones de tipo de trabajo para una categoría.
+ * Prioriza `category_work_types`; si no hay, cae a los servicios de la lista de precios.
  *
- * @param categoryServices - Servicios configurados por categoría.
+ * @param categoryWorkTypes - Tipos vinculados por categoría.
  * @param prices - Lista de precios.
  * @param categoryId - Categoría seleccionada.
  * @param formatId - Formato seleccionado.
- * @returns Opciones de servicio con su marca de preselección.
+ * @returns Opciones con marca de preselección.
  */
-function serviceOptionsFor(
-  categoryServices: CategoryServiceDto[],
+function workTypeOptionsFor(
+  categoryWorkTypes: CategoryWorkTypeDto[],
   prices: PriceRowDto[],
   categoryId: number,
   formatId: number | null,
-): ServiceOption[] {
-  const configured = categoryServices.filter((s) => s.categoryId === categoryId);
+): WorkTypeOption[] {
+  const configured = categoryWorkTypes.filter(
+    (row) => row.categoryId === categoryId && row.workTypeActive,
+  );
   if (configured.length > 0) {
-    return configured.map((s) => ({ name: s.service, isDefault: s.isDefault }));
+    return configured.map((row) => ({
+      name: row.workTypeName,
+      isDefault: true,
+    }));
   }
   const { services } = serviceAndFinishOptions(prices, categoryId, formatId);
   return services.map((name) => ({ name, isDefault: false }));
@@ -79,8 +86,8 @@ function finishOptionsFor(
 }
 
 /**
- * Modal CRUD para añadir o editar una línea de pedido con auto-selección de
- * servicios por categoría y cálculo automático de precios.
+ * Modal CRUD para añadir o editar una línea de pedido con tipos de trabajo
+ * por categoría y cálculo automático de precios.
  *
  * @param props - Estado del modal y catálogos.
  * @returns Diálogo de línea de pedido.
@@ -93,7 +100,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
     categories,
     formats,
     prices,
-    categoryServices,
+    categoryWorkTypes,
     categoryFinishes,
     onClose,
     onSave,
@@ -102,13 +109,16 @@ export function OrderLineModal(props: OrderLineModalProps) {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Construye la lista de servicios preseleccionados con su precio calculado.
+   * Construye la lista de tipos de trabajo preseleccionados con su precio.
    */
-  const buildDefaultServices = (categoryId: number, formatId: number | null, finish: string): DraftLineService[] => {
-    const options = serviceOptionsFor(categoryServices, prices, categoryId, formatId);
+  const buildDefaultWorkTypes = (
+    categoryId: number,
+    formatId: number | null,
+    finish: string,
+  ): DraftLineService[] => {
+    const options = workTypeOptionsFor(categoryWorkTypes, prices, categoryId, formatId);
     const defaults = options.filter((o) => o.isDefault);
-    const chosen = defaults.length > 0 ? defaults : [];
-    return chosen.map((o) => {
+    return defaults.map((o) => {
       const price = resolveServicePrice(prices, categoryId, formatId, o.name, finish);
       return { service: o.name, unitPrice: price !== null ? String(price) : "" };
     });
@@ -128,7 +138,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
         formatId: null,
         finish: defaultFinish,
         quantity: "1",
-        services: buildDefaultServices(defaultCategoryId, null, defaultFinish),
+        services: buildDefaultWorkTypes(defaultCategoryId, null, defaultFinish),
       });
     }
     setError(null);
@@ -142,12 +152,12 @@ export function OrderLineModal(props: OrderLineModalProps) {
     return formatOptionsForCategory(prices, draft.categoryId, formats);
   }, [draft, prices, formats]);
 
-  const serviceOptions = useMemo(() => {
+  const workTypeOptions = useMemo(() => {
     if (!draft) {
-      return [] as ServiceOption[];
+      return [] as WorkTypeOption[];
     }
-    return serviceOptionsFor(categoryServices, prices, draft.categoryId, draft.formatId);
-  }, [draft, categoryServices, prices]);
+    return workTypeOptionsFor(categoryWorkTypes, prices, draft.categoryId, draft.formatId);
+  }, [draft, categoryWorkTypes, prices]);
 
   const finishInfo = useMemo(() => {
     if (!draft) {
@@ -156,10 +166,10 @@ export function OrderLineModal(props: OrderLineModalProps) {
     return finishOptionsFor(categoryFinishes, prices, draft.categoryId, draft.formatId);
   }, [draft, categoryFinishes, prices]);
 
-  const hasConfiguredServices = serviceOptions.length > 0;
+  const hasConfiguredWorkTypes = workTypeOptions.length > 0;
 
-  /** Recalcula el precio de los servicios seleccionados tras cambiar formato/acabado. */
-  const recalcServicePrices = (
+  /** Recalcula el precio de los tipos seleccionados tras cambiar formato/acabado. */
+  const recalcWorkTypePrices = (
     services: DraftLineService[],
     categoryId: number,
     formatId: number | null,
@@ -181,7 +191,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
         categoryId,
         formatId: null,
         finish: defaultFinish,
-        services: buildDefaultServices(categoryId, null, defaultFinish),
+        services: buildDefaultWorkTypes(categoryId, null, defaultFinish),
       };
     });
   };
@@ -194,7 +204,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
       return {
         ...prev,
         formatId,
-        services: recalcServicePrices(prev.services, prev.categoryId, formatId, prev.finish),
+        services: recalcWorkTypePrices(prev.services, prev.categoryId, formatId, prev.finish),
       };
     });
   };
@@ -207,12 +217,12 @@ export function OrderLineModal(props: OrderLineModalProps) {
       return {
         ...prev,
         finish,
-        services: recalcServicePrices(prev.services, prev.categoryId, prev.formatId, finish),
+        services: recalcWorkTypePrices(prev.services, prev.categoryId, prev.formatId, finish),
       };
     });
   };
 
-  const toggleService = (name: string, checked: boolean) => {
+  const toggleWorkType = (name: string, checked: boolean) => {
     setDraft((prev) => {
       if (!prev) {
         return prev;
@@ -224,14 +234,17 @@ export function OrderLineModal(props: OrderLineModalProps) {
         const price = resolveServicePrice(prices, prev.categoryId, prev.formatId, name, prev.finish);
         return {
           ...prev,
-          services: [...prev.services, { service: name, unitPrice: price !== null ? String(price) : "" }],
+          services: [
+            ...prev.services,
+            { service: name, unitPrice: price !== null ? String(price) : "" },
+          ],
         };
       }
       return { ...prev, services: prev.services.filter((s) => s.service !== name) };
     });
   };
 
-  const setServicePrice = (name: string, unitPrice: string) => {
+  const setWorkTypePrice = (name: string, unitPrice: string) => {
     setDraft((prev) => {
       if (!prev) {
         return prev;
@@ -243,7 +256,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
     });
   };
 
-  /** Precio del modo manual (categorías sin servicios configurados). */
+  /** Precio del modo manual (categorías sin tipos de trabajo configurados). */
   const setManualPrice = (unitPrice: string) => {
     setDraft((prev) => {
       if (!prev) {
@@ -267,7 +280,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
       return;
     }
     if (draft.services.length === 0) {
-      setError("Selecciona al menos un servicio.");
+      setError("Selecciona al menos un tipo de trabajo.");
       return;
     }
     const invalidPrice = draft.services.some((s) => {
@@ -275,7 +288,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
       return !Number.isFinite(unit) || unit < 0;
     });
     if (invalidPrice) {
-      setError("Indica un precio válido para cada servicio.");
+      setError("Indica un precio válido para cada tipo de trabajo.");
       return;
     }
     onSave(draft);
@@ -361,10 +374,10 @@ export function OrderLineModal(props: OrderLineModalProps) {
           </label>
 
           <div className="form-control sm:col-span-2">
-            <span className="label-text text-xs">Servicios</span>
-            {hasConfiguredServices ? (
+            <span className="label-text text-xs">Tipos de trabajo</span>
+            {hasConfiguredWorkTypes ? (
               <div className="mt-1 space-y-1 rounded-lg border border-base-300 p-2">
-                {serviceOptions.map((opt) => {
+                {workTypeOptions.map((opt) => {
                   const selected = draft.services.find((s) => s.service === opt.name);
                   const checked = Boolean(selected);
                   return (
@@ -374,7 +387,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
                           type="checkbox"
                           className="checkbox checkbox-sm"
                           checked={checked}
-                          onChange={(e) => toggleService(opt.name, e.target.checked)}
+                          onChange={(e) => toggleWorkType(opt.name, e.target.checked)}
                         />
                         {opt.name}
                       </label>
@@ -385,21 +398,27 @@ export function OrderLineModal(props: OrderLineModalProps) {
                         placeholder="Precio"
                         value={selected?.unitPrice ?? ""}
                         disabled={!checked}
-                        onChange={(e) => setServicePrice(opt.name, e.target.value)}
+                        onChange={(e) => setWorkTypePrice(opt.name, e.target.value)}
                       />
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <input
-                type="text"
-                inputMode="decimal"
-                className="input input-bordered input-sm"
-                placeholder="Precio unitario (CUP)"
-                value={manualPrice}
-                onChange={(e) => setManualPrice(e.target.value)}
-              />
+              <div className="mt-1 space-y-1">
+                <p className="text-xs text-base-content/50">
+                  Esta categoría no tiene tipos de trabajo asociados. Configúralos en Categorías o
+                  indica un precio unitario.
+                </p>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="input input-bordered input-sm w-full"
+                  placeholder="Precio unitario (CUP)"
+                  value={manualPrice}
+                  onChange={(e) => setManualPrice(e.target.value)}
+                />
+              </div>
             )}
           </div>
         </div>

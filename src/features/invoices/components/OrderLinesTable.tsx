@@ -34,7 +34,7 @@ export function OrderLinesTable(props: OrderLinesTableProps) {
           <tr>
             <th>Categoría</th>
             <th>Formato</th>
-            <th>Servicios</th>
+            <th>Tipos de trabajo</th>
             <th>Acabado</th>
             <th className="text-right">Cant.</th>
             <th className="text-right">P.U. total</th>

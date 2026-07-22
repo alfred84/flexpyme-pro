@@ -393,6 +393,121 @@ pub fn category_finish_delete(id: i64) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryWorkTypeDto {
+    pub id: i64,
+    pub category_id: i64,
+    pub work_type_id: i64,
+    pub work_type_name: String,
+    pub work_type_active: bool,
+}
+
+/// Lists work types linked to a category.
+#[tauri::command]
+pub fn category_work_types_list(category_id: i64) -> Result<Vec<CategoryWorkTypeDto>, String> {
+    let conn = db::open_connection()?;
+    list_category_work_types(&conn, Some(category_id))
+}
+
+/// Lists all category ↔ work-type links (for order forms).
+#[tauri::command]
+pub fn category_work_types_all() -> Result<Vec<CategoryWorkTypeDto>, String> {
+    let conn = db::open_connection()?;
+    list_category_work_types(&conn, None)
+}
+
+fn list_category_work_types(
+    conn: &rusqlite::Connection,
+    category_id: Option<i64>,
+) -> Result<Vec<CategoryWorkTypeDto>, String> {
+    let sql = if category_id.is_some() {
+        "SELECT cwt.id, cwt.category_id, cwt.work_type_id, wt.name, wt.is_active
+         FROM category_work_types cwt
+         JOIN work_types wt ON wt.id = cwt.work_type_id
+         WHERE cwt.category_id = ?1
+         ORDER BY wt.name COLLATE NOCASE"
+    } else {
+        "SELECT cwt.id, cwt.category_id, cwt.work_type_id, wt.name, wt.is_active
+         FROM category_work_types cwt
+         JOIN work_types wt ON wt.id = cwt.work_type_id
+         ORDER BY cwt.category_id, wt.name COLLATE NOCASE"
+    };
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let map_row = |row: &rusqlite::Row<'_>| {
+        Ok(CategoryWorkTypeDto {
+            id: row.get(0)?,
+            category_id: row.get(1)?,
+            work_type_id: row.get(2)?,
+            work_type_name: row.get(3)?,
+            work_type_active: row.get::<_, i64>(4)? != 0,
+        })
+    };
+    let rows = if let Some(id) = category_id {
+        stmt.query_map(params![id], map_row)
+    } else {
+        stmt.query_map([], map_row)
+    }
+    .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Links a work type to a category (idempotent).
+#[tauri::command]
+pub fn category_work_type_add(category_id: i64, work_type_id: i64) -> Result<CategoryWorkTypeDto, String> {
+    let conn = db::open_connection()?;
+    let (name, is_active): (String, i64) = conn
+        .query_row(
+            "SELECT name, is_active FROM work_types WHERE id = ?1",
+            params![work_type_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Tipo de trabajo no válido".to_string())?;
+    let category_exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM product_categories WHERE id = ?1",
+            params![category_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if category_exists == 0 {
+        return Err("Categoría no encontrada".to_string());
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO category_work_types (category_id, work_type_id)
+         VALUES (?1, ?2)",
+        params![category_id, work_type_id],
+    )
+    .map_err(|e| e.to_string())?;
+    let id: i64 = conn
+        .query_row(
+            "SELECT id FROM category_work_types WHERE category_id = ?1 AND work_type_id = ?2",
+            params![category_id, work_type_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(CategoryWorkTypeDto {
+        id,
+        category_id,
+        work_type_id,
+        work_type_name: name,
+        work_type_active: is_active != 0,
+    })
+}
+
+/// Unlinks a work type from a category by assignment id.
+#[tauri::command]
+pub fn category_work_type_remove(id: i64) -> Result<(), String> {
+    let conn = db::open_connection()?;
+    let removed = conn
+        .execute("DELETE FROM category_work_types WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    if removed == 0 {
+        return Err("Asignación de tipo de trabajo no encontrada".to_string());
+    }
+    Ok(())
+}
+
 /// Resolves the display label stored in invoice item snapshots.
 pub fn category_display_name(conn: &rusqlite::Connection, category_id: i64) -> Result<String, String> {
     conn.query_row(

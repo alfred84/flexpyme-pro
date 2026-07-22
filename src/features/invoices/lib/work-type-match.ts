@@ -10,21 +10,29 @@ function normalizeServiceToken(value: string): string {
 }
 
 /**
- * Indica si el servicio de una línea corresponde al código de tipo de trabajo.
+ * Indica si el servicio/tipo de una línea corresponde a un tipo de trabajo.
  *
- * @param service - Servicio de la línea del pedido.
- * @param workTypeCode - Código del tipo de trabajo (`laminado`, `impresion`, etc.).
+ * @param service - Valor de `invoice_items.service` (nombre del tipo).
+ * @param workTypeCode - Código del tipo (`laminado`, `impresion`, etc.).
+ * @param workTypeName - Nombre visible del tipo (opcional, mejora el match).
  * @returns Verdadero si el servicio encaja con el tipo de trabajo.
  */
-export function serviceMatchesWorkType(service: string | null, workTypeCode: string): boolean {
+export function serviceMatchesWorkType(
+  service: string | null,
+  workTypeCode: string,
+  workTypeName?: string,
+): boolean {
   if (!service?.trim()) {
     return false;
   }
   const normalizedService = normalizeServiceToken(service);
-  const normalizedCode = normalizeServiceToken(workTypeCode);
-  return (
-    normalizedService === normalizedCode ||
-    normalizedService.includes(normalizedCode) ||
-    normalizedCode.includes(normalizedService)
+  const candidates = [workTypeCode, workTypeName]
+    .filter((v): v is string => Boolean(v?.trim()))
+    .map(normalizeServiceToken);
+  return candidates.some(
+    (token) =>
+      normalizedService === token ||
+      normalizedService.includes(token) ||
+      token.includes(normalizedService),
   );
 }
