@@ -12,11 +12,22 @@ import { Link } from "@tanstack/react-router";
 import { RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { RestoreClientsModal } from "@/features/clients/components/RestoreClientsModal";
+import {
+  clientBalanceStatusBadgeClass,
+  clientBalanceStatusLabel,
+  formatClientBalanceDisplay,
+  resolveClientBalanceStatus,
+} from "@/features/clients/lib/client-balance";
 import { fetchClients, fetchDeletedClients } from "@/db/queries/clients";
 import type { ClientDto } from "@/types/client";
 import { formatMoney } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
 
+/**
+ * Columnas de la tabla de clientes (balance con signo/color y estado).
+ *
+ * @returns Definición de columnas para TanStack Table.
+ */
 function useClientColumns(): ColumnDef<ClientDto>[] {
   return useMemo(
     () => [
@@ -30,7 +41,14 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
       {
         accessorKey: "balance",
         header: "Balance",
-        cell: (info) => formatMoney(info.getValue<number>()),
+        cell: (info) => {
+          const display = formatClientBalanceDisplay(info.getValue<number>());
+          return (
+            <span className={display.className} title={clientBalanceStatusLabel(display.status)}>
+              {display.text}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "totalHistorical",
@@ -38,8 +56,22 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
         cell: (info) => <span className="tabular-nums">{formatMoney(info.getValue<number>())}</span>,
       },
       {
+        id: "estado",
+        header: "Estado",
+        accessorFn: (row) => resolveClientBalanceStatus(row.balance),
+        cell: ({ row }) => {
+          const status = resolveClientBalanceStatus(row.original.balance);
+          return (
+            <span className={clientBalanceStatusBadgeClass(status)}>
+              {clientBalanceStatusLabel(status)}
+            </span>
+          );
+        },
+      },
+      {
         id: "actions",
         header: "",
+        enableSorting: false,
         cell: ({ row }) => (
           <div className="flex gap-2">
             <Link className="btn btn-xs btn-outline" to="/clientes/$clientId" params={{ clientId: String(row.original.id) }}>
@@ -61,9 +93,9 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
 }
 
 /**
- * Lists all active clients with search and navigation to detail routes.
+ * Lista de clientes activos con búsqueda, balance semántico y estado.
  *
- * @returns Clients table page.
+ * @returns Página de tabla de clientes.
  */
 export function ClientsListPage() {
   const [globalFilter, setGlobalFilter] = useState("");
@@ -98,7 +130,13 @@ export function ClientsListPage() {
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold">Clientes</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Clientes</h1>
+          <p className="text-sm text-base-content/70">
+            El balance se muestra desde la perspectiva del cliente: saldo a favor en verde y deuda en
+            rojo.
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {hasDeletedClients && (
             <button
