@@ -1,10 +1,23 @@
 /**
+ * Categoría de material de inventario.
+ */
+export interface MaterialCategoryDto {
+  id: number;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+/**
  * Ítem de inventario con bandera de stock bajo calculada en backend.
  */
 export interface InventoryItemDto {
   id: number;
   name: string;
   category: string | null;
+  materialCategoryId: number | null;
+  materialCategoryName: string | null;
   unitId: number | null;
   unitSnapshot: string | null;
   unit: string;
@@ -31,11 +44,29 @@ export interface InventoryMovementDto {
 }
 
 /**
+ * Movimiento en el listado global de Inventario.
+ */
+export interface InventoryMovementListDto {
+  id: number;
+  itemId: number;
+  itemName: string;
+  movementType: string;
+  quantity: number;
+  reason: string | null;
+  date: string;
+  notes: string | null;
+  referenceId: number | null;
+  /** `Manual` | `Rebaja por Pedido` | `—` */
+  method: string;
+}
+
+/**
  * Payload de creación de ítem de inventario.
  */
 export interface CreateItemPayload {
   name: string;
-  category: string | null;
+  materialCategoryId: number;
+  category?: string | null;
   unitId?: number | null;
   unit?: string | null;
   quantity: number;
@@ -51,7 +82,8 @@ export interface CreateItemPayload {
 export interface UpdateItemPayload {
   id: number;
   name: string;
-  category: string | null;
+  materialCategoryId: number;
+  category?: string | null;
   unitId?: number | null;
   unit?: string | null;
   minStock: number;
@@ -72,13 +104,18 @@ export interface MovementPayload {
 }
 
 /**
- * Norma de consumo de inventario al completar un pedido.
+ * Norma de consumo de inventario.
  */
 export interface InventoryRecipeDto {
   id: number;
   categoryId: number;
   categoryName: string;
   service: string | null;
+  workTypeId: number | null;
+  workTypeName: string | null;
+  formatId: number | null;
+  formatLabel: string | null;
+  finish: string | null;
   inventoryItemId: number;
   inventoryItemName: string;
   quantityPerUnit: number;
@@ -90,7 +127,30 @@ export interface InventoryRecipeDto {
  */
 export interface CreateRecipePayload {
   categoryId: number;
-  service: string | null;
+  workTypeId: number;
+  formatId: number | null;
+  finish: string | null;
   inventoryItemId: number;
   quantityPerUnit: number;
+}
+
+/**
+ * Payload de actualización de norma.
+ */
+export interface UpdateRecipePayload {
+  id: number;
+  inventoryItemId: number;
+  formatId: number | null;
+  finish: string | null;
+  quantityPerUnit: number;
+}
+
+/**
+ * Material asignado a una línea de pedido.
+ */
+export interface InvoiceItemMaterialInput {
+  inventoryItemId: number;
+  quantityPerUnit: number;
+  source?: string | null;
+  recipeId?: number | null;
 }

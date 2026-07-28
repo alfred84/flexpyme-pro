@@ -91,6 +91,7 @@ pub struct CreateInvoiceItemPayload {
     pub service: Option<String>,
     pub quantity: i64,
     pub unit_price: f64,
+    pub materials: Option<Vec<crate::commands::inventory::InvoiceItemMaterialInput>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -562,6 +563,16 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
             ],
         )
         .map_err(|e| e.to_string())?;
+        let invoice_item_id = tx.last_insert_rowid();
+        if let Some(ref materials) = item.materials {
+            if !materials.is_empty() {
+                crate::commands::inventory::insert_invoice_item_materials(
+                    &tx,
+                    invoice_item_id,
+                    materials,
+                )?;
+            }
+        }
     }
 
     tx.execute(

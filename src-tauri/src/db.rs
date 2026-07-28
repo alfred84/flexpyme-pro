@@ -98,6 +98,8 @@ const EMBEDDED_FINISHES_CATALOG_SCHEMA: &str =
     include_str!("../../src/db/migrations/0021_finishes_catalog.sql");
 const EMBEDDED_SIN_FORMATO_SCHEMA: &str =
     include_str!("../../src/db/migrations/0022_sin_formato.sql");
+const EMBEDDED_INVENTORY_MATERIALS_V26_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0023_inventory_materials_v26.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -327,6 +329,27 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
         .unwrap_or(0);
     if sin_formato_exists == 0 {
         execute_migration(conn, EMBEDDED_SIN_FORMATO_SCHEMA, "0022_sin_formato")?;
+    }
+    if !table_exists(conn, "inventory_material_categories") {
+        execute_migration(
+            conn,
+            EMBEDDED_INVENTORY_MATERIALS_V26_SCHEMA,
+            "0023_inventory_materials_v26",
+        )?;
+    } else if !column_exists(conn, "inventory_items", "material_category_id") {
+        execute_migration(
+            conn,
+            EMBEDDED_INVENTORY_MATERIALS_V26_SCHEMA,
+            "0023_inventory_materials_v26",
+        )?;
+    } else if table_exists(conn, "inventory_recipes")
+        && !column_exists(conn, "inventory_recipes", "work_type_id")
+    {
+        execute_migration(
+            conn,
+            EMBEDDED_INVENTORY_MATERIALS_V26_SCHEMA,
+            "0023_inventory_materials_v26",
+        )?;
     }
     Ok(())
 }

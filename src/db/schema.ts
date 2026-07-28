@@ -354,10 +354,26 @@ export const employeeExtraRoles = sqliteTable("employee_extra_roles", {
 /**
  * Materiales/insumos del taller con control de stock mínimo.
  */
+/**
+ * Categorías de materiales de inventario (catálogo).
+ */
+export const inventoryMaterialCategories = sqliteTable("inventory_material_categories", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  description: text("description"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
 export const inventoryItems = sqliteTable("inventory_items", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
+  /** @deprecated Preferir materialCategoryId; se mantiene por compatibilidad. */
   category: text("category"),
+  materialCategoryId: integer("material_category_id").references(
+    () => inventoryMaterialCategories.id,
+  ),
   unitId: integer("unit_id").references(() => units.id),
   unitSnapshot: text("unit_snapshot"),
   unit: text("unit").notNull().default("unidad"),
@@ -371,19 +387,43 @@ export const inventoryItems = sqliteTable("inventory_items", {
 });
 
 /**
- * Recetas de consumo de inventario por categoría/servicio de producto vendido.
+ * Normas de consumo de inventario por categoría de pedido, tipo de trabajo,
+ * formato y acabado.
  */
 export const inventoryRecipes = sqliteTable("inventory_recipes", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   categoryId: integer("category_id")
     .notNull()
     .references(() => productCategories.id),
+  /** @deprecated Preferir workTypeId. */
   service: text("service"),
+  workTypeId: integer("work_type_id").references(() => workTypes.id),
+  formatId: integer("format_id").references(() => formats.id),
+  finish: text("finish"),
   inventoryItemId: integer("inventory_item_id")
     .notNull()
     .references(() => inventoryItems.id),
   quantityPerUnit: real("quantity_per_unit").notNull().default(1),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
+/**
+ * Materiales de inventario asignados a una línea de pedido (norma o manual).
+ */
+export const invoiceItemMaterials = sqliteTable("invoice_item_materials", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  invoiceItemId: integer("invoice_item_id")
+    .notNull()
+    .references(() => invoiceItems.id, { onDelete: "cascade" }),
+  inventoryItemId: integer("inventory_item_id")
+    .notNull()
+    .references(() => inventoryItems.id),
+  quantityPerUnit: real("quantity_per_unit").notNull().default(1),
+  source: text("source").notNull().default("manual"),
+  recipeId: integer("recipe_id").references(() => inventoryRecipes.id, {
+    onDelete: "set null",
+  }),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 });
 

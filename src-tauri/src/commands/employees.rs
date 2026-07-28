@@ -582,7 +582,7 @@ fn mark_invoice_item_completed(
 ) -> Result<(), String> {
     let mut stmt = tx
         .prepare(
-            "SELECT id, category_id, service, quantity, completed_quantity
+            "SELECT id, category_id, service, quantity, completed_quantity, format_id, finish
              FROM invoice_items
              WHERE invoice_id = ?1 AND (format_id = ?2 OR (?2 IS NULL AND format_id IS NULL))
              ORDER BY id",
@@ -596,6 +596,8 @@ fn mark_invoice_item_completed(
                 row.get::<_, Option<String>>(2)?,
                 row.get::<_, i64>(3)?,
                 row.get::<_, i64>(4)?,
+                row.get::<_, Option<i64>>(5)?,
+                row.get::<_, Option<String>>(6)?,
             ))
         })
         .map_err(|e| e.to_string())?
@@ -604,7 +606,7 @@ fn mark_invoice_item_completed(
     drop(stmt);
 
     let mut remaining = item.quantity;
-    for (id, category_id, service, quantity, completed) in candidates {
+    for (id, category_id, service, quantity, completed, format_id, finish) in candidates {
         if remaining <= 0 {
             break;
         }
@@ -626,7 +628,6 @@ fn mark_invoice_item_completed(
         .map_err(|e| e.to_string())?;
         remaining -= add;
 
-        // Descuenta el inventario por la cantidad concluida en esta línea.
         let service_filter = if service.trim().is_empty() {
             None
         } else {
@@ -636,8 +637,11 @@ fn mark_invoice_item_completed(
             tx,
             invoice_id,
             invoice_number,
+            id,
             category_id,
             service_filter,
+            format_id,
+            finish.as_deref(),
             add,
         )?;
         if !deficit.is_empty() {

@@ -4,9 +4,12 @@ import type {
   CreateRecipePayload,
   InventoryItemDto,
   InventoryMovementDto,
+  InventoryMovementListDto,
   InventoryRecipeDto,
+  MaterialCategoryDto,
   MovementPayload,
   UpdateItemPayload,
+  UpdateRecipePayload,
 } from "@/types/inventory";
 
 /**
@@ -52,7 +55,70 @@ export async function fetchInventoryMovements(itemId: number): Promise<Inventory
 }
 
 /**
- * Lists production consumption norms (normas de consumo).
+ * Lists inventory movements for the current day (`hoy`) or month (`mes`).
+ *
+ * @param period - Periodo del listado.
+ * @returns Movimientos ordenados del más reciente al más antiguo.
+ */
+export async function fetchInventoryMovementsList(
+  period: "hoy" | "mes",
+): Promise<InventoryMovementListDto[]> {
+  return invoke<InventoryMovementListDto[]>("inventory_movements_list", { period });
+}
+
+/**
+ * Lists material categories.
+ */
+export async function fetchMaterialCategories(activeOnly = false): Promise<MaterialCategoryDto[]> {
+  return invoke<MaterialCategoryDto[]>("inventory_material_categories_list", { activeOnly });
+}
+
+/**
+ * Creates a material category.
+ */
+export async function createMaterialCategory(payload: {
+  name: string;
+  description?: string | null;
+  sortOrder?: number;
+}): Promise<MaterialCategoryDto> {
+  return invoke<MaterialCategoryDto>("inventory_material_category_create", {
+    name: payload.name,
+    description: payload.description ?? null,
+    sortOrder: payload.sortOrder ?? 10,
+  });
+}
+
+/**
+ * Updates a material category.
+ */
+export async function updateMaterialCategory(
+  id: number,
+  payload: { name: string; description?: string | null; sortOrder?: number },
+): Promise<MaterialCategoryDto> {
+  return invoke<MaterialCategoryDto>("inventory_material_category_update", {
+    id,
+    name: payload.name,
+    description: payload.description ?? null,
+    sortOrder: payload.sortOrder ?? 10,
+  });
+}
+
+/**
+ * Deactivates a material category.
+ */
+export async function deactivateMaterialCategory(id: number): Promise<void> {
+  return invoke<void>("inventory_material_category_deactivate", { id });
+}
+
+/**
+ * Reactivates a material category.
+ */
+export async function reactivateMaterialCategory(id: number): Promise<MaterialCategoryDto> {
+  return invoke<MaterialCategoryDto>("inventory_material_category_reactivate", { id });
+}
+
+/**
+ * Lists production consumption norms.
  */
 export async function fetchInventoryRecipes(activeOnly = true): Promise<InventoryRecipeDto[]> {
   return invoke<InventoryRecipeDto[]>("inventory_recipes_list", { activeOnly });
@@ -66,8 +132,22 @@ export async function createInventoryRecipe(payload: CreateRecipePayload): Promi
 }
 
 /**
+ * Updates a production consumption norm.
+ */
+export async function updateInventoryRecipe(payload: UpdateRecipePayload): Promise<InventoryRecipeDto> {
+  return invoke<InventoryRecipeDto>("inventory_recipe_update", { payload });
+}
+
+/**
  * Deactivates a production consumption norm.
  */
 export async function deactivateInventoryRecipe(id: number): Promise<void> {
   return invoke<void>("inventory_recipe_deactivate", { id });
+}
+
+/**
+ * Reactivates a production consumption norm.
+ */
+export async function reactivateInventoryRecipe(id: number): Promise<InventoryRecipeDto> {
+  return invoke<InventoryRecipeDto>("inventory_recipe_reactivate", { id });
 }
