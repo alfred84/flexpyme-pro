@@ -96,12 +96,14 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 
 ### 3.5 Inventario
 - Gestión de materiales/insumos del taller
-- Campos: nombre, categoría, cantidad en stock, unidad de medida, precio de costo, stock mínimo
-- Alertas de stock bajo (cuando cantidad ≤ stock mínimo)
-- Registro de entradas y salidas de inventario
-- Historial de movimientos por ítem
-- **Recetas de producción**: vinculan categoría/servicio del pedido con material y cantidad por unidad
-- **Descuento por línea concluida (v2.5)**: el inventario se descuenta al concluir cada línea/servicio vía lotes de trabajo (no al marcar todo el pedido listo)
+- **Categorías de material** (CRUD del usuario): obligatorias antes de dar de alta ítems; se gestionan desde la opción **Categorías** en Inventario (modal); el listado agrupa ítems en acordeón por categoría
+- Campos del ítem: categoría (obligatoria), nombre, unidad, stock; **stock mínimo, costo unitario y proveedor opcionales**; descripción/apuntes; **edición** de datos del ítem (el stock solo cambia con movimientos)
+- Stock mínimo `0` o vacío = **Sin establecer** (sin alertas de stock bajo). Alertas solo si mínimo &gt; 0 y cantidad ≤ mínimo
+- Listado: mosaico compacto por categoría de material; al entrar, tabla de ítems y alta de ítem; sección **Movimientos** (día/mes) con método Manual vs Rebaja por Pedido; **salida manual** (sin pedido) con **motivo obligatorio**; **normas** desde la opción **Normas** (modal)
+- Historial de movimientos por ítem (salidas con motivo obligatorio)
+- **Normas de producción**: por categoría de pedido + tipo de trabajo (tabs) + formato/acabado + material y cantidad/unidad; editables (solo afectan pedidos futuros); desactivadas ocultas con opción de ver/reactivar
+- En **Pedidos**, por línea: aplicar norma (se fijan materiales al crear el pedido) **o** asignar materiales manualmente desde almacén
+- **Descuento por línea concluida (v2.5)**: al concluir cada línea/servicio vía lotes de trabajo se descuentan materiales asignados o, si no hay, los de normas coincidentes
 - **Déficit permitido (v2.5)**: si falta material, la salida se registra igualmente dejando existencia negativa (déficit) en lugar de bloquear; la línea del pedido se marca `resource_missing` con nota y el pedido agrega la bandera; el inventario muestra el ítem en **Déficit**
 
 ### 3.6 Flujo de Caja
@@ -229,7 +231,7 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 4. La deuda anterior del cliente **no** se incluye en el total del pedido; al guardar se actualiza el balance del cliente (`balance += subtotal - anticipo - pagado`)
 5. El flujo de caja registra TODA operación de dinero (cobros a clientes, anticipos de pedido, pagos a empleados, gastos)
 6. Los empleados dados de baja no aparecen en nuevas asignaciones pero su historial se conserva
-7. El inventario descuenta materiales **al concluir cada línea/servicio** vía lotes de trabajo (`inventory_recipes`); si falta material se permite déficit (existencia negativa), se marca `resource_missing` en la línea y en el pedido, y no se bloquea la conclusión
+7. El inventario descuenta materiales **al concluir cada línea/servicio** vía lotes de trabajo (materiales fijados en el pedido desde norma o asignación manual; si no hay, coincidencia con `inventory_recipes`); si falta material se permite déficit (existencia negativa), se marca `resource_missing` en la línea y en el pedido, y no se bloquea la conclusión
 8. La tasa USD/CUP vigente se guarda en cada transacción para auditoría
 
 ---
@@ -333,6 +335,12 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - Columna/modal **Tarifa de Pago** (obligatoria, default 0); al guardar se sincroniza `cost_list` para salarios.
 - Formato base **Sin formato** (0×0); filas pendientes en Precios cuando hay tipos de trabajo sin precio definido.
 - Click en Precios del sidebar limpia `?categoria=` y vuelve al mosaico.
+
+### v2.6.1 — Inventario por categorías y normas (2026-07)
+- Categorías de material (`inventory_material_categories`); ítems con categoría obligatoria; listado en acordeón.
+- Stock mínimo / costo / proveedor opcionales; sin alertas si mínimo no establecido.
+- Normas por tipo de trabajo (tabs) + formato/acabado; editar (solo futuros); ver/reactivar desactivadas.
+- Pedidos: norma o materiales manuales por línea (`invoice_item_materials`); salida manual con motivo.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
