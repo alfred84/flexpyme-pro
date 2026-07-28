@@ -26,7 +26,9 @@ import { EmployeeDetailPage } from "@/features/employees/pages/EmployeeDetailPag
 import { EmployeeWorkBatchPage } from "@/features/employees/pages/EmployeeWorkBatchPage";
 import { InventoryListPage } from "@/features/inventory/pages/InventoryListPage";
 import { InventoryNewPage } from "@/features/inventory/pages/InventoryNewPage";
+import { InventoryCategoryPage } from "@/features/inventory/pages/InventoryCategoryPage";
 import { InventoryItemDetailPage } from "@/features/inventory/pages/InventoryItemDetailPage";
+import { InventoryItemEditPage } from "@/features/inventory/pages/InventoryItemEditPage";
 import { CashflowPage } from "@/features/cashflow/pages/CashflowPage";
 import { CashflowNewPage } from "@/features/cashflow/pages/CashflowNewPage";
 import { CashflowHistoryPage } from "@/features/cashflow/pages/CashflowHistoryPage";
@@ -265,13 +267,32 @@ const inventoryListRoute = createRoute({
 const inventoryNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "inventario/nuevo",
+  validateSearch: (search: Record<string, unknown>) => {
+    const raw = search.categoria;
+    const n = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+    return {
+      categoria: Number.isFinite(n) && n > 0 ? n : undefined,
+    };
+  },
   component: InventoryNewPage,
+});
+
+const inventoryCategoryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "inventario/categoria/$categoryId",
+  component: InventoryCategoryPage,
 });
 
 const inventoryItemDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "inventario/$itemId",
   component: InventoryItemDetailPage,
+});
+
+const inventoryItemEditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "inventario/$itemId/editar",
+  component: InventoryItemEditPage,
 });
 
 const cashflowRoute = createRoute({
@@ -348,6 +369,8 @@ const routeTree = rootRoute.addChildren([
   employeeWorkBatchRoute,
   inventoryListRoute,
   inventoryNewRoute,
+  inventoryCategoryRoute,
+  inventoryItemEditRoute,
   inventoryItemDetailRoute,
   cashflowRoute,
   cashflowNewRoute,

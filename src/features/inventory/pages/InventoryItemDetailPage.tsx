@@ -58,6 +58,10 @@ export function InventoryItemDetailPage() {
       setError("Indica una cantidad mayor que cero.");
       return;
     }
+    if (movementType === "salida" && !reason.trim()) {
+      setError("El motivo de la salida es obligatorio.");
+      return;
+    }
     await mutation.mutateAsync({
       itemId,
       movementType,
@@ -74,30 +78,66 @@ export function InventoryItemDetailPage() {
           <h1 className="text-2xl font-bold">{item?.name ?? "Ítem"}</h1>
           {item && (
             <p className="text-sm text-base-content/60">
-              {item.category ?? "Sin categoría"} · {item.unit}
+              {item.materialCategoryName ?? item.category ?? "Sin categoría"} · {item.unit}
             </p>
           )}
         </div>
-        <Link to="/inventario" className="btn btn-ghost btn-sm">
-          Volver
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          {item && (
+            <Link
+              to="/inventario/$itemId/editar"
+              params={{ itemId: String(item.id) }}
+              className="btn btn-outline btn-sm"
+            >
+              Editar
+            </Link>
+          )}
+          <Link
+            to={
+              item?.materialCategoryId
+                ? "/inventario/categoria/$categoryId"
+                : "/inventario"
+            }
+            params={
+              item?.materialCategoryId
+                ? { categoryId: String(item.materialCategoryId) }
+                : undefined
+            }
+            className="btn btn-ghost btn-sm"
+          >
+            Volver
+          </Link>
+        </div>
       </div>
 
       {item && (
-        <div className="stats bg-base-200">
-          <div className="stat">
-            <div className="stat-title">Stock actual</div>
-            <div className={`stat-value text-2xl ${item.lowStock ? "text-error" : ""}`}>{item.quantity}</div>
+        <>
+          {item.notes && (
+            <p className="rounded-lg border border-base-300 bg-base-100 px-4 py-3 text-sm text-base-content/80">
+              {item.notes}
+            </p>
+          )}
+          <div className="stats bg-base-200">
+            <div className="stat">
+              <div className="stat-title">Stock actual</div>
+              <div className={`stat-value text-2xl ${item.deficit ? "text-error" : item.lowStock ? "text-warning" : ""}`}>
+                {item.quantity}
+              </div>
+            </div>
+            <div className="stat">
+              <div className="stat-title">Stock mínimo</div>
+              <div className="stat-value text-2xl text-base">
+                {item.minStock > 0 ? item.minStock : "Sin establecer"}
+              </div>
+            </div>
+            <div className="stat">
+              <div className="stat-title">Costo unitario</div>
+              <div className="stat-value text-2xl text-base">
+                {item.costPerUnit > 0 ? formatMoney(item.costPerUnit) : "Sin establecer"}
+              </div>
+            </div>
           </div>
-          <div className="stat">
-            <div className="stat-title">Stock mínimo</div>
-            <div className="stat-value text-2xl">{item.minStock}</div>
-          </div>
-          <div className="stat">
-            <div className="stat-title">Costo unitario</div>
-            <div className="stat-value text-2xl">{formatMoney(item.costPerUnit)}</div>
-          </div>
-        </div>
+        </>
       )}
 
       <div className="card bg-base-200">
@@ -137,11 +177,18 @@ export function InventoryItemDetailPage() {
             </div>
             <div className="form-control flex-1">
               <label className="label" htmlFor="mov-reason">
-                <span className="label-text">Motivo</span>
+                <span className="label-text">
+                  Motivo {movementType === "salida" ? "*" : "(opcional)"}
+                </span>
               </label>
               <input
                 id="mov-reason"
                 className="input input-bordered w-full"
+                placeholder={
+                  movementType === "salida"
+                    ? "Obligatorio: merma, ajuste, uso interno…"
+                    : "Opcional"
+                }
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
               />

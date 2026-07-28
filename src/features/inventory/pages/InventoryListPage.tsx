@@ -1,34 +1,101 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, Package, Plus } from "lucide-react";
-import { fetchInventoryItems } from "@/db/queries/inventory";
+import {
+  AlertTriangle,
+  ClipboardList,
+  FolderTree,
+  Package,
+  PackageMinus,
+} from "lucide-react";
+import { ModalPortal } from "@/components/common/ModalPortal";
+import { fetchInventoryItems, fetchMaterialCategories } from "@/db/queries/inventory";
 import { InventoryRecipesPanel } from "@/features/inventory/components/InventoryRecipesPanel";
-import { formatMoney } from "@/lib/format-money";
+import { InventoryMovementsSection } from "@/features/inventory/components/InventoryMovementsSection";
+import { ManualOutboundModal } from "@/features/inventory/components/ManualOutboundModal";
+import { MaterialCategoriesPanel } from "@/features/inventory/components/MaterialCategoriesPanel";
+import { categoryMosaicTone } from "@/lib/category-icons";
+
+type InventoryManagePanel = "categorias" | "normas" | null;
+
+interface CategoryTile {
+  id: number;
+  name: string;
+  description: string | null;
+  itemCount: number;
+  lowCount: number;
+  deficitCount: number;
+}
 
 /**
- * Listado de inventario con alertas de stock bajo y normas de producción.
+ * Pantalla principal de inventario: mosaico de categorías de material.
+ * Categorías y normas se gestionan desde opciones (modales).
  *
  * @returns Página de inventario.
  */
 export function InventoryListPage() {
+  const [showOutbound, setShowOutbound] = useState(false);
+  const [managePanel, setManagePanel] = useState<InventoryManagePanel>(null);
+
   const itemsQuery = useQuery({
     queryKey: ["inventory", "list"],
     queryFn: fetchInventoryItems,
+  });
+  const categoriesQuery = useQuery({
+    queryKey: ["inventory", "material-categories"],
+    queryFn: () => fetchMaterialCategories(false),
   });
 
   const items = itemsQuery.data ?? [];
   const lowStockCount = items.filter((item) => item.lowStock).length;
   const deficitCount = items.filter((item) => item.deficit).length;
 
+  const tiles = useMemo((): CategoryTile[] => {
+    const cats = (categoriesQuery.data ?? []).filter((c) => c.isActive);
+    return cats
+      .map((cat) => {
+        const catItems = items.filter((i) => i.materialCategoryId === cat.id);
+        return {
+          id: cat.id,
+          name: cat.name,
+          description: cat.description,
+          itemCount: catItems.length,
+          lowCount: catItems.filter((i) => i.lowStock).length,
+          deficitCount: catItems.filter((i) => i.deficit).length,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  }, [items, categoriesQuery.data]);
+
   return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between">
+    <section className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="flex items-center gap-2 text-2xl font-bold">
           <Package className="h-6 w-6" /> Inventario
         </h1>
-        <Link to="/inventario/nuevo" className="btn btn-primary btn-sm gap-1">
-          <Plus className="h-4 w-4" /> Nuevo ítem
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn btn-outline btn-sm gap-1"
+            onClick={() => setManagePanel("categorias")}
+          >
+            <FolderTree className="h-4 w-4" /> Categorías
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm gap-1"
+            onClick={() => setManagePanel("normas")}
+          >
+            <ClipboardList className="h-4 w-4" /> Normas
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm gap-1"
+            onClick={() => setShowOutbound(true)}
+          >
+            <PackageMinus className="h-4 w-4" /> Salida manual
+          </button>
+        </div>
       </div>
 
       {deficitCount > 0 && (
@@ -50,72 +117,139 @@ export function InventoryListPage() {
         </div>
       )}
 
-      {itemsQuery.isLoading && <p>Cargando inventario...</p>}
-      {itemsQuery.isError && (
-        <div className="alert alert-error">
-          <span>No se pudo cargar el inventario.</span>
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold">Materiales por categoría</h2>
+          <p className="text-sm text-base-content/70">
+            Elige una categoría para ver sus materiales y dar de alta ítems.
+          </p>
         </div>
+
+        {(itemsQuery.isLoading || categoriesQuery.isLoading) && <p>Cargando inventario...</p>}
+        {(itemsQuery.isError || categoriesQuery.isError) && (
+          <div className="alert alert-error">
+            <span>No se pudo cargar el inventario.</span>
+          </div>
+        )}
+
+        {categoriesQuery.data && tiles.length === 0 && (
+          <div className="rounded-lg border border-dashed border-base-300 p-6 text-center text-base-content/60">
+            <p>No hay categorías de material activas.</p>
+            <button
+              type="button"
+              className="btn btn-link btn-sm mt-1"
+              onClick={() => setManagePanel("categorias")}
+            >
+              Gestionar categorías de materiales
+            </button>
+          </div>
+        )}
+
+        {tiles.length > 0 && (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {tiles.map((tile, index) => (
+              <Link
+                key={tile.id}
+                to="/inventario/categoria/$categoryId"
+                params={{ categoryId: String(tile.id) }}
+                className={`flex min-h-[5.5rem] flex-col items-start justify-center gap-1 rounded-xl border px-3 py-2.5 text-left transition ${categoryMosaicTone(index)}`}
+              >
+                <div className="flex w-full flex-wrap items-center gap-1.5">
+                  <span className="text-sm font-semibold leading-tight">{tile.name}</span>
+                  <span className="badge badge-xs badge-primary h-auto px-2 py-1 leading-none">
+                    {tile.itemCount} ítem(s)
+                  </span>
+                  {tile.deficitCount > 0 && (
+                    <span className="badge badge-xs badge-error">Déficit</span>
+                  )}
+                  {tile.lowCount > 0 && (
+                    <span className="badge badge-xs badge-warning">Bajo</span>
+                  )}
+                </div>
+                {tile.description ? (
+                  <p className="line-clamp-2 w-full text-xs leading-snug text-base-content/60">
+                    {tile.description}
+                  </p>
+                ) : (
+                  <p className="text-xs text-base-content/40">Sin descripción</p>
+                )}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <InventoryMovementsSection />
+
+      {showOutbound && <ManualOutboundModal onClose={() => setShowOutbound(false)} />}
+
+      {managePanel === "categorias" && (
+        <ModalPortal>
+          <dialog className="modal modal-open">
+            <div className="modal-box max-h-[90vh] max-w-3xl overflow-y-auto">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="text-lg font-bold">Categorías de materiales</h3>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-circle btn-ghost"
+                  aria-label="Cerrar"
+                  onClick={() => setManagePanel(null)}
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="mt-3">
+                <MaterialCategoriesPanel embedded />
+              </div>
+              <div className="modal-action">
+                <button type="button" className="btn" onClick={() => setManagePanel(null)}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="modal-backdrop bg-transparent"
+              aria-label="Cerrar"
+              onClick={() => setManagePanel(null)}
+            />
+          </dialog>
+        </ModalPortal>
       )}
 
-      {itemsQuery.data && (
-        <div className="overflow-x-auto rounded-lg border border-base-300 bg-base-100">
-          <table className="table table-zebra table-sm">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Categoría</th>
-                <th className="text-right">Stock</th>
-                <th>Unidad</th>
-                <th className="text-right">Stock mín.</th>
-                <th className="text-right">Costo unit.</th>
-                <th>Estado</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className={item.deficit || item.lowStock ? "bg-error/10" : ""}>
-                  <td className="font-medium">{item.name}</td>
-                  <td>{item.category ?? "—"}</td>
-                  <td className={`text-right ${item.deficit ? "font-semibold text-error" : ""}`}>
-                    {item.quantity}
-                  </td>
-                  <td>{item.unit}</td>
-                  <td className="text-right">{item.minStock}</td>
-                  <td className="text-right">{formatMoney(item.costPerUnit)}</td>
-                  <td>
-                    {item.deficit ? (
-                      <span className="badge badge-sm badge-error">Déficit</span>
-                    ) : item.lowStock ? (
-                      <span className="badge badge-sm badge-warning">Bajo</span>
-                    ) : (
-                      <span className="badge badge-sm badge-success">OK</span>
-                    )}
-                  </td>
-                  <td className="text-right">
-                    <Link
-                      className="btn btn-xs btn-outline"
-                      to="/inventario/$itemId"
-                      params={{ itemId: String(item.id) }}
-                    >
-                      Ver
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-              {items.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="py-6 text-center text-base-content/60">
-                    No hay ítems de inventario todavía.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {managePanel === "normas" && (
+        <ModalPortal>
+          <dialog className="modal modal-open">
+            <div className="modal-box max-h-[90vh] max-w-5xl overflow-y-auto">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="text-lg font-bold">Normas de producción</h3>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-circle btn-ghost"
+                  aria-label="Cerrar"
+                  onClick={() => setManagePanel(null)}
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="mt-3">
+                <InventoryRecipesPanel embedded />
+              </div>
+              <div className="modal-action">
+                <button type="button" className="btn" onClick={() => setManagePanel(null)}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="modal-backdrop bg-transparent"
+              aria-label="Cerrar"
+              onClick={() => setManagePanel(null)}
+            />
+          </dialog>
+        </ModalPortal>
       )}
-
-      <InventoryRecipesPanel />
     </section>
   );
 }
