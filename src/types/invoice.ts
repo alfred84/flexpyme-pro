@@ -1,3 +1,5 @@
+import type { InvoiceItemMaterialInput } from "@/types/inventory";
+
 /**
  * Invoice row for list screens.
  */
@@ -108,6 +110,8 @@ export interface CreateInvoiceItemPayload {
   service: string | null;
   quantity: number;
   unitPrice: number;
+  /** Materiales a descontar al concluir la línea (norma o asignación manual). */
+  materials?: InvoiceItemMaterialInput[] | null;
 }
 
 /**

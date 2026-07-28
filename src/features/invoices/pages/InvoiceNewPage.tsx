@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { fetchClients } from "@/db/queries/clients";
 import { createInvoice } from "@/db/queries/invoices";
 import { fetchCategories, fetchCategoryFinishes, fetchAllCategoryFormats, fetchAllCategoryWorkTypes } from "@/db/queries/categories";
+import { fetchInventoryItems, fetchInventoryRecipes } from "@/db/queries/inventory";
 import { fetchFormats, fetchPrices } from "@/db/queries/prices";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 import {
@@ -56,6 +57,14 @@ export function InvoiceNewPage() {
   const categoryFinishesQuery = useQuery({
     queryKey: ["category-finishes"],
     queryFn: fetchCategoryFinishes,
+  });
+  const recipesQuery = useQuery({
+    queryKey: ["inventory", "recipes", "active"],
+    queryFn: () => fetchInventoryRecipes(true),
+  });
+  const inventoryItemsQuery = useQuery({
+    queryKey: ["inventory", "list"],
+    queryFn: fetchInventoryItems,
   });
 
   const defaultCategoryId = categoriesQuery.data?.[0]?.id ?? 1;
@@ -133,7 +142,9 @@ export function InvoiceNewPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (collectPayment: boolean) => {
-      const items: CreateInvoiceItemPayload[] = lines.flatMap((line) => draftLineToItems(line));
+      const items: CreateInvoiceItemPayload[] = lines.flatMap((line) =>
+        draftLineToItems(line, recipesQuery.data ?? [], categoryWorkTypesQuery.data ?? []),
+      );
 
       if (payment.paymentMethod === "efectivo" && payment.paymentCurrency === "USD" && exchangeRate <= 0) {
         throw new Error("Indica una tasa USD→CUP válida.");
@@ -380,6 +391,8 @@ export function InvoiceNewPage() {
         categoryWorkTypes={categoryWorkTypesQuery.data ?? []}
         categoryFormats={categoryFormatsQuery.data ?? []}
         categoryFinishes={categoryFinishesQuery.data ?? []}
+        inventoryItems={inventoryItemsQuery.data ?? []}
+        recipes={recipesQuery.data ?? []}
         onClose={() => setLineModalOpen(false)}
         onSave={handleSaveLine}
       />

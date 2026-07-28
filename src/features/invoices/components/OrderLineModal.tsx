@@ -3,10 +3,13 @@ import { ModalPortal } from "@/components/common/ModalPortal";
 import {
   draftLineSubtotal,
   formatOptionsForCategory,
+  resolveRecipeMaterials,
   resolveServicePrice,
   serviceAndFinishOptions,
   type DraftLine,
+  type DraftLineMaterial,
   type DraftLineService,
+  type DraftMaterialMode,
 } from "@/features/invoices/lib/order-draft";
 import { formatMoney } from "@/lib/format-money";
 import type {
@@ -15,6 +18,7 @@ import type {
   CategoryWorkTypeDto,
   ProductCategoryDto,
 } from "@/types/category";
+import type { InventoryItemDto, InventoryRecipeDto } from "@/types/inventory";
 import type { FormatDto, PriceRowDto } from "@/types/price";
 
 interface OrderLineModalProps {
@@ -29,6 +33,10 @@ interface OrderLineModalProps {
   /** Formatos asociados a cada categoría. */
   categoryFormats: CategoryFormatDto[];
   categoryFinishes: CategoryFinishDto[];
+  /** Materiales de almacén para asignación manual. */
+  inventoryItems: InventoryItemDto[];
+  /** Normas activas (vista previa en modo norma). */
+  recipes: InventoryRecipeDto[];
   onClose: () => void;
   onSave: (line: DraftLine) => void;
 }
@@ -113,6 +121,8 @@ export function OrderLineModal(props: OrderLineModalProps) {
     categoryWorkTypes,
     categoryFormats,
     categoryFinishes,
+    inventoryItems,
+    recipes,
     onClose,
     onSave,
   } = props;
@@ -140,7 +150,12 @@ export function OrderLineModal(props: OrderLineModalProps) {
       return;
     }
     if (editing) {
-      setDraft({ ...editing, services: editing.services.map((s) => ({ ...s })) });
+      setDraft({
+        ...editing,
+        services: editing.services.map((s) => ({ ...s })),
+        materials: (editing.materials ?? []).map((m) => ({ ...m })),
+        materialMode: editing.materialMode ?? "norma",
+      });
     } else {
       const { defaultFinish } = finishOptionsFor(categoryFinishes, prices, defaultCategoryId, null);
       setDraft({
@@ -150,6 +165,8 @@ export function OrderLineModal(props: OrderLineModalProps) {
         finish: defaultFinish,
         quantity: "1",
         services: buildDefaultWorkTypes(defaultCategoryId, null, defaultFinish),
+        materialMode: "norma",
+        materials: [],
       });
     }
     setError(null);
@@ -211,6 +228,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
         formatId: formatStillValid ? prev.formatId : null,
         finish: defaultFinish,
         services: buildDefaultWorkTypes(categoryId, null, defaultFinish),
+        materials: prev.materialMode === "manual" ? prev.materials : [],
       };
     });
   };
@@ -310,15 +328,102 @@ export function OrderLineModal(props: OrderLineModalProps) {
       setError("Indica un precio válido para cada tipo de trabajo.");
       return;
     }
+    if (draft.materialMode === "manual") {
+      if (draft.materials.length === 0) {
+        setError("Añade al menos un material de inventario, o cambia a normas de producción.");
+        return;
+      }
+      const badMat = draft.materials.some((m) => {
+        const q = Number.parseFloat(m.quantityPerUnit.replace(",", "."));
+        return !m.inventoryItemId || !Number.isFinite(q) || q <= 0;
+      });
+      if (badMat) {
+        setError("Revisa las cantidades de los materiales asignados.");
+        return;
+      }
+    }
     onSave(draft);
     onClose();
   };
+
+  const previewNormMaterials = useMemo(() => {
+    if (!draft || draft.materialMode !== "norma") return [];
+    const seen = new Map<number, { name: string; qty: number }>();
+    for (const s of draft.services) {
+      const mats = resolveRecipeMaterials(
+        recipes,
+        categoryWorkTypes,
+        draft.categoryId,
+        draft.formatId,
+        draft.finish.trim() || null,
+        s.service.trim() || null,
+      );
+      for (const m of mats) {
+        const item = inventoryItems.find((it) => it.id === m.inventoryItemId);
+        const prev = seen.get(m.inventoryItemId);
+        if (prev) {
+          prev.qty += m.quantityPerUnit;
+        } else {
+          seen.set(m.inventoryItemId, {
+            name: item?.name ?? `Ítem #${m.inventoryItemId}`,
+            qty: m.quantityPerUnit,
+          });
+        }
+      }
+    }
+    return Array.from(seen.values());
+  }, [draft, recipes, categoryWorkTypes, inventoryItems]);
 
   if (!open || !draft) {
     return null;
   }
 
   const manualPrice = draft.services[0]?.unitPrice ?? "";
+
+  const setMaterialMode = (mode: DraftMaterialMode) => {
+    setDraft((prev) => (prev ? { ...prev, materialMode: mode } : prev));
+  };
+
+  const addManualMaterial = () => {
+    const first = inventoryItems[0];
+    if (!first) {
+      setError("No hay materiales en inventario.");
+      return;
+    }
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const row: DraftLineMaterial = {
+        inventoryItemId: first.id,
+        quantityPerUnit: "1",
+        label: first.name,
+      };
+      return { ...prev, materials: [...prev.materials, row] };
+    });
+  };
+
+  const updateManualMaterial = (index: number, patch: Partial<DraftLineMaterial>) => {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        materials: prev.materials.map((m, i) => {
+          if (i !== index) return m;
+          const next = { ...m, ...patch };
+          if (patch.inventoryItemId != null) {
+            const item = inventoryItems.find((it) => it.id === patch.inventoryItemId);
+            next.label = item?.name;
+          }
+          return next;
+        }),
+      };
+    });
+  };
+
+  const removeManualMaterial = (index: number) => {
+    setDraft((prev) =>
+      prev ? { ...prev, materials: prev.materials.filter((_, i) => i !== index) } : prev,
+    );
+  };
 
   return (
     <ModalPortal>
@@ -438,6 +543,93 @@ export function OrderLineModal(props: OrderLineModalProps) {
                   value={manualPrice}
                   onChange={(e) => setManualPrice(e.target.value)}
                 />
+              </div>
+            )}
+          </div>
+
+          <div className="form-control sm:col-span-2">
+            <span className="label-text text-xs">Materiales de inventario</span>
+            <div role="tablist" className="tabs tabs-boxed mt-1 w-full">
+              <button
+                type="button"
+                role="tab"
+                className={`tab flex-1 ${draft.materialMode === "norma" ? "tab-active" : ""}`}
+                onClick={() => setMaterialMode("norma")}
+              >
+                Norma de producción
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={`tab flex-1 ${draft.materialMode === "manual" ? "tab-active" : ""}`}
+                onClick={() => setMaterialMode("manual")}
+              >
+                Asignación manual
+              </button>
+            </div>
+
+            {draft.materialMode === "norma" ? (
+              <div className="mt-2 rounded-lg border border-base-300 bg-base-200/40 p-2 text-xs">
+                {previewNormMaterials.length === 0 ? (
+                  <p className="text-base-content/60">
+                    No hay normas activas que coincidan con esta línea. Puedes crearlas en Inventario
+                    o usar asignación manual.
+                  </p>
+                ) : (
+                  <ul className="space-y-1">
+                    {previewNormMaterials.map((m) => (
+                      <li key={m.name} className="flex justify-between gap-2">
+                        <span>{m.name}</span>
+                        <span className="font-medium">{m.qty} / ud.</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-2 text-base-content/50">
+                  Los materiales se fijan al guardar el pedido; editar normas después no cambia este
+                  pedido.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {draft.materials.map((m, index) => (
+                  <div key={`${m.inventoryItemId}-${index}`} className="flex items-center gap-2">
+                    <select
+                      className="select select-bordered select-xs flex-1"
+                      value={m.inventoryItemId}
+                      onChange={(e) =>
+                        updateManualMaterial(index, {
+                          inventoryItemId: Number(e.target.value),
+                        })
+                      }
+                    >
+                      {inventoryItems.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name} ({item.quantity} {item.unit})
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className="input input-bordered input-xs w-20"
+                      inputMode="decimal"
+                      value={m.quantityPerUnit}
+                      onChange={(e) =>
+                        updateManualMaterial(index, { quantityPerUnit: e.target.value })
+                      }
+                      title="Cantidad por unidad"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs"
+                      onClick={() => removeManualMaterial(index)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button type="button" className="btn btn-outline btn-xs" onClick={addManualMaterial}>
+                  + Material
+                </button>
               </div>
             )}
           </div>

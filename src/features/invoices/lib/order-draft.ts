@@ -1,5 +1,7 @@
 import { SIN_FORMATO_LABEL } from "@/lib/formats";
+import type { CategoryWorkTypeDto } from "@/types/category";
 import type { CreateInvoiceItemPayload } from "@/types/invoice";
+import type { InventoryRecipeDto, InvoiceItemMaterialInput } from "@/types/inventory";
 import type { PriceRowDto } from "@/types/price";
 
 /**
@@ -9,6 +11,23 @@ export interface DraftLineService {
   /** Nombre del tipo de trabajo (se guarda en `invoice_items.service`). */
   service: string;
   unitPrice: string;
+}
+
+/**
+ * Cómo se asocian materiales de inventario a la línea.
+ * - `norma`: usa normas activas (se fijan al crear el pedido).
+ * - `manual`: el usuario elige materiales y cantidades.
+ */
+export type DraftMaterialMode = "norma" | "manual";
+
+/**
+ * Material asignado manualmente en el borrador de línea.
+ */
+export interface DraftLineMaterial {
+  inventoryItemId: number;
+  quantityPerUnit: string;
+  /** Etiqueta solo para UI. */
+  label?: string;
 }
 
 /**
@@ -27,6 +46,10 @@ export interface DraftLine {
   quantity: string;
   /** Tipos de trabajo seleccionados (persistidos como `invoice_items.service`). */
   services: DraftLineService[];
+  /** Norma automática o asignación manual de materiales. */
+  materialMode: DraftMaterialMode;
+  /** Solo usado cuando `materialMode === "manual"`. */
+  materials: DraftLineMaterial[];
 }
 
 /**
@@ -43,7 +66,61 @@ export function makeDraftLine(categoryId: number): DraftLine {
     finish: "",
     quantity: "1",
     services: [],
+    materialMode: "norma",
+    materials: [],
   };
+}
+
+/**
+ * Resuelve materiales de normas activas que coinciden con la línea/servicio.
+ *
+ * @param recipes - Normas activas.
+ * @param categoryWorkTypes - Tipos vinculados a categorías.
+ * @param categoryId - Categoría del pedido.
+ * @param formatId - Formato.
+ * @param finish - Acabado.
+ * @param serviceName - Nombre del tipo de trabajo en la línea.
+ * @returns Materiales a persistir en el ítem de factura.
+ */
+export function resolveRecipeMaterials(
+  recipes: InventoryRecipeDto[],
+  categoryWorkTypes: CategoryWorkTypeDto[],
+  categoryId: number,
+  formatId: number | null,
+  finish: string | null,
+  serviceName: string | null,
+): InvoiceItemMaterialInput[] {
+  const wantFinish = (finish ?? "").trim().toLowerCase();
+  const wantService = (serviceName ?? "").trim().toLowerCase();
+  const workTypeId =
+    categoryWorkTypes.find(
+      (wt) =>
+        wt.categoryId === categoryId &&
+        wt.workTypeActive &&
+        wt.workTypeName.trim().toLowerCase() === wantService,
+    )?.workTypeId ?? null;
+
+  return recipes
+    .filter((r) => {
+      if (!r.isActive || r.categoryId !== categoryId) return false;
+      if (r.workTypeId != null && workTypeId != null && r.workTypeId !== workTypeId) {
+        return false;
+      }
+      if (r.workTypeId == null && r.service) {
+        if (r.service.trim().toLowerCase() !== wantService) return false;
+      }
+      if (r.formatId != null && r.formatId !== formatId) return false;
+      if (r.finish) {
+        if (r.finish.trim().toLowerCase() !== wantFinish) return false;
+      }
+      return true;
+    })
+    .map((r) => ({
+      inventoryItemId: r.inventoryItemId,
+      quantityPerUnit: r.quantityPerUnit,
+      source: "recipe",
+      recipeId: r.id,
+    }));
 }
 
 /**
@@ -232,10 +309,23 @@ export function isDraftLineValid(line: DraftLine): boolean {
   if (line.services.length === 0) {
     return false;
   }
-  return line.services.every((s) => {
+  const pricesOk = line.services.every((s) => {
     const unit = Number.parseFloat(s.unitPrice.replace(",", "."));
     return Number.isFinite(unit) && unit >= 0;
   });
+  if (!pricesOk) {
+    return false;
+  }
+  if (line.materialMode === "manual") {
+    if (line.materials.length === 0) {
+      return false;
+    }
+    return line.materials.every((m) => {
+      const q = Number.parseFloat(m.quantityPerUnit.replace(",", "."));
+      return m.inventoryItemId > 0 && Number.isFinite(q) && q > 0;
+    });
+  }
+  return true;
 }
 
 /**
@@ -244,15 +334,54 @@ export function isDraftLineValid(line: DraftLine): boolean {
  * @param line - Línea de borrador válida.
  * @returns Items de factura listos para el backend.
  */
-export function draftLineToItems(line: DraftLine): CreateInvoiceItemPayload[] {
+/**
+ * Expande una línea en ítems de factura, adjuntando materiales según el modo.
+ *
+ * @param line - Línea de borrador válida.
+ * @param recipes - Normas activas (para modo norma).
+ * @param categoryWorkTypes - Tipos de trabajo por categoría.
+ * @returns Items de factura listos para el backend.
+ */
+export function draftLineToItems(
+  line: DraftLine,
+  recipes: InventoryRecipeDto[] = [],
+  categoryWorkTypes: CategoryWorkTypeDto[] = [],
+): CreateInvoiceItemPayload[] {
   const quantity = Number.parseInt(line.quantity, 10);
   const finish = line.finish.trim() || null;
-  return line.services.map((s) => ({
-    categoryId: line.categoryId,
-    formatId: line.formatId,
-    finish,
-    service: s.service.trim() || null,
-    quantity,
-    unitPrice: Number.parseFloat(s.unitPrice.replace(",", ".")),
-  }));
+  const manualMaterials: InvoiceItemMaterialInput[] =
+    line.materialMode === "manual"
+      ? line.materials
+          .map((m) => ({
+            inventoryItemId: m.inventoryItemId,
+            quantityPerUnit: Number.parseFloat(m.quantityPerUnit.replace(",", ".")),
+            source: "manual",
+            recipeId: null,
+          }))
+          .filter((m) => Number.isFinite(m.quantityPerUnit) && m.quantityPerUnit > 0)
+      : [];
+
+  return line.services.map((s) => {
+    const service = s.service.trim() || null;
+    const materials =
+      line.materialMode === "manual"
+        ? manualMaterials
+        : resolveRecipeMaterials(
+            recipes,
+            categoryWorkTypes,
+            line.categoryId,
+            line.formatId,
+            finish,
+            service,
+          );
+    return {
+      categoryId: line.categoryId,
+      formatId: line.formatId,
+      finish,
+      service,
+      quantity,
+      unitPrice: Number.parseFloat(s.unitPrice.replace(",", ".")),
+      materials: materials.length > 0 ? materials : null,
+    };
+  });
 }
