@@ -1,12 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
-import { fetchInvoiceDetail, fetchInvoicePaymentHistory } from "@/db/queries/invoices";
+import { ModalPortal } from "@/components/common/ModalPortal";
+import {
+  cancelInvoice,
+  fetchInvoiceDetail,
+  fetchInvoicePaymentHistory,
+} from "@/db/queries/invoices";
 import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
-import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
+import { popFlashMessage, pushFlashMessage, type FlashMessage } from "@/lib/flash-message";
 import { InvoiceWorkPanel } from "@/features/invoices/components/InvoiceWorkPanel";
 
 function statusLabel(status: string): string {
@@ -16,18 +21,25 @@ function statusLabel(status: string): string {
   if (status === "partial") {
     return "Parcial";
   }
+  if (status === "anulada") {
+    return "Anulado";
+  }
   return "Pendiente";
 }
 
 /**
- * Shows invoice header, totals, and line items.
+ * Detalle de pedido con líneas, trabajo, anulación y acceso a edición.
  *
- * @returns Invoice detail page.
+ * @returns Página de detalle de pedido.
  */
 export function InvoiceDetailPage() {
   const params = useParams({ strict: false }) as { invoiceId?: string };
   const invoiceId = Number(params.invoiceId);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [flash] = useState<FlashMessage | null>(() => popFlashMessage());
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   const detailQuery = useQuery({
     queryKey: ["invoices", "detail", invoiceId],
@@ -40,6 +52,18 @@ export function InvoiceDetailPage() {
     enabled: Number.isFinite(invoiceId) && invoiceId > 0,
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelInvoice(invoiceId, cancelReason),
+    onSuccess: async () => {
+      setShowCancel(false);
+      await queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      await queryClient.invalidateQueries({ queryKey: ["clients"] });
+      await queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      pushFlashMessage({ kind: "success", text: "Pedido anulado." });
+      await navigate({ to: "/pedidos", search: pedidosListSearch });
+    },
+  });
+
   if (!Number.isFinite(invoiceId) || invoiceId <= 0) {
     return (
       <div className="alert alert-warning">
@@ -49,6 +73,9 @@ export function InvoiceDetailPage() {
   }
 
   const inv = detailQuery.data?.invoice;
+  const canEdit = detailQuery.data?.canEdit ?? false;
+  const canCancel = detailQuery.data?.canCancel ?? false;
+  const isCancelled = Boolean(inv?.cancelledAt) || inv?.status === "anulada";
 
   return (
     <section className="space-y-6">
@@ -58,7 +85,25 @@ export function InvoiceDetailPage() {
           {inv && <p className="text-lg font-mono">{inv.invoiceNumber}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
-          {inv && (
+          {inv && canEdit && (
+            <Link
+              to="/pedidos/$invoiceId/editar"
+              params={{ invoiceId: String(inv.id) }}
+              className="btn btn-outline btn-sm"
+            >
+              Editar
+            </Link>
+          )}
+          {inv && canCancel && (
+            <button
+              type="button"
+              className="btn btn-error btn-outline btn-sm"
+              onClick={() => setShowCancel(true)}
+            >
+              Anular
+            </button>
+          )}
+          {inv && !isCancelled && (
             <>
               <Link
                 to="/pedidos/$invoiceId/imprimir"
@@ -94,6 +139,21 @@ export function InvoiceDetailPage() {
         </div>
       )}
 
+      {inv && isCancelled && (
+        <div className="alert alert-error">
+          <span>
+            Pedido anulado
+            {inv.cancelledReason ? `: ${inv.cancelledReason}` : "."}
+          </span>
+        </div>
+      )}
+
+      {inv && !canEdit && !isCancelled && detailQuery.data?.editBlockReason && (
+        <p className="text-xs text-base-content/60">
+          Edición no disponible: {detailQuery.data.editBlockReason}
+        </p>
+      )}
+
       {inv && (
         <>
           <div className="grid gap-4 md:grid-cols-2">
@@ -111,16 +171,14 @@ export function InvoiceDetailPage() {
                   </div>
                   <div>
                     <dt className="text-base-content/60">Producción</dt>
-                    <dd>
-                      {inv.productionStatus === "listo" ? "Listo" : "En producción"}
-                    </dd>
+                    <dd>{inv.productionStatus === "listo" ? "Listo" : "En producción"}</dd>
                   </div>
                   <div>
                     <dt className="text-base-content/60">Cobro</dt>
                     <dd>{inv.paymentStatus === "cobrado" ? "Cobrado" : "Pendiente"}</dd>
                   </div>
                   <div>
-                    <dt className="text-base-content/60">Estado (legacy)</dt>
+                    <dt className="text-base-content/60">Estado</dt>
                     <dd>{statusLabel(inv.status)}</dd>
                   </div>
                   {inv.notes && (
@@ -161,9 +219,7 @@ export function InvoiceDetailPage() {
                     <dd>{formatMoney(inv.balance)}</dd>
                   </div>
                 </dl>
-                {inv.paymentMethod && (
-                  <div className="divider my-1" />
-                )}
+                {inv.paymentMethod && <div className="divider my-1" />}
                 {inv.paymentMethod && (
                   <dl className="space-y-1 text-sm">
                     <div className="flex justify-between">
@@ -178,7 +234,8 @@ export function InvoiceDetailPage() {
                         <div className="flex justify-between">
                           <dt>Monto recibido</dt>
                           <dd>
-                            $ {inv.amountUsd.toFixed(2)} USD (tasa: {inv.exchangeRateSnapshot} CUP/USD)
+                            $ {inv.amountUsd.toFixed(2)} USD (tasa: {inv.exchangeRateSnapshot}{" "}
+                            CUP/USD)
                           </dd>
                         </div>
                         <div className="flex justify-between">
@@ -254,45 +311,82 @@ export function InvoiceDetailPage() {
             </table>
           </div>
 
-          <InvoiceWorkPanel
-            invoiceId={inv.id}
-            clientId={inv.clientId}
-            items={detailQuery.data?.items ?? []}
-          />
+          {!isCancelled && inv && (
+            <InvoiceWorkPanel
+              invoiceId={inv.id}
+              clientId={inv.clientId}
+              items={detailQuery.data?.items ?? []}
+            />
+          )}
 
           <div className="card bg-base-100 shadow">
             <div className="card-body">
               <h2 className="card-title text-base">Historial de cobros</h2>
-              {paymentsQuery.isLoading && <p className="text-sm">Cargando cobros...</p>}
               {(paymentsQuery.data ?? []).length === 0 ? (
-                <p className="text-sm text-base-content/60">No hay cobros registrados en caja para este pedido.</p>
+                <p className="text-sm text-base-content/60">Sin cobros registrados.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="table table-sm">
-                    <thead>
-                      <tr>
-                        <th>Fecha</th>
-                        <th>Concepto</th>
-                        <th>Método</th>
-                        <th className="text-right">CUP</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paymentsQuery.data?.map((payment) => (
-                        <tr key={payment.id}>
-                          <td className="text-xs">{payment.date.slice(0, 16).replace("T", " ")}</td>
-                          <td>{payment.concept}</td>
-                          <td className="capitalize">{payment.paymentMethod}</td>
-                          <td className="text-right">{formatMoney(payment.amountCup)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <ul className="space-y-2 text-sm">
+                  {paymentsQuery.data?.map((p) => (
+                    <li key={p.id} className="rounded border border-base-300 px-3 py-2">
+                      {formatDate(p.date)} · {p.concept} · {formatMoney(p.amountCup)}
+                      {p.amountUsd > 0 ? ` (+ ${p.amountUsd} USD)` : ""}
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </div>
         </>
+      )}
+
+      {showCancel && (
+        <ModalPortal>
+          <dialog className="modal modal-open">
+            <div className="modal-box">
+              <h3 className="text-lg font-bold">Anular pedido</h3>
+              <p className="py-2 text-sm text-base-content/70">
+                Se revertirán los cobros en caja y las salidas de inventario asociadas a este pedido.
+                Los lotes de trabajo ya registrados se conservan como historial (la nómina pagada no
+                se deshace). El motivo es obligatorio.
+              </p>
+              <textarea
+                className="textarea textarea-bordered w-full"
+                rows={3}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Motivo de anulación"
+              />
+              {cancelMutation.isError && (
+                <p className="mt-2 text-sm text-error">
+                  {(cancelMutation.error as Error).message}
+                </p>
+              )}
+              <div className="modal-action">
+                <button type="button" className="btn" onClick={() => setShowCancel(false)}>
+                  Cerrar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-error"
+                  disabled={cancelMutation.isPending || !cancelReason.trim()}
+                  onClick={() => void cancelMutation.mutateAsync()}
+                >
+                  {cancelMutation.isPending ? (
+                    <span className="loading loading-spinner loading-sm" />
+                  ) : (
+                    "Confirmar anulación"
+                  )}
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="modal-backdrop bg-transparent"
+              aria-label="Cerrar"
+              onClick={() => setShowCancel(false)}
+            />
+          </dialog>
+        </ModalPortal>
       )}
     </section>
   );

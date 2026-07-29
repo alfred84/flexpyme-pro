@@ -72,6 +72,17 @@ pub struct InvoiceItemDto {
     pub completed_quantity: i64,
     pub resource_missing: bool,
     pub resource_note: Option<String>,
+    pub materials: Vec<InvoiceItemMaterialDto>,
+}
+
+/// Material fijado en una línea de pedido.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceItemMaterialDto {
+    pub inventory_item_id: i64,
+    pub quantity_per_unit: f64,
+    pub source: String,
+    pub recipe_id: Option<i64>,
 }
 
 /// Full invoice payload returned to the UI.
@@ -80,6 +91,9 @@ pub struct InvoiceItemDto {
 pub struct InvoiceDetailDto {
     pub invoice: InvoiceHeaderDto,
     pub items: Vec<InvoiceItemDto>,
+    pub can_edit: bool,
+    pub can_cancel: bool,
+    pub edit_block_reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -117,6 +131,17 @@ pub struct CreateInvoiceResponse {
     pub invoice_number: String,
 }
 
+/// Payload para editar un pedido (sin cambiar cobros ya registrados).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateInvoicePayload {
+    pub id: i64,
+    pub client_id: i64,
+    pub date: String,
+    pub notes: Option<String>,
+    pub items: Vec<CreateInvoiceItemPayload>,
+}
+
 fn trim_notes(value: Option<String>) -> Option<String> {
     value.and_then(|v| {
         let t = v.trim().to_string();
@@ -148,6 +173,133 @@ fn compute_invoice_status(balance: f64, paid: f64) -> String {
     } else {
         "partial".to_string()
     }
+}
+
+/// Evalúa si un pedido puede editarse (aún sin trabajo de producción).
+fn invoice_editability(
+    tx: &rusqlite::Transaction<'_>,
+    invoice_id: i64,
+) -> Result<(bool, Option<String>), String> {
+    let (cancelled_at, production_status): (Option<String>, String) = tx
+        .query_row(
+            "SELECT cancelled_at, production_status FROM invoices
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![invoice_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Pedido no encontrado".to_string())?;
+    if cancelled_at.is_some() {
+        return Ok((false, Some("El pedido está anulado.".to_string())));
+    }
+    if production_status == "listo" {
+        return Ok((
+            false,
+            Some("No se puede editar un pedido marcado como listo.".to_string()),
+        ));
+    }
+    let completed: i64 = tx
+        .query_row(
+            "SELECT COALESCE(SUM(completed_quantity), 0) FROM invoice_items WHERE invoice_id = ?1",
+            params![invoice_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if completed > 0 {
+        return Ok((
+            false,
+            Some("Ya hay trabajo registrado en líneas del pedido.".to_string()),
+        ));
+    }
+    let batches: i64 = tx
+        .query_row(
+            "SELECT COUNT(*) FROM production_batch_items WHERE invoice_id = ?1",
+            params![invoice_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    if batches > 0 {
+        return Ok((
+            false,
+            Some("El pedido tiene lotes de trabajo asociados.".to_string()),
+        ));
+    }
+    Ok((true, None))
+}
+
+/// Evalúa editabilidad sobre una conexión (solo lectura).
+fn evaluate_editability_conn(
+    conn: &rusqlite::Connection,
+    invoice_id: i64,
+) -> Result<(bool, Option<String>), String> {
+    let (cancelled_at, production_status): (Option<String>, String) = conn
+        .query_row(
+            "SELECT cancelled_at, production_status FROM invoices
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![invoice_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Pedido no encontrado".to_string())?;
+    if cancelled_at.is_some() {
+        return Ok((false, Some("El pedido está anulado.".to_string())));
+    }
+    if production_status == "listo" {
+        return Ok((
+            false,
+            Some("No se puede editar un pedido marcado como listo.".to_string()),
+        ));
+    }
+    let completed: i64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(completed_quantity), 0) FROM invoice_items WHERE invoice_id = ?1",
+            params![invoice_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if completed > 0 {
+        return Ok((
+            false,
+            Some("Ya hay trabajo registrado en líneas del pedido.".to_string()),
+        ));
+    }
+    let batches: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM production_batch_items WHERE invoice_id = ?1",
+            params![invoice_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    if batches > 0 {
+        return Ok((
+            false,
+            Some("El pedido tiene lotes de trabajo asociados.".to_string()),
+        ));
+    }
+    Ok((true, None))
+}
+
+fn assert_invoice_editable(tx: &rusqlite::Transaction<'_>, invoice_id: i64) -> Result<(), String> {
+    let (ok, reason) = invoice_editability(tx, invoice_id)?;
+    if !ok {
+        return Err(reason.unwrap_or_else(|| "El pedido no se puede editar".to_string()));
+    }
+    Ok(())
+}
+
+fn recalc_client_balance(tx: &rusqlite::Transaction<'_>, client_id: i64) -> Result<(), String> {
+    let new_client_balance: f64 = tx
+        .query_row(
+            "SELECT COALESCE(SUM(balance), 0) FROM invoices
+             WHERE client_id = ?1 AND deleted_at IS NULL AND cancelled_at IS NULL",
+            params![client_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    tx.execute(
+        "UPDATE clients SET balance = ?1, updated_at = datetime('now') WHERE id = ?2",
+        params![new_client_balance, client_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 fn next_invoice_number(tx: &rusqlite::Transaction<'_>, year: &str) -> Result<String, String> {
@@ -371,7 +523,7 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
              ORDER BY ii.id",
         )
         .map_err(|e| e.to_string())?;
-    let items = stmt
+    let mut items = stmt
         .query_map(params![id], |row| {
             Ok(InvoiceItemDto {
                 id: row.get(0)?,
@@ -387,15 +539,44 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                 completed_quantity: row.get(10)?,
                 resource_missing: row.get::<_, i64>(11)? != 0,
                 resource_note: row.get(12)?,
+                materials: Vec::new(),
             })
         })
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
 
+    for item in &mut items {
+        let mut mstmt = conn
+            .prepare(
+                "SELECT inventory_item_id, quantity_per_unit, COALESCE(source, 'manual'), recipe_id
+                 FROM invoice_item_materials WHERE invoice_item_id = ?1 ORDER BY id",
+            )
+            .map_err(|e| e.to_string())?;
+        item.materials = mstmt
+            .query_map(params![item.id], |row| {
+                Ok(InvoiceItemMaterialDto {
+                    inventory_item_id: row.get(0)?,
+                    quantity_per_unit: row.get(1)?,
+                    source: row.get(2)?,
+                    recipe_id: row.get(3)?,
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+    }
+
+    let can_cancel = header.cancelled_at.is_none()
+        && !(header.payment_status == "cobrado" && header.balance <= EPS);
+    let (can_edit, edit_block_reason) = evaluate_editability_conn(&conn, id)?;
+
     Ok(InvoiceDetailDto {
         invoice: header,
         items,
+        can_edit,
+        can_cancel,
+        edit_block_reason,
     })
 }
 
@@ -599,6 +780,154 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
         id: invoice_id,
         invoice_number,
     })
+}
+
+/// Actualiza cliente, fecha, notas y líneas de un pedido editable.
+#[tauri::command]
+pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto, String> {
+    if payload.items.is_empty() {
+        return Err("El pedido debe tener al menos una línea".to_string());
+    }
+    let date_trim = payload.date.trim().to_string();
+    if date_trim.len() < 4 {
+        return Err("Fecha inválida".to_string());
+    }
+    for item in &payload.items {
+        if item.quantity <= 0 {
+            return Err("Cada línea debe tener cantidad mayor que cero".to_string());
+        }
+        if item.unit_price < 0.0 {
+            return Err("El precio unitario no puede ser negativo".to_string());
+        }
+    }
+
+    let mut conn = db::open_connection()?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    assert_invoice_editable(&tx, payload.id)?;
+
+    let (old_client_id, advance_payment, previous_debt, paid): (i64, f64, f64, f64) = tx
+        .query_row(
+            "SELECT client_id, advance_payment, previous_debt, paid
+             FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
+            params![payload.id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .map_err(|_| "Pedido no encontrado".to_string())?;
+
+    let client_exists: i64 = tx
+        .query_row(
+            "SELECT COUNT(*) FROM clients WHERE id = ?1 AND deleted_at IS NULL",
+            params![payload.client_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if client_exists == 0 {
+        return Err("Cliente no encontrado".to_string());
+    }
+
+    let mut subtotal = 0.0_f64;
+    for item in &payload.items {
+        subtotal += (item.quantity as f64) * item.unit_price;
+    }
+    let total = subtotal - advance_payment;
+    if total < -1e-6 {
+        return Err("El total calculado no puede ser negativo".to_string());
+    }
+    let balance = total - paid;
+    if balance < -EPS {
+        return Err(
+            "El nuevo total es menor que lo ya cobrado. Ajusta las líneas o registra un ajuste en caja."
+                .to_string(),
+        );
+    }
+    let status = compute_invoice_status(balance, paid);
+    let payment_status = if balance <= EPS { "cobrado" } else { "pendiente" };
+    let notes = trim_notes(payload.notes);
+
+    tx.execute(
+        "DELETE FROM invoice_item_materials
+         WHERE invoice_item_id IN (SELECT id FROM invoice_items WHERE invoice_id = ?1)",
+        params![payload.id],
+    )
+    .map_err(|e| e.to_string())?;
+    tx.execute(
+        "DELETE FROM invoice_items WHERE invoice_id = ?1",
+        params![payload.id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    for item in &payload.items {
+        let line_subtotal = (item.quantity as f64) * item.unit_price;
+        let finish = trim_optional(&item.finish);
+        let service = trim_optional(&item.service);
+        let format_label: Option<String> = if let Some(fid) = item.format_id {
+            tx.query_row(
+                "SELECT label FROM formats WHERE id = ?1",
+                params![fid],
+                |row| row.get(0),
+            )
+            .ok()
+        } else {
+            None
+        };
+        let category_snapshot = category_display_name(&tx, item.category_id)?;
+        tx.execute(
+            "INSERT INTO invoice_items (invoice_id, category_id, category_snapshot, format_id, format_label_snapshot, finish, service, quantity, unit_price, subtotal)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                payload.id,
+                item.category_id,
+                category_snapshot,
+                item.format_id,
+                format_label,
+                finish,
+                service,
+                item.quantity,
+                item.unit_price,
+                line_subtotal
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        let invoice_item_id = tx.last_insert_rowid();
+        if let Some(ref materials) = item.materials {
+            if !materials.is_empty() {
+                crate::commands::inventory::insert_invoice_item_materials(
+                    &tx,
+                    invoice_item_id,
+                    materials,
+                )?;
+            }
+        }
+    }
+
+    tx.execute(
+        "UPDATE invoices
+         SET client_id = ?1, date = ?2, subtotal = ?3, total = ?4, balance = ?5, status = ?6,
+             payment_status = ?7, notes = ?8, amount_cup = ?9
+         WHERE id = ?10",
+        params![
+            payload.client_id,
+            date_trim,
+            subtotal,
+            total,
+            balance,
+            status,
+            payment_status,
+            notes,
+            total.max(0.0),
+            payload.id
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let _ = previous_debt; // preserved on header; client balance recalculated from invoice balances
+    recalc_client_balance(&tx, old_client_id)?;
+    if old_client_id != payload.client_id {
+        recalc_client_balance(&tx, payload.client_id)?;
+    }
+
+    tx.commit().map_err(|e| e.to_string())?;
+    invoices_get_detail(payload.id).map(|d| d.invoice)
 }
 
 /// Exports a single invoice as a simple PDF file.
@@ -830,6 +1159,12 @@ pub fn cancel_invoice(invoice_id: i64, reason: String) -> Result<InvoiceHeaderDt
         )
         .map_err(|e| e.to_string())?;
     }
+
+    crate::commands::inventory::reverse_inventory_for_cancelled_invoice(
+        &tx,
+        invoice_id,
+        &invoice_number,
+    )?;
 
     let client_id: i64 = tx
         .query_row(

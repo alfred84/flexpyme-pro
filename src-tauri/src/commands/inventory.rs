@@ -290,6 +290,62 @@ fn apply_inventory_movement(
     Ok(())
 }
 
+/// Revierte salidas de inventario vinculadas a un pedido anulado (entrada compensatoria).
+pub fn reverse_inventory_for_cancelled_invoice(
+    tx: &rusqlite::Transaction<'_>,
+    invoice_id: i64,
+    invoice_number: &str,
+) -> Result<(), String> {
+    let rows: Vec<(i64, f64)> = {
+        let mut stmt = tx
+            .prepare(
+                "SELECT item_id, SUM(quantity)
+                 FROM inventory_movements
+                 WHERE reference_id = ?1 AND type = 'salida'
+                   AND COALESCE(notes, '') NOT LIKE 'Reverso anulación%'
+                 GROUP BY item_id
+                 HAVING SUM(quantity) > 0",
+            )
+            .map_err(|e| e.to_string())?;
+        let mapped = stmt
+            .query_map(params![invoice_id], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?))
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        mapped
+    };
+
+    let reason = format!("Reverso anulación {}", invoice_number);
+    for (item_id, quantity) in rows {
+        apply_inventory_movement(
+            tx,
+            item_id,
+            "entrada",
+            quantity,
+            Some(&reason),
+            Some(invoice_id),
+            Some("Reverso anulación de pedido"),
+        )?;
+    }
+
+    tx.execute(
+        "UPDATE invoice_items
+         SET resource_missing = 0, resource_note = NULL
+         WHERE invoice_id = ?1",
+        params![invoice_id],
+    )
+    .map_err(|e| e.to_string())?;
+    tx.execute(
+        "UPDATE invoices SET resource_missing = 0 WHERE id = ?1",
+        params![invoice_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 fn apply_deduction_allow_deficit(
     tx: &rusqlite::Transaction<'_>,
     item_id: i64,

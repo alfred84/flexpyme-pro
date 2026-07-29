@@ -43,6 +43,8 @@ export function FacturaDetailPage() {
     onSuccess: async () => {
       setShowCancel(false);
       await queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      await queryClient.invalidateQueries({ queryKey: ["clients"] });
+      await queryClient.invalidateQueries({ queryKey: ["inventory"] });
     },
   });
 
@@ -180,7 +182,10 @@ export function FacturaDetailPage() {
           <dialog className="modal modal-open">
           <div className="modal-box">
             <h3 className="font-bold text-lg">Anular factura</h3>
-            <p className="py-2 text-sm">Se revertirán los pagos parciales en caja. Indica el motivo.</p>
+            <p className="py-2 text-sm">
+              Se revertirán los cobros en caja y las salidas de inventario del pedido. Indica el
+              motivo.
+            </p>
             <textarea
               className="textarea textarea-bordered w-full"
               rows={3}

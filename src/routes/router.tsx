@@ -16,6 +16,7 @@ import { InvoiceCashierPage } from "@/features/invoices/pages/InvoiceCashierPage
 import { InvoiceDetailPage } from "@/features/invoices/pages/InvoiceDetailPage";
 import { InvoicePrintPage } from "@/features/invoices/pages/InvoicePrintPage";
 import { InvoiceNewPage } from "@/features/invoices/pages/InvoiceNewPage";
+import { InvoiceEditPage } from "@/features/invoices/pages/InvoiceEditPage";
 import { InvoicesListPage } from "@/features/invoices/pages/InvoicesListPage";
 import { FacturaDetailPage } from "@/features/invoices/pages/FacturaDetailPage";
 import { FacturasPage } from "@/features/invoices/pages/FacturasPage";
@@ -210,6 +211,12 @@ const invoicesNewRoute = createRoute({
   component: InvoiceNewPage,
 });
 
+const invoiceEditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "pedidos/$invoiceId/editar",
+  component: InvoiceEditPage,
+});
+
 const invoicePrintRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "pedidos/$invoiceId/imprimir",
@@ -359,6 +366,7 @@ const routeTree = rootRoute.addChildren([
   facturaPagoRoute,
   invoicesListRoute,
   invoicesNewRoute,
+  invoiceEditRoute,
   invoicePrintRoute,
   invoiceCashierRoute,
   invoiceDetailRoute,

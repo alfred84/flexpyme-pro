@@ -7,6 +7,7 @@ import type {
   InvoiceListDto,
   InvoiceMetricsDto,
   InvoicePaymentHistoryRow,
+  UpdateInvoicePayload,
 } from "@/types/invoice";
 
 /**
@@ -56,6 +57,13 @@ export async function fetchInvoiceDetail(id: number): Promise<InvoiceDetailDto> 
  */
 export async function createInvoice(payload: CreateInvoicePayload): Promise<CreateInvoiceResponse> {
   return invoke<CreateInvoiceResponse>("invoices_create", { payload });
+}
+
+/**
+ * Updates an editable order (client, date, notes, lines).
+ */
+export async function updateInvoice(payload: UpdateInvoicePayload): Promise<InvoiceHeaderDto> {
+  return invoke<InvoiceHeaderDto>("invoices_update", { payload });
 }
 
 /**

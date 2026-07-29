@@ -90,6 +90,17 @@ export interface InvoiceItemDto {
   completedQuantity: number;
   resourceMissing: boolean;
   resourceNote: string | null;
+  materials: InvoiceItemMaterialDto[];
+}
+
+/**
+ * Material fijado en una línea de pedido.
+ */
+export interface InvoiceItemMaterialDto {
+  inventoryItemId: number;
+  quantityPerUnit: number;
+  source: string;
+  recipeId: number | null;
 }
 
 /**
@@ -98,6 +109,9 @@ export interface InvoiceItemDto {
 export interface InvoiceDetailDto {
   invoice: InvoiceHeaderDto;
   items: InvoiceItemDto[];
+  canEdit: boolean;
+  canCancel: boolean;
+  editBlockReason: string | null;
 }
 
 /**
@@ -112,6 +126,17 @@ export interface CreateInvoiceItemPayload {
   unitPrice: number;
   /** Materiales a descontar al concluir la línea (norma o asignación manual). */
   materials?: InvoiceItemMaterialInput[] | null;
+}
+
+/**
+ * Payload para editar un pedido existente (sin alterar cobros registrados).
+ */
+export interface UpdateInvoicePayload {
+  id: number;
+  clientId: number;
+  date: string;
+  notes?: string | null;
+  items: CreateInvoiceItemPayload[];
 }
 
 /**

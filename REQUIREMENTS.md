@@ -59,6 +59,8 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Al marcar como listo → estado: `ejecutado`
 - Filtros por estado, cliente, fecha
 - Vista detalle de pedido con todos los ítems
+- **Editar pedido**: permitido solo si no está anulado, no está listo y aún no hay trabajo registrado (sin `completed_quantity` ni lotes). Se pueden cambiar cliente, fecha, notas y líneas; los cobros ya hechos se conservan y el saldo se recalcula (no se permite bajar el total por debajo de lo pagado)
+- **Anular pedido**: motivo obligatorio; revierte cobros en caja e inventario descontado; no se permite si está totalmente cobrado; los lotes/nómina históricos se conservan. También disponible desde Facturas
 - **Registrar trabajo** en detalle: vincula empleado + tipo de trabajo con líneas del pedido (lotes en `production_batch_items.invoice_id`)
 - Historial de pedidos por cliente
 
@@ -341,6 +343,7 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - Stock mínimo / costo / proveedor opcionales; sin alertas si mínimo no establecido.
 - Normas por tipo de trabajo (tabs) + formato/acabado; editar (solo futuros); ver/reactivar desactivadas.
 - Pedidos: norma o materiales manuales por línea (`invoice_item_materials`); salida manual con motivo.
+- **Pedidos: editar / anular** desde detalle (`/pedidos/:id`); anulación con reverso de caja e inventario; edición acotada a pedidos sin trabajo iniciado.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
