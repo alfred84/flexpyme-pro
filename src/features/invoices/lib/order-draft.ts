@@ -24,6 +24,8 @@ export type DraftMaterialMode = "norma" | "manual";
  * Material asignado manualmente en el borrador de línea.
  */
 export interface DraftLineMaterial {
+  /** Categoría de material de inventario (UI). */
+  materialCategoryId: number;
   inventoryItemId: number;
   quantityPerUnit: string;
   /** Etiqueta solo para UI. */

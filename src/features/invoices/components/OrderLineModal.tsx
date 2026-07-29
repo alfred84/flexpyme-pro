@@ -18,7 +18,7 @@ import type {
   CategoryWorkTypeDto,
   ProductCategoryDto,
 } from "@/types/category";
-import type { InventoryItemDto, InventoryRecipeDto } from "@/types/inventory";
+import type { InventoryItemDto, InventoryRecipeDto, MaterialCategoryDto } from "@/types/inventory";
 import type { FormatDto, PriceRowDto } from "@/types/price";
 
 interface OrderLineModalProps {
@@ -33,6 +33,8 @@ interface OrderLineModalProps {
   /** Formatos asociados a cada categoría. */
   categoryFormats: CategoryFormatDto[];
   categoryFinishes: CategoryFinishDto[];
+  /** Categorías de material de inventario (activas). */
+  materialCategories: MaterialCategoryDto[];
   /** Materiales de almacén para asignación manual. */
   inventoryItems: InventoryItemDto[];
   /** Normas activas (vista previa en modo norma). */
@@ -104,6 +106,66 @@ function finishOptionsFor(
 }
 
 /**
+ * Construye una fila de material manual con la primera categoría e ítem disponibles.
+ *
+ * @param materialCategories - Categorías de material activas.
+ * @param inventoryItems - Ítems de inventario.
+ * @returns Fila por defecto o `null` si no hay datos.
+ */
+function defaultManualMaterialRow(
+  materialCategories: MaterialCategoryDto[],
+  inventoryItems: InventoryItemDto[],
+): DraftLineMaterial | null {
+  const categories = materialCategories.filter((c) => c.isActive);
+  const firstCat = categories[0];
+  if (!firstCat) {
+    return null;
+  }
+  const itemsInCat = inventoryItems.filter((i) => i.materialCategoryId === firstCat.id);
+  const firstItem = itemsInCat[0];
+  if (!firstItem) {
+    return {
+      materialCategoryId: firstCat.id,
+      inventoryItemId: 0,
+      quantityPerUnit: "1",
+    };
+  }
+  return {
+    materialCategoryId: firstCat.id,
+    inventoryItemId: firstItem.id,
+    quantityPerUnit: "1",
+    label: firstItem.name,
+  };
+}
+
+/**
+ * Normaliza filas de material al editar (rellena categoría desde el ítem).
+ *
+ * @param materials - Filas del borrador.
+ * @param inventoryItems - Catálogo de ítems.
+ * @param materialCategories - Categorías activas.
+ * @returns Filas con categoría resuelta.
+ */
+function hydrateManualMaterials(
+  materials: DraftLineMaterial[],
+  inventoryItems: InventoryItemDto[],
+  materialCategories: MaterialCategoryDto[],
+): DraftLineMaterial[] {
+  return materials.map((m) => {
+    if (m.materialCategoryId > 0) {
+      return m;
+    }
+    const item = inventoryItems.find((it) => it.id === m.inventoryItemId);
+    const fallbackCat = materialCategories.find((c) => c.isActive)?.id ?? 0;
+    return {
+      ...m,
+      materialCategoryId: item?.materialCategoryId ?? fallbackCat,
+      label: m.label ?? item?.name,
+    };
+  });
+}
+
+/**
  * Modal CRUD para añadir o editar una línea de pedido con tipos de trabajo
  * por categoría y cálculo automático de precios.
  *
@@ -121,6 +183,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
     categoryWorkTypes,
     categoryFormats,
     categoryFinishes,
+    materialCategories,
     inventoryItems,
     recipes,
     onClose,
@@ -153,7 +216,11 @@ export function OrderLineModal(props: OrderLineModalProps) {
       setDraft({
         ...editing,
         services: editing.services.map((s) => ({ ...s })),
-        materials: (editing.materials ?? []).map((m) => ({ ...m })),
+        materials: hydrateManualMaterials(
+          (editing.materials ?? []).map((m) => ({ ...m })),
+          inventoryItems,
+          materialCategories,
+        ),
         materialMode: editing.materialMode ?? "norma",
       });
     } else {
@@ -374,6 +441,11 @@ export function OrderLineModal(props: OrderLineModalProps) {
     return Array.from(seen.values());
   }, [draft, recipes, categoryWorkTypes, inventoryItems]);
 
+  const activeMaterialCategories = useMemo(
+    () => materialCategories.filter((c) => c.isActive),
+    [materialCategories],
+  );
+
   if (!open || !draft) {
     return null;
   }
@@ -381,24 +453,28 @@ export function OrderLineModal(props: OrderLineModalProps) {
   const manualPrice = draft.services[0]?.unitPrice ?? "";
 
   const setMaterialMode = (mode: DraftMaterialMode) => {
-    setDraft((prev) => (prev ? { ...prev, materialMode: mode } : prev));
+    setDraft((prev) => {
+      if (!prev) return prev;
+      if (mode === "manual" && prev.materials.length === 0) {
+        const row = defaultManualMaterialRow(materialCategories, inventoryItems);
+        if (!row) {
+          setError("No hay categorías o materiales de inventario disponibles.");
+          return prev;
+        }
+        return { ...prev, materialMode: mode, materials: [row] };
+      }
+      return { ...prev, materialMode: mode };
+    });
   };
 
   const addManualMaterial = () => {
-    const first = inventoryItems[0];
-    if (!first) {
-      setError("No hay materiales en inventario.");
+    const row = defaultManualMaterialRow(materialCategories, inventoryItems);
+    if (!row || row.inventoryItemId <= 0) {
+      setError("No hay materiales en inventario para asignar.");
       return;
     }
-    setDraft((prev) => {
-      if (!prev) return prev;
-      const row: DraftLineMaterial = {
-        inventoryItemId: first.id,
-        quantityPerUnit: "1",
-        label: first.name,
-      };
-      return { ...prev, materials: [...prev.materials, row] };
-    });
+    setError(null);
+    setDraft((prev) => (prev ? { ...prev, materials: [...prev.materials, row] } : prev));
   };
 
   const updateManualMaterial = (index: number, patch: Partial<DraftLineMaterial>) => {
@@ -408,10 +484,24 @@ export function OrderLineModal(props: OrderLineModalProps) {
         ...prev,
         materials: prev.materials.map((m, i) => {
           if (i !== index) return m;
-          const next = { ...m, ...patch };
-          if (patch.inventoryItemId != null) {
+          let next: DraftLineMaterial = { ...m, ...patch };
+          if (patch.materialCategoryId != null && patch.inventoryItemId == null) {
+            const itemsInCat = inventoryItems.filter(
+              (it) => it.materialCategoryId === patch.materialCategoryId,
+            );
+            const first = itemsInCat[0];
+            next = {
+              ...next,
+              inventoryItemId: first?.id ?? 0,
+              label: first?.name,
+              quantityPerUnit: next.quantityPerUnit || "1",
+            };
+          } else if (patch.inventoryItemId != null) {
             const item = inventoryItems.find((it) => it.id === patch.inventoryItemId);
             next.label = item?.name;
+            if (item?.materialCategoryId != null) {
+              next.materialCategoryId = item.materialCategoryId;
+            }
           }
           return next;
         }),
@@ -428,7 +518,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
   return (
     <ModalPortal>
       <dialog className="modal modal-open">
-      <div className="modal-box max-w-lg">
+      <div className="modal-box max-w-2xl">
         <h3 className="font-bold text-lg">{editing ? "Editar línea" : "Nueva línea"}</h3>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <label className="form-control sm:col-span-2">
@@ -592,41 +682,83 @@ export function OrderLineModal(props: OrderLineModalProps) {
               </div>
             ) : (
               <div className="mt-2 space-y-2">
-                {draft.materials.map((m, index) => (
-                  <div key={`${m.inventoryItemId}-${index}`} className="flex items-center gap-2">
-                    <select
-                      className="select select-bordered select-xs flex-1"
-                      value={m.inventoryItemId}
-                      onChange={(e) =>
-                        updateManualMaterial(index, {
-                          inventoryItemId: Number(e.target.value),
-                        })
-                      }
+                {activeMaterialCategories.length === 0 && (
+                  <p className="text-xs text-warning">
+                    No hay categorías de material activas. Créalas en Inventario.
+                  </p>
+                )}
+                {draft.materials.map((m, index) => {
+                  const itemsInCat = inventoryItems.filter(
+                    (it) => it.materialCategoryId === m.materialCategoryId,
+                  );
+                  return (
+                    <div
+                      key={`mat-${index}-${m.materialCategoryId}-${m.inventoryItemId}`}
+                      className="flex flex-wrap items-end gap-2"
                     >
-                      {inventoryItems.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name} ({item.quantity} {item.unit})
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className="input input-bordered input-xs w-20"
-                      inputMode="decimal"
-                      value={m.quantityPerUnit}
-                      onChange={(e) =>
-                        updateManualMaterial(index, { quantityPerUnit: e.target.value })
-                      }
-                      title="Cantidad por unidad"
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-xs"
-                      onClick={() => removeManualMaterial(index)}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
+                      <label className="form-control min-w-[8rem] flex-1">
+                        <span className="label-text text-[0.65rem]">Categoría</span>
+                        <select
+                          className="select select-bordered select-xs"
+                          value={m.materialCategoryId || ""}
+                          onChange={(e) =>
+                            updateManualMaterial(index, {
+                              materialCategoryId: Number(e.target.value),
+                            })
+                          }
+                        >
+                          {activeMaterialCategories.map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="form-control min-w-[10rem] flex-[1.4]">
+                        <span className="label-text text-[0.65rem]">Material</span>
+                        <select
+                          className="select select-bordered select-xs"
+                          value={m.inventoryItemId || ""}
+                          disabled={itemsInCat.length === 0}
+                          onChange={(e) =>
+                            updateManualMaterial(index, {
+                              inventoryItemId: Number(e.target.value),
+                            })
+                          }
+                        >
+                          {itemsInCat.length === 0 ? (
+                            <option value="">Sin materiales</option>
+                          ) : (
+                            itemsInCat.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.name} ({item.quantity} {item.unit})
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </label>
+                      <label className="form-control w-20">
+                        <span className="label-text text-[0.65rem]">Cant./ud.</span>
+                        <input
+                          className="input input-bordered input-xs w-20"
+                          inputMode="decimal"
+                          value={m.quantityPerUnit}
+                          onChange={(e) =>
+                            updateManualMaterial(index, { quantityPerUnit: e.target.value })
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs mb-0.5"
+                        onClick={() => removeManualMaterial(index)}
+                        aria-label="Quitar material"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
                 <button type="button" className="btn btn-outline btn-xs" onClick={addManualMaterial}>
                   + Material
                 </button>

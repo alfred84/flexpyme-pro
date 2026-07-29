@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { fetchClients } from "@/db/queries/clients";
 import { createInvoice } from "@/db/queries/invoices";
 import { fetchCategories, fetchCategoryFinishes, fetchAllCategoryFormats, fetchAllCategoryWorkTypes } from "@/db/queries/categories";
-import { fetchInventoryItems, fetchInventoryRecipes } from "@/db/queries/inventory";
+import { fetchInventoryItems, fetchInventoryRecipes, fetchMaterialCategories } from "@/db/queries/inventory";
 import { fetchFormats, fetchPrices } from "@/db/queries/prices";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 import {
@@ -65,6 +65,10 @@ export function InvoiceNewPage() {
   const inventoryItemsQuery = useQuery({
     queryKey: ["inventory", "list"],
     queryFn: fetchInventoryItems,
+  });
+  const materialCategoriesQuery = useQuery({
+    queryKey: ["inventory", "material-categories", "active"],
+    queryFn: () => fetchMaterialCategories(true),
   });
 
   const defaultCategoryId = categoriesQuery.data?.[0]?.id ?? 1;
@@ -391,6 +395,7 @@ export function InvoiceNewPage() {
         categoryWorkTypes={categoryWorkTypesQuery.data ?? []}
         categoryFormats={categoryFormatsQuery.data ?? []}
         categoryFinishes={categoryFinishesQuery.data ?? []}
+        materialCategories={materialCategoriesQuery.data ?? []}
         inventoryItems={inventoryItemsQuery.data ?? []}
         recipes={recipesQuery.data ?? []}
         onClose={() => setLineModalOpen(false)}
