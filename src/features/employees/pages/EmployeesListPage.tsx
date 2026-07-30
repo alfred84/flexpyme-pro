@@ -1,15 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { CalendarDays, UserCog, UserPlus } from "lucide-react";
+import { useMemo, useState } from "react";
+import { CalendarDays, Banknote, UserCog, UserPlus } from "lucide-react";
 import {
   deactivateEmployee,
   fetchEmployees,
   fetchPayrollDaily,
+  fetchUnpaidBatchesForDate,
+  payWorkBatchesMany,
   reactivateEmployee,
 } from "@/db/queries/employees";
+import { EmployeePayCashierModal } from "@/features/employees/components/EmployeePayCashierModal";
 import { formatDate, todayIso } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
+import { pushFlashMessage } from "@/lib/flash-message";
 
 /**
  * Listado de empleados con alta y baja (soft delete).
@@ -18,9 +22,15 @@ import { formatMoney } from "@/lib/format-money";
  */
 export function EmployeesListPage() {
   const queryClient = useQueryClient();
+  const [payOpen, setPayOpen] = useState(false);
   const employeesQuery = useQuery({
     queryKey: ["employees", "list"],
     queryFn: () => fetchEmployees(false),
+  });
+
+  const unpaidTodayQuery = useQuery({
+    queryKey: ["employees", "unpaid-today", todayIso()],
+    queryFn: () => fetchUnpaidBatchesForDate(todayIso()),
   });
 
   const deactivateMutation = useMutation({
@@ -48,6 +58,12 @@ export function EmployeesListPage() {
     { total: 0, paid: 0, pending: 0 },
   );
 
+  const unpaidToday = unpaidTodayQuery.data ?? [];
+  const unpaidTotal = useMemo(
+    () => unpaidToday.reduce((s, b) => s + b.pending, 0),
+    [unpaidToday],
+  );
+
   const handleDeactivate = (id: number, name: string) => {
     if (window.confirm(`¿Dar de baja a ${name}? Su historial se conserva.`)) {
       deactivateMutation.mutate(id);
@@ -56,13 +72,26 @@ export function EmployeesListPage() {
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="flex items-center gap-2 text-2xl font-bold">
           <UserCog className="h-6 w-6" /> Empleados
         </h1>
-        <Link to="/empleados/nuevo" className="btn btn-primary btn-sm gap-1">
-          <UserPlus className="h-4 w-4" /> Nuevo empleado
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm gap-1"
+            disabled={unpaidToday.length === 0}
+            onClick={() => setPayOpen(true)}
+          >
+            <Banknote className="h-4 w-4" /> Pago de empleados
+            {unpaidToday.length > 0 && (
+              <span className="badge badge-sm">{formatMoney(unpaidTotal)}</span>
+            )}
+          </button>
+          <Link to="/empleados/nuevo" className="btn btn-primary btn-sm gap-1">
+            <UserPlus className="h-4 w-4" /> Nuevo empleado
+          </Link>
+        </div>
       </div>
 
       {employeesQuery.isLoading && <p>Cargando empleados...</p>}
@@ -211,6 +240,32 @@ export function EmployeesListPage() {
           )}
         </div>
       </div>
+
+      <EmployeePayCashierModal
+        open={payOpen}
+        title="Pago de empleados"
+        description={
+          unpaidToday.length === 0
+            ? "No hay lotes pendientes hoy."
+            : `${unpaidToday.length} lote(s) del día pendientes de pago.`
+        }
+        amountCup={unpaidTotal}
+        onClose={() => setPayOpen(false)}
+        onConfirm={async (data) => {
+          await payWorkBatchesMany({
+            batchIds: unpaidToday.map((b) => b.id),
+            paymentMethod: data.paymentMethod,
+            currency: data.currency,
+            denominationBreakdown: data.denominationBreakdown,
+            amountCup: data.amountCup,
+            amountUsd: data.amountUsd,
+          });
+          await queryClient.invalidateQueries({ queryKey: ["employees"] });
+          await queryClient.invalidateQueries({ queryKey: ["cashflow"] });
+          await queryClient.invalidateQueries({ queryKey: ["payroll-daily"] });
+          pushFlashMessage({ kind: "success", text: "Pagos de empleados registrados." });
+        }}
+      />
     </section>
   );
 }

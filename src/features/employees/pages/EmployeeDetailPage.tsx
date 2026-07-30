@@ -1,12 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
+import { useState } from "react";
 import {
   fetchEmployeeById,
   fetchWorkBatches,
   payWorkBatch,
 } from "@/db/queries/employees";
+import { EmployeePayCashierModal } from "@/features/employees/components/EmployeePayCashierModal";
 import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
+import { pushFlashMessage } from "@/lib/flash-message";
 import { WORK_TYPE_LABELS, type WorkType } from "@/types/employee";
 
 /**
@@ -25,6 +28,7 @@ export function EmployeeDetailPage() {
   const params = useParams({ strict: false }) as { employeeId?: string };
   const employeeId = Number(params.employeeId);
   const queryClient = useQueryClient();
+  const [payBatchId, setPayBatchId] = useState<number | null>(null);
 
   const employeeQuery = useQuery({
     queryKey: ["employees", "detail", employeeId],
@@ -38,18 +42,11 @@ export function EmployeeDetailPage() {
     enabled: Number.isFinite(employeeId),
   });
 
-  const payMutation = useMutation({
-    mutationFn: payWorkBatch,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["employees", "batches", employeeId] });
-      void queryClient.invalidateQueries({ queryKey: ["cashflow"] });
-    },
-  });
-
   const emp = employeeQuery.data;
   const extraRoles = emp?.extraRoles ?? [];
   const batches = batchesQuery.data ?? [];
-  const totalPending = batches.reduce((acc, b) => acc + Math.max(b.totalCost - b.paid, 0), 0);
+  const payBatch = batches.find((b) => b.id === payBatchId) ?? null;
+  const payAmount = payBatch ? Math.max(payBatch.totalCost - payBatch.paid, 0) : 0;
 
   return (
     <section className="space-y-6">
@@ -83,24 +80,14 @@ export function EmployeeDetailPage() {
         </div>
       </div>
 
-      <div className="stats bg-base-200">
-        <div className="stat">
-          <div className="stat-title">Salario pendiente</div>
-          <div className="stat-value text-2xl text-warning">{formatMoney(totalPending)}</div>
-        </div>
-        <div className="stat">
-          <div className="stat-title">Lotes registrados</div>
-          <div className="stat-value text-2xl">{batches.length}</div>
-        </div>
-      </div>
-
       <div className="card bg-base-200">
         <div className="card-body">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <h2 className="card-title text-base">Roles</h2>
               <p className="text-xs text-base-content/60">
-                Rol principal: <span className="font-semibold capitalize">{emp?.role ?? "Sin rol"}</span>
+                Rol principal:{" "}
+                <span className="font-semibold capitalize">{emp?.role ?? "Sin rol"}</span>
               </p>
             </div>
             <Link
@@ -159,8 +146,7 @@ export function EmployeeDetailPage() {
                         <button
                           type="button"
                           className="btn btn-xs btn-primary"
-                          disabled={payMutation.isPending}
-                          onClick={() => payMutation.mutate(b.id)}
+                          onClick={() => setPayBatchId(b.id)}
                         >
                           Pagar
                         </button>
@@ -180,6 +166,34 @@ export function EmployeeDetailPage() {
           </div>
         </div>
       </div>
+
+      <EmployeePayCashierModal
+        open={payBatchId !== null}
+        title={`Pagar lote #${payBatchId ?? ""}`}
+        description={
+          payBatch
+            ? `${workTypeLabel(payBatch.workType)} · ${formatDate(payBatch.date)}`
+            : undefined
+        }
+        amountCup={payAmount}
+        onClose={() => setPayBatchId(null)}
+        onConfirm={async (data) => {
+          if (payBatchId === null) {
+            return;
+          }
+          await payWorkBatch({
+            batchId: payBatchId,
+            paymentMethod: data.paymentMethod,
+            currency: data.currency,
+            denominationBreakdown: data.denominationBreakdown,
+            amountCup: data.amountCup,
+            amountUsd: data.amountUsd,
+          });
+          await queryClient.invalidateQueries({ queryKey: ["employees", "batches", employeeId] });
+          await queryClient.invalidateQueries({ queryKey: ["cashflow"] });
+          pushFlashMessage({ kind: "success", text: "Pago registrado." });
+        }}
+      />
     </section>
   );
 }
