@@ -100,6 +100,8 @@ const EMBEDDED_SIN_FORMATO_SCHEMA: &str =
     include_str!("../../src/db/migrations/0022_sin_formato.sql");
 const EMBEDDED_INVENTORY_MATERIALS_V26_SCHEMA: &str =
     include_str!("../../src/db/migrations/0023_inventory_materials_v26.sql");
+const EMBEDDED_ROLE_WORK_ASSIGNMENTS_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0024_role_work_and_line_assignments.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -350,6 +352,26 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             EMBEDDED_INVENTORY_MATERIALS_V26_SCHEMA,
             "0023_inventory_materials_v26",
         )?;
+    }
+    if !table_exists(conn, "role_work_types") || !table_exists(conn, "invoice_item_assignments")
+    {
+        execute_migration(
+            conn,
+            EMBEDDED_ROLE_WORK_ASSIGNMENTS_SCHEMA,
+            "0024_role_work_and_line_assignments",
+        )?;
+    }
+    if !column_exists(conn, "invoice_items", "production_line_status") {
+        conn.execute(
+            "ALTER TABLE invoice_items ADD COLUMN production_line_status text NOT NULL DEFAULT 'en_produccion'",
+            [],
+        )
+        .map_err(|e| {
+            format!(
+                "No se pudo aplicar production_line_status (0024): {}",
+                e
+            )
+        })?;
     }
     Ok(())
 }

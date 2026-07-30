@@ -174,6 +174,8 @@ export const invoiceItems = sqliteTable("invoice_items", {
   completedAt: text("completed_at"),
   resourceMissing: integer("resource_missing").notNull().default(0),
   resourceNote: text("resource_note"),
+  /** Estado productivo de la línea: `en_produccion` | `listo`. */
+  productionLineStatus: text("production_line_status").notNull().default("en_produccion"),
 });
 
 export const workTypes = sqliteTable("work_types", {
@@ -319,6 +321,29 @@ export const employeeRoles = sqliteTable("employee_roles", {
 });
 
 /**
+ * Tipos de trabajo que un rol puede realizar (configurable en Configuración).
+ */
+export const roleWorkTypes = sqliteTable(
+  "role_work_types",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    roleId: integer("role_id")
+      .notNull()
+      .references(() => employeeRoles.id, { onDelete: "cascade" }),
+    workTypeId: integer("work_type_id")
+      .notNull()
+      .references(() => workTypes.id, { onDelete: "cascade" }),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    uniqueRoleWorkType: uniqueIndex("role_work_types_unique").on(
+      table.roleId,
+      table.workTypeId,
+    ),
+  }),
+);
+
+/**
  * Empleados del taller. Soft delete con `is_active = false`.
  */
 export const employees = sqliteTable("employees", {
@@ -334,6 +359,30 @@ export const employees = sqliteTable("employees", {
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
 });
+
+/**
+ * Empleados asignados a una línea de pedido (por tipo de trabajo) con tarifa opcional.
+ */
+export const invoiceItemAssignments = sqliteTable(
+  "invoice_item_assignments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    invoiceItemId: integer("invoice_item_id")
+      .notNull()
+      .references(() => invoiceItems.id, { onDelete: "cascade" }),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id),
+    customUnitCost: real("custom_unit_cost"),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    uniqueItemEmployee: uniqueIndex("invoice_item_assignments_unique").on(
+      table.invoiceItemId,
+      table.employeeId,
+    ),
+  }),
+);
 
 /**
  * Roles adicionales que un empleado puede cubrir (multi-rol). El rol principal
