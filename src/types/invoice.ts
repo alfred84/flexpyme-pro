@@ -15,6 +15,10 @@ export interface InvoiceListDto {
   status: string;
   productionStatus: string;
   paymentStatus: string;
+  /** True si el pedido aún se puede editar (sin trabajo iniciado). */
+  canEdit: boolean;
+  /** True si el pedido se puede anular (no cobrado al 100%). */
+  canCancel: boolean;
 }
 
 /**

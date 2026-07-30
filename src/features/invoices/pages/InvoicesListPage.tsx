@@ -7,10 +7,15 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { fetchInvoices, updateInvoiceProductionStatus } from "@/db/queries/invoices";
+import { ModalPortal } from "@/components/common/ModalPortal";
+import { PaymentStatusBadge, ProductionStatusBadge } from "@/components/invoices/InvoiceStatusBadges";
+import {
+  cancelInvoice,
+  fetchInvoices,
+  updateInvoiceProductionStatus,
+} from "@/db/queries/invoices";
 import { formatMoney } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
-import { PaymentStatusBadge, ProductionStatusBadge } from "@/components/invoices/InvoiceStatusBadges";
 import type { InvoiceListDto } from "@/types/invoice";
 
 type ListFilter = "todos" | "en_produccion" | "listos" | "pendiente_cobro" | "cobrados" | "completados";
@@ -51,6 +56,9 @@ export function InvoicesListPage() {
   const { filter: searchFilter } = useSearch({ from: "/pedidos" });
   const filter = parseFilter(searchFilter);
   const [search, setSearch] = useState("");
+  const [cancelTarget, setCancelTarget] = useState<InvoiceListDto | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+
   const invoicesQuery = useQuery({
     queryKey: ["invoices", "list"],
     queryFn: fetchInvoices,
@@ -67,6 +75,25 @@ export function InvoicesListPage() {
     },
     onError: (e: Error) => {
       pushFlashMessage({ kind: "error", text: e.message });
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: () => {
+      if (!cancelTarget) {
+        return Promise.reject(new Error("Pedido no seleccionado"));
+      }
+      return cancelInvoice(cancelTarget.id, cancelReason);
+    },
+    onSuccess: async () => {
+      setCancelTarget(null);
+      setCancelReason("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+        queryClient.invalidateQueries({ queryKey: ["clients"] }),
+        queryClient.invalidateQueries({ queryKey: ["inventory"] }),
+      ]);
+      pushFlashMessage({ kind: "success", text: "Pedido anulado." });
     },
   });
 
@@ -129,7 +156,32 @@ export function InvoicesListPage() {
                   Cobrar
                 </Link>
               )}
-              <Link className="btn btn-xs btn-ghost" to="/pedidos/$invoiceId" params={{ invoiceId: String(inv.id) }}>
+              {inv.canEdit && (
+                <Link
+                  className="btn btn-xs btn-outline"
+                  to="/pedidos/$invoiceId/editar"
+                  params={{ invoiceId: String(inv.id) }}
+                >
+                  Editar
+                </Link>
+              )}
+              {inv.canCancel && (
+                <button
+                  type="button"
+                  className="btn btn-xs btn-error btn-outline"
+                  onClick={() => {
+                    setCancelReason("");
+                    setCancelTarget(inv);
+                  }}
+                >
+                  Anular
+                </button>
+              )}
+              <Link
+                className="btn btn-xs btn-ghost"
+                to="/pedidos/$invoiceId"
+                params={{ invoiceId: String(inv.id) }}
+              >
                 Ver
               </Link>
             </div>
@@ -207,7 +259,9 @@ export function InvoicesListPage() {
                   <tr key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
                       <th key={header.id}>
-                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(header.column.columnDef.header, header.getContext())}
                       </th>
                     ))}
                   </tr>
@@ -224,7 +278,9 @@ export function InvoicesListPage() {
                   table.getRowModel().rows.map((row) => (
                     <tr key={row.id}>
                       {row.getVisibleCells().map((cell) => (
-                        <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                        <td key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
                       ))}
                     </tr>
                   ))
@@ -233,6 +289,65 @@ export function InvoicesListPage() {
             </table>
           </div>
         </>
+      )}
+
+      {cancelTarget && (
+        <ModalPortal>
+          <dialog className="modal modal-open">
+            <div className="modal-box">
+              <h3 className="text-lg font-bold">Anular pedido {cancelTarget.invoiceNumber}</h3>
+              <p className="py-2 text-sm text-base-content/70">
+                Se revertirán los cobros en caja y las salidas de inventario asociadas. El motivo es
+                obligatorio.
+              </p>
+              <textarea
+                className="textarea textarea-bordered w-full"
+                rows={3}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Motivo de anulación"
+              />
+              {cancelMutation.isError && (
+                <p className="mt-2 text-sm text-error">
+                  {(cancelMutation.error as Error).message}
+                </p>
+              )}
+              <div className="modal-action">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    setCancelTarget(null);
+                    setCancelReason("");
+                  }}
+                >
+                  Cerrar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-error"
+                  disabled={cancelMutation.isPending || !cancelReason.trim()}
+                  onClick={() => void cancelMutation.mutateAsync()}
+                >
+                  {cancelMutation.isPending ? (
+                    <span className="loading loading-spinner loading-sm" />
+                  ) : (
+                    "Confirmar anulación"
+                  )}
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="modal-backdrop bg-transparent"
+              aria-label="Cerrar"
+              onClick={() => {
+                setCancelTarget(null);
+                setCancelReason("");
+              }}
+            />
+          </dialog>
+        </ModalPortal>
       )}
     </section>
   );
