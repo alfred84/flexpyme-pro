@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
+import { LineEmployeesModal } from "@/features/invoices/components/LineEmployeesModal";
 import {
   draftLineSubtotal,
   formatOptionsForCategory,
@@ -10,6 +11,7 @@ import {
   type DraftLineMaterial,
   type DraftLineService,
   type DraftMaterialMode,
+  type DraftServiceAssignment,
 } from "@/features/invoices/lib/order-draft";
 import { formatMoney } from "@/lib/format-money";
 import type {
@@ -191,6 +193,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
   } = props;
   const [draft, setDraft] = useState<DraftLine | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [employeesForService, setEmployeesForService] = useState<string | null>(null);
 
   /**
    * Construye la lista de tipos de trabajo preseleccionados con su precio.
@@ -204,7 +207,11 @@ export function OrderLineModal(props: OrderLineModalProps) {
     const defaults = options.filter((o) => o.isDefault);
     return defaults.map((o) => {
       const price = resolveServicePrice(prices, categoryId, formatId, o.name, finish);
-      return { service: o.name, unitPrice: price !== null ? String(price) : "" };
+      return {
+        service: o.name,
+        unitPrice: price !== null ? String(price) : "",
+        assignments: [],
+      };
     });
   };
 
@@ -215,7 +222,10 @@ export function OrderLineModal(props: OrderLineModalProps) {
     if (editing) {
       setDraft({
         ...editing,
-        services: editing.services.map((s) => ({ ...s })),
+        services: editing.services.map((s) => ({
+          ...s,
+          assignments: (s.assignments ?? []).map((a) => ({ ...a })),
+        })),
         materials: hydrateManualMaterials(
           (editing.materials ?? []).map((m) => ({ ...m })),
           inventoryItems,
@@ -340,7 +350,11 @@ export function OrderLineModal(props: OrderLineModalProps) {
           ...prev,
           services: [
             ...prev.services,
-            { service: name, unitPrice: price !== null ? String(price) : "" },
+            {
+              service: name,
+              unitPrice: price !== null ? String(price) : "",
+              assignments: [],
+            },
           ],
         };
       }
@@ -360,13 +374,39 @@ export function OrderLineModal(props: OrderLineModalProps) {
     });
   };
 
+  /**
+   * Guarda las asignaciones de empleados para un tipo de trabajo.
+   *
+   * @param serviceName - Nombre del tipo.
+   * @param assignments - Empleados seleccionados.
+   */
+  const saveServiceAssignments = (
+    serviceName: string,
+    assignments: DraftServiceAssignment[],
+  ) => {
+    setDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        services: prev.services.map((s) =>
+          s.service === serviceName ? { ...s, assignments } : s,
+        ),
+      };
+    });
+  };
+
   /** Precio del modo manual (categorías sin tipos de trabajo configurados). */
   const setManualPrice = (unitPrice: string) => {
     setDraft((prev) => {
       if (!prev) {
         return prev;
       }
-      return { ...prev, services: [{ service: "", unitPrice }] };
+      return {
+        ...prev,
+        services: [{ service: "", unitPrice, assignments: [] }],
+      };
     });
   };
 
@@ -393,6 +433,16 @@ export function OrderLineModal(props: OrderLineModalProps) {
     });
     if (invalidPrice) {
       setError("Indica un precio válido para cada tipo de trabajo.");
+      return;
+    }
+    const qtyNum = Number.parseInt(draft.quantity, 10);
+    const overAssigned = draft.services.find(
+      (s) => (s.assignments?.length ?? 0) > qtyNum,
+    );
+    if (overAssigned) {
+      setError(
+        `«${overAssigned.service}» tiene más empleados que la cantidad de la línea (${qtyNum}).`,
+      );
       return;
     }
     if (draft.materialMode === "manual") {
@@ -595,9 +645,10 @@ export function OrderLineModal(props: OrderLineModalProps) {
                 {workTypeOptions.map((opt) => {
                   const selected = draft.services.find((s) => s.service === opt.name);
                   const checked = Boolean(selected);
+                  const assignedCount = selected?.assignments?.length ?? 0;
                   return (
-                    <div key={opt.name} className="flex items-center gap-2">
-                      <label className="flex flex-1 cursor-pointer items-center gap-2 text-sm">
+                    <div key={opt.name} className="flex flex-wrap items-center gap-2">
+                      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-sm">
                         <input
                           type="checkbox"
                           className="checkbox checkbox-sm"
@@ -615,6 +666,14 @@ export function OrderLineModal(props: OrderLineModalProps) {
                         disabled={!checked}
                         onChange={(e) => setWorkTypePrice(opt.name, e.target.value)}
                       />
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs"
+                        disabled={!checked}
+                        onClick={() => setEmployeesForService(opt.name)}
+                      >
+                        Empleados{assignedCount > 0 ? ` (${assignedCount})` : ""}
+                      </button>
                     </div>
                   );
                 })}
@@ -782,6 +841,18 @@ export function OrderLineModal(props: OrderLineModalProps) {
       </div>
       <button type="button" className="modal-backdrop bg-transparent" aria-label="Cerrar" onClick={onClose} />
       </dialog>
+      {employeesForService && draft && (
+        <LineEmployeesModal
+          open={Boolean(employeesForService)}
+          workTypeName={employeesForService}
+          quantity={Number.parseInt(draft.quantity, 10) || 1}
+          initial={
+            draft.services.find((s) => s.service === employeesForService)?.assignments ?? []
+          }
+          onClose={() => setEmployeesForService(null)}
+          onSave={(assignments) => saveServiceAssignments(employeesForService, assignments)}
+        />
+      )}
     </ModalPortal>
   );
 }

@@ -11,6 +11,18 @@ export interface DraftLineService {
   /** Nombre del tipo de trabajo (se guarda en `invoice_items.service`). */
   service: string;
   unitPrice: string;
+  /** Empleados asignados a este tipo de trabajo (máx. = cantidad de la línea). */
+  assignments?: DraftServiceAssignment[];
+}
+
+/**
+ * Empleado asignado a un tipo de trabajo en el borrador de línea.
+ */
+export interface DraftServiceAssignment {
+  employeeId: number;
+  employeeName: string;
+  /** Tarifa personalizada; vacío = usar tarifa de Precios. */
+  customUnitCost: string;
 }
 
 /**
@@ -384,6 +396,18 @@ export function draftLineToItems(
       quantity,
       unitPrice: Number.parseFloat(s.unitPrice.replace(",", ".")),
       materials: materials.length > 0 ? materials : null,
+      assignments:
+        (s.assignments ?? []).length > 0
+          ? (s.assignments ?? []).map((a) => {
+              const raw = a.customUnitCost.trim().replace(",", ".");
+              const custom = raw === "" ? null : Number.parseFloat(raw);
+              return {
+                employeeId: a.employeeId,
+                customUnitCost:
+                  custom !== null && Number.isFinite(custom) ? custom : null,
+              };
+            })
+          : null,
     };
   });
 }

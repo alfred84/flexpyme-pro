@@ -43,6 +43,14 @@ export function invoiceItemsToDraftLines(
     line.services.push({
       service: item.service ?? "",
       unitPrice: String(item.unitPrice),
+      assignments: (item.assignments ?? []).map((a) => ({
+        employeeId: a.employeeId,
+        employeeName: a.employeeName,
+        customUnitCost:
+          a.customUnitCost !== null && a.customUnitCost !== undefined
+            ? String(a.customUnitCost)
+            : "",
+      })),
     });
   }
 
