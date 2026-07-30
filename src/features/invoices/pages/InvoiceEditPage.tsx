@@ -15,6 +15,10 @@ import { fetchFormats, fetchPrices } from "@/db/queries/prices";
 import { OrderHeaderSection } from "@/features/invoices/components/OrderHeaderSection";
 import { OrderLineModal } from "@/features/invoices/components/OrderLineModal";
 import { OrderLinesTable } from "@/features/invoices/components/OrderLinesTable";
+import {
+  OrderWorkTypeSummary,
+  aggregateWorkTypeSummary,
+} from "@/features/invoices/components/OrderWorkTypeSummary";
 import { invoiceItemsToDraftLines } from "@/features/invoices/lib/invoice-to-draft";
 import {
   draftLineSubtotal,
@@ -266,6 +270,18 @@ export function InvoiceEditPage() {
             setLineModalOpen(true);
           }}
           onRemove={(key) => setLines((prev) => prev.filter((l) => l.key !== key))}
+        />
+        <OrderWorkTypeSummary
+          rows={aggregateWorkTypeSummary(
+            lines.flatMap((line) => {
+              const qty = Number.parseInt(line.quantity, 10) || 0;
+              return line.services.map((s) => ({
+                service: s.service,
+                quantity: qty,
+                unitPrice: Number.parseFloat(s.unitPrice.replace(",", ".")) || 0,
+              }));
+            }),
+          )}
         />
       </div>
 

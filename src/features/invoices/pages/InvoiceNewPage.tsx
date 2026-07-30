@@ -19,6 +19,10 @@ import {
 import { OrderHeaderSection } from "@/features/invoices/components/OrderHeaderSection";
 import { OrderLineModal } from "@/features/invoices/components/OrderLineModal";
 import { OrderLinesTable } from "@/features/invoices/components/OrderLinesTable";
+import {
+  OrderWorkTypeSummary,
+  aggregateWorkTypeSummary,
+} from "@/features/invoices/components/OrderWorkTypeSummary";
 import { OrderPaymentSection, type OrderPaymentState } from "@/features/invoices/components/OrderPaymentSection";
 import {
   draftLineSubtotal,
@@ -303,6 +307,18 @@ export function InvoiceNewPage() {
                 formatLabels={formatLabels}
                 onEdit={openEditLine}
                 onRemove={removeLine}
+              />
+              <OrderWorkTypeSummary
+                rows={aggregateWorkTypeSummary(
+                  lines.flatMap((line) => {
+                    const qty = Number.parseInt(line.quantity, 10) || 0;
+                    return line.services.map((s) => ({
+                      service: s.service,
+                      quantity: qty,
+                      unitPrice: Number.parseFloat(s.unitPrice.replace(",", ".")) || 0,
+                    }));
+                  }),
+                )}
               />
             </div>
           </div>
