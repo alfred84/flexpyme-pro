@@ -61,7 +61,10 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Vista detalle de pedido con todos los ítems
 - **Editar pedido**: permitido solo si no está anulado, no está listo y aún no hay trabajo registrado (sin `completed_quantity` ni lotes). Se pueden cambiar cliente, fecha, notas y líneas; los cobros ya hechos se conservan y el saldo se recalcula (no se permite bajar el total por debajo de lo pagado)
 - **Anular pedido**: motivo obligatorio; revierte cobros en caja e inventario descontado; no se permite si está totalmente cobrado; los lotes/nómina históricos se conservan. También disponible desde Facturas
-- **Registrar trabajo** en detalle: vincula empleado + tipo de trabajo con líneas del pedido (lotes en `production_batch_items.invoice_id`)
+- **Asignación de empleados en líneas**: al crear/editar, por cada tipo de trabajo de la línea, botón **Empleados** para seleccionar 1..N trabajadores elegibles (rol primario/secundario con ese tipo de trabajo en Configuración). Tope: N ≤ cantidad de la línea (uno por unidad). Tarifa de pago personalizada opcional por empleado
+- **Resumen por tipo de trabajo**: debajo de las líneas, totales globales (cantidad + importe) agrupados por tipo, independientemente del formato
+- **Status por línea** en Ver pedido: `En producción` | `Listo`; botón para confirmar Listo (modal con empleados, cantidades y tarifas editables → crea `production_batches`). Si todas las líneas están Listo, el pedido pasa a `production_status=listo`. **Marcar listo** en el listado aplica el mismo flujo a todas las líneas pendientes (requiere asignaciones)
+- Se eliminó **Registrar trabajo** del detalle; la asignación ocurre en crear/editar líneas
 - Historial de pedidos por cliente
 
 **Tipos de productos en un pedido (del taller):**
@@ -89,12 +92,13 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
   - **Solo Respaldo**: mismos precios que enmarcado
   - **Impresión**: 5x7-10x15: 5, 12x16/18: 10, 16x20-20x24: 15, 24x32/39: 20, 24x60: 50
 - Registro de lotes de trabajo: fecha, tipo, cantidades por formato y cliente
-- Los lotes pueden vincularse a un **pedido** (`production_batch_items.invoice_id`) al registrar desde el detalle del pedido
-- Cálculo automático del salario a pagar
+- Los lotes pueden vincularse a un **pedido** (`production_batch_items.invoice_id`) al marcar Listo en el detalle (o Marcar listo en listado)
+- Cálculo automático del salario a pagar (tarifa de Precios o personalizada en la asignación del pedido)
 - Historial de pagos al empleado
 - Dar de baja (soft delete, no eliminar)
 - **Multi-rol (v2.5)**: cada empleado tiene un rol principal (`employees.role_id`) y puede tener roles adicionales (`employee_extra_roles`) para cuando cubre otra Área
-- **Nómina diaria (v2.5)**: vista de salario por empleado/día del mes en curso (derivada de `production_batches`), con total, pagado y pendiente; pagar registra el egreso en caja
+- **Nómina diaria (v2.5)**: vista de salario por empleado/día del mes en curso (derivada de `production_batches`), con total, pagado y pendiente
+- **Pago de empleados**: botón en listado que suma lotes del día terminados y pendientes de pago; siempre muestra cuadrícula de denominaciones (default Efectivo + CUP). Pago individual por lote desde el historial del empleado con el mismo modal reutilizable
 
 ### 3.5 Inventario
 - Gestión de materiales/insumos del taller
@@ -127,6 +131,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Tasa de cambio USD → CUP (actualizable desde cabecera o Configuración; histórico de cambios)
 - **Precios** como entrada del sidebar (debajo de Flujo de Caja), no como tab de Configuración. Incluye precios de venta y **tarifas de pago** a trabajadores (antes «Costos»); la ruta legacy `/costos` redirige a `/precios`.
 - **Categorías** de productos (CRUD con `is_system`, snapshot en pedidos)
+- **Roles de empleados**: catálogo `employee_roles`; cada rol puede asociarse a uno o más **tipos de trabajo** (`role_work_types`) que definen qué trabajos pueden realizar los empleados con ese rol (principal o secundario)
 - **Tipos de trabajo, formatos y acabados por categoría**: tablas `category_work_types`, `category_formats` y `category_finishes` (vinculadas a los catálogos `work_types`, `formats` y `finishes`). Catálogo global de acabados en Configuración → Acabados. Al crear líneas se preseleccionan tipos y acabados «por defecto», se limitan formatos asociados y cada tipo se expande en un `invoice_item`.
 - **Unidades** de medida (CRUD con tipo, snapshot en inventario)
 - Formatos disponibles (alta, edición y baja de formatos). Incluye formato base **Sin formato** (0×0) para categorías sin medidas.
@@ -317,7 +322,7 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - **Caja**: denominación CUP **2000** en conteo de billetes.
 - **Nuevo pedido**: encabezado compacto; líneas en tabla + modal CRUD; resumen solo del pedido (sin deuda anterior); cobro integrado al completar encabezado, líneas y método de pago; autocompletado de línea desde lista de precios.
 - **Inventario operativo**: recetas de consumo (`inventory_recipes`); descuento automático al marcar pedido listo; Stock retirado del sidebar (filtro Listos en Pedidos).
-- **Empleados ↔ pedidos**: panel Registrar trabajo en detalle de pedido; `invoice_id` en líneas de lote de producción.
+- **Empleados ↔ pedidos**: asignación de trabajadores en crear/editar líneas; Listo por línea crea lotes (`invoice_id` en `production_batch_items`).
 - **Caja ↔ pedidos**: cobro y anticipo registran `cash_transactions` en la misma transacción al crear el pedido (`initial_payment`); historial de cobros en detalle de pedido; enlaces desde Flujo de Caja al pedido origen.
 
 ### v2.5 — Reenfoque a producción (2026-07-16)
@@ -344,6 +349,13 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - Normas por tipo de trabajo (tabs) + formato/acabado; editar (solo futuros); ver/reactivar desactivadas.
 - Pedidos: norma o materiales manuales por línea (`invoice_item_materials`); salida manual con motivo.
 - **Pedidos: editar / anular** desde detalle (`/pedidos/:id`); anulación con reverso de caja e inventario; edición acotada a pedidos sin trabajo iniciado.
+
+### v2.7 — Roles ↔ trabajos, asignación en líneas y Listo (2026-07)
+- **Roles ↔ tipos de trabajo** (`role_work_types`): configurable en Configuración → Roles.
+- **Asignaciones en líneas** (`invoice_item_assignments`): empleados + tarifa opcional; tope N ≤ cantidad.
+- **Status por línea** (`production_line_status`); confirmar Listo crea lotes; Marcar listo del listado sincroniza todas las líneas.
+- Se retira **Registrar trabajo** del detalle de pedido.
+- **Pago empleados** con `DenominationGrid` (lote individual y pago del día).
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
