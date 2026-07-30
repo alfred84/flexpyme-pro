@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import {
@@ -37,6 +37,57 @@ interface CategoryConfigModalProps {
   category: ProductCategoryDto;
   /** Callback al cerrar el modal. */
   onClose: () => void;
+}
+
+interface SelectAllCheckboxProps {
+  /** True si todas las opciones seleccionables están marcadas. */
+  allSelected: boolean;
+  /** True si hay selección parcial (estado indeterminado). */
+  someSelected: boolean;
+  /** Deshabilita el control mientras hay mutaciones. */
+  disabled?: boolean;
+  /** Clase de color del checkbox (DaisyUI). */
+  checkboxClassName?: string;
+  /**
+   * Alterna selección masiva.
+   *
+   * @param selectAll - `true` marca todas; `false` desmarca todas.
+   */
+  onToggle: (selectAll: boolean) => void;
+}
+
+/**
+ * Checkbox «Todos» en negrita para seleccionar o limpiar un grupo de opciones.
+ *
+ * @param props - Estado de selección y callback de toggle.
+ */
+function SelectAllCheckbox(props: SelectAllCheckboxProps) {
+  const {
+    allSelected,
+    someSelected,
+    disabled,
+    checkboxClassName = "checkbox-primary",
+    onToggle,
+  } = props;
+
+  return (
+    <label className="label cursor-pointer justify-start gap-3 rounded border-b border-base-300 px-1 pb-2 pt-1 hover:bg-base-200">
+      <input
+        ref={(el) => {
+          if (el) {
+            el.indeterminate = someSelected && !allSelected;
+          }
+        }}
+        type="checkbox"
+        className={`checkbox checkbox-sm ${checkboxClassName}`}
+        checked={allSelected}
+        disabled={disabled}
+        onChange={(e) => onToggle(e.target.checked)}
+        aria-label="Seleccionar todos"
+      />
+      <span className="label-text text-sm font-bold">Todos</span>
+    </label>
+  );
 }
 
 /**
@@ -173,23 +224,128 @@ export function CategoryConfigModal(props: CategoryConfigModalProps) {
     onSuccess: () => void invalidateFormats(),
   });
 
-  const workTypeBusy = addWorkType.isPending || removeWorkType.isPending;
-  const formatBusy = addFormat.isPending || removeFormat.isPending;
+  type BulkSection = "workTypes" | "formats" | "finishes";
+  const [bulkBusy, setBulkBusy] = useState<BulkSection | null>(null);
+  const [bulkError, setBulkError] = useState<{ section: BulkSection; message: string } | null>(
+    null,
+  );
+
+  const workTypeBusy = addWorkType.isPending || removeWorkType.isPending || bulkBusy === "workTypes";
+  const formatBusy = addFormat.isPending || removeFormat.isPending || bulkBusy === "formats";
   const finishBusy =
-    addFinish.isPending || removeFinish.isPending || toggleFinishDefault.isPending;
+    addFinish.isPending ||
+    removeFinish.isPending ||
+    toggleFinishDefault.isPending ||
+    bulkBusy === "finishes";
   const workTypeError =
+    (bulkError?.section === "workTypes" ? bulkError.message : null) ??
     (addWorkType.error as Error | null)?.message ??
     (removeWorkType.error as Error | null)?.message ??
     null;
   const formatError =
+    (bulkError?.section === "formats" ? bulkError.message : null) ??
     (addFormat.error as Error | null)?.message ??
     (removeFormat.error as Error | null)?.message ??
     null;
   const finishError =
+    (bulkError?.section === "finishes" ? bulkError.message : null) ??
     (addFinish.error as Error | null)?.message ??
     (removeFinish.error as Error | null)?.message ??
     (toggleFinishDefault.error as Error | null)?.message ??
     null;
+
+  const allWorkTypesSelected =
+    selectableWorkTypes.length > 0 &&
+    selectableWorkTypes.every((wt) => linkedByWorkTypeId.has(wt.id));
+  const someWorkTypesSelected = selectableWorkTypes.some((wt) => linkedByWorkTypeId.has(wt.id));
+  const allFormatsSelected =
+    selectableFormats.length > 0 &&
+    selectableFormats.every((fmt) => linkedByFormatId.has(fmt.id));
+  const someFormatsSelected = selectableFormats.some((fmt) => linkedByFormatId.has(fmt.id));
+  const allFinishesSelected =
+    selectableFinishes.length > 0 &&
+    selectableFinishes.every((finish) => linkedByFinishId.has(finish.id));
+  const someFinishesSelected = selectableFinishes.some((finish) =>
+    linkedByFinishId.has(finish.id),
+  );
+
+  /**
+   * Selecciona o desmarca todos los tipos de trabajo visibles.
+   *
+   * @param selectAll - `true` asocia todos; `false` quita todos.
+   */
+  const toggleAllWorkTypes = async (selectAll: boolean) => {
+    setBulkError(null);
+    setBulkBusy("workTypes");
+    try {
+      if (selectAll) {
+        const missing = selectableWorkTypes.filter((wt) => !linkedByWorkTypeId.has(wt.id));
+        await Promise.all(missing.map((wt) => addCategoryWorkType(category.id, wt.id)));
+      } else {
+        await Promise.all(linkedWorkTypes.map((row) => removeCategoryWorkType(row.id)));
+      }
+      await invalidateWorkTypes();
+    } catch (e) {
+      setBulkError({
+        section: "workTypes",
+        message: e instanceof Error ? e.message : "No se pudo actualizar tipos de trabajo",
+      });
+    } finally {
+      setBulkBusy(null);
+    }
+  };
+
+  /**
+   * Selecciona o desmarca todos los formatos visibles.
+   *
+   * @param selectAll - `true` asocia todos; `false` quita todos.
+   */
+  const toggleAllFormats = async (selectAll: boolean) => {
+    setBulkError(null);
+    setBulkBusy("formats");
+    try {
+      if (selectAll) {
+        const missing = selectableFormats.filter((fmt) => !linkedByFormatId.has(fmt.id));
+        await Promise.all(missing.map((fmt) => addCategoryFormat(category.id, fmt.id)));
+      } else {
+        await Promise.all(linkedFormats.map((row) => removeCategoryFormat(row.id)));
+      }
+      await invalidateFormats();
+    } catch (e) {
+      setBulkError({
+        section: "formats",
+        message: e instanceof Error ? e.message : "No se pudo actualizar formatos",
+      });
+    } finally {
+      setBulkBusy(null);
+    }
+  };
+
+  /**
+   * Selecciona o desmarca todos los acabados visibles.
+   *
+   * @param selectAll - `true` asocia todos; `false` quita todos.
+   */
+  const toggleAllFinishes = async (selectAll: boolean) => {
+    setBulkError(null);
+    setBulkBusy("finishes");
+    try {
+      if (selectAll) {
+        const missing = selectableFinishes.filter((f) => !linkedByFinishId.has(f.id));
+        await Promise.all(missing.map((f) => addCategoryFinish(category.id, f.id, false)));
+      } else {
+        await Promise.all(linkedFinishes.map((row) => deleteCategoryFinish(row.id)));
+      }
+      await invalidateFinishes();
+    } catch (e) {
+      setBulkError({
+        section: "finishes",
+        message: e instanceof Error ? e.message : "No se pudo actualizar acabados",
+      });
+    } finally {
+      setBulkBusy(null);
+    }
+  };
 
   return (
     <ModalPortal>
@@ -239,6 +395,13 @@ export function CategoryConfigModal(props: CategoryConfigModalProps) {
               </p>
             ) : (
               <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-2">
+                <SelectAllCheckbox
+                  allSelected={allWorkTypesSelected}
+                  someSelected={someWorkTypesSelected}
+                  disabled={workTypeBusy}
+                  checkboxClassName="checkbox-primary"
+                  onToggle={(selectAll) => void toggleAllWorkTypes(selectAll)}
+                />
                 {selectableWorkTypes.map((wt) => {
                   const linked = linkedByWorkTypeId.get(wt.id);
                   const checked = linked != null;
@@ -316,6 +479,13 @@ export function CategoryConfigModal(props: CategoryConfigModalProps) {
               </p>
             ) : (
               <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-2">
+                <SelectAllCheckbox
+                  allSelected={allFormatsSelected}
+                  someSelected={someFormatsSelected}
+                  disabled={formatBusy}
+                  checkboxClassName="checkbox-secondary"
+                  onToggle={(selectAll) => void toggleAllFormats(selectAll)}
+                />
                 {selectableFormats.map((fmt) => {
                   const linked = linkedByFormatId.get(fmt.id);
                   const checked = linked != null;
@@ -401,6 +571,13 @@ export function CategoryConfigModal(props: CategoryConfigModalProps) {
               </p>
             ) : (
               <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-2 md:max-w-xl">
+                <SelectAllCheckbox
+                  allSelected={allFinishesSelected}
+                  someSelected={someFinishesSelected}
+                  disabled={finishBusy}
+                  checkboxClassName="checkbox-accent"
+                  onToggle={(selectAll) => void toggleAllFinishes(selectAll)}
+                />
                 {selectableFinishes.map((finish) => {
                   const linked = linkedByFinishId.get(finish.id);
                   const checked = linked != null;
