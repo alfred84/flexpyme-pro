@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { invoke } from "@tauri-apps/api/core";
 import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
@@ -8,11 +9,16 @@ import {
   fetchInvoiceDetail,
   fetchInvoicePaymentHistory,
 } from "@/db/queries/invoices";
+import { ConfirmCompleteWorkModal } from "@/features/invoices/components/ConfirmCompleteWorkModal";
+import {
+  OrderWorkTypeSummary,
+  aggregateWorkTypeSummary,
+} from "@/features/invoices/components/OrderWorkTypeSummary";
 import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 import { popFlashMessage, pushFlashMessage, type FlashMessage } from "@/lib/flash-message";
-import { InvoiceWorkPanel } from "@/features/invoices/components/InvoiceWorkPanel";
+import type { InvoiceItemDto } from "@/types/invoice";
 
 function statusLabel(status: string): string {
   if (status === "paid") {
@@ -28,6 +34,15 @@ function statusLabel(status: string): string {
 }
 
 /**
+ * Etiqueta de status productivo de una línea.
+ *
+ * @param status - `en_produccion` | `listo`.
+ */
+function lineStatusLabel(status: string): string {
+  return status === "listo" ? "Listo" : "En producción";
+}
+
+/**
  * Detalle de pedido con líneas, trabajo, anulación y acceso a edición.
  *
  * @returns Página de detalle de pedido.
@@ -40,11 +55,19 @@ export function InvoiceDetailPage() {
   const [flash] = useState<FlashMessage | null>(() => popFlashMessage());
   const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [listoItem, setListoItem] = useState<InvoiceItemDto | null>(null);
 
   const detailQuery = useQuery({
     queryKey: ["invoices", "detail", invoiceId],
     queryFn: () => fetchInvoiceDetail(invoiceId),
     enabled: Number.isFinite(invoiceId) && invoiceId > 0,
+  });
+  const workTypesQuery = useQuery({
+    queryKey: ["work-types", "active"],
+    queryFn: () =>
+      invoke<{ id: number; name: string; code: string }[]>("get_work_types", {
+        activeOnly: true,
+      }),
   });
   const paymentsQuery = useQuery({
     queryKey: ["invoices", "payments", invoiceId],
@@ -272,11 +295,13 @@ export function InvoiceDetailPage() {
                   <th className="text-right">Realizado</th>
                   <th className="text-right">P. unit.</th>
                   <th className="text-right">Subtotal</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {detailQuery.data?.items.map((line) => {
                   const pending = Math.max(0, line.quantity - line.completedQuantity);
+                  const isListo = (line.productionLineStatus ?? "en_produccion") === "listo";
                   return (
                     <tr key={line.id} className={line.resourceMissing ? "bg-error/10" : undefined}>
                       <td>{line.categoryName}</td>
@@ -291,6 +316,11 @@ export function InvoiceDetailPage() {
                             <AlertTriangle className="h-3 w-3" /> Falta recurso
                           </span>
                         )}
+                        {(line.assignments?.length ?? 0) > 0 && (
+                          <div className="text-xs text-base-content/50">
+                            {line.assignments.map((a) => a.employeeName).join(", ")}
+                          </div>
+                        )}
                       </td>
                       <td>{line.finish ?? "—"}</td>
                       <td className="text-right">{line.quantity}</td>
@@ -304,6 +334,25 @@ export function InvoiceDetailPage() {
                       </td>
                       <td className="text-right">{formatMoney(line.unitPrice)}</td>
                       <td className="text-right">{formatMoney(line.subtotal)}</td>
+                      <td>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span
+                            className={`badge badge-sm ${isListo ? "badge-success" : "badge-warning"}`}
+                          >
+                            {lineStatusLabel(line.productionLineStatus ?? "en_produccion")}
+                          </span>
+                          {!isCancelled && !isListo && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs"
+                              title="Cambiar a Listo"
+                              onClick={() => setListoItem(line)}
+                            >
+                              → Listo
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -311,13 +360,20 @@ export function InvoiceDetailPage() {
             </table>
           </div>
 
-          {!isCancelled && inv && (
-            <InvoiceWorkPanel
-              invoiceId={inv.id}
-              clientId={inv.clientId}
-              items={detailQuery.data?.items ?? []}
-            />
-          )}
+          <OrderWorkTypeSummary
+            rows={aggregateWorkTypeSummary(detailQuery.data?.items ?? [])}
+          />
+
+          <ConfirmCompleteWorkModal
+            open={Boolean(listoItem)}
+            item={listoItem}
+            workTypes={workTypesQuery.data ?? []}
+            onClose={() => setListoItem(null)}
+            onSuccess={() => {
+              void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+              pushFlashMessage({ kind: "success", text: "Línea marcada como listo." });
+            }}
+          />
 
           <div className="card bg-base-100 shadow">
             <div className="card-body">

@@ -12,8 +12,9 @@ import { PaymentStatusBadge, ProductionStatusBadge } from "@/components/invoices
 import {
   cancelInvoice,
   fetchInvoices,
-  updateInvoiceProductionStatus,
+  markInvoiceAllListo,
 } from "@/db/queries/invoices";
+import { todayIso } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 import type { InvoiceListDto } from "@/types/invoice";
@@ -65,11 +66,12 @@ export function InvoicesListPage() {
   });
 
   const markReadyMutation = useMutation({
-    mutationFn: (id: number) => updateInvoiceProductionStatus(id, "listo"),
+    mutationFn: (id: number) => markInvoiceAllListo(id, todayIso()),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["invoices"] }),
         queryClient.invalidateQueries({ queryKey: ["inventory"] }),
+        queryClient.invalidateQueries({ queryKey: ["employees"] }),
       ]);
       pushFlashMessage({ kind: "success", text: "Pedido marcado como listo." });
     },
