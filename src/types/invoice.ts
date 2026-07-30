@@ -94,7 +94,19 @@ export interface InvoiceItemDto {
   completedQuantity: number;
   resourceMissing: boolean;
   resourceNote: string | null;
+  /** Estado productivo de la línea: `en_produccion` | `listo`. */
+  productionLineStatus: string;
   materials: InvoiceItemMaterialDto[];
+  assignments: InvoiceItemAssignmentDto[];
+}
+
+/**
+ * Empleado asignado a una línea de pedido.
+ */
+export interface InvoiceItemAssignmentDto {
+  employeeId: number;
+  employeeName: string;
+  customUnitCost: number | null;
 }
 
 /**
@@ -130,6 +142,16 @@ export interface CreateInvoiceItemPayload {
   unitPrice: number;
   /** Materiales a descontar al concluir la línea (norma o asignación manual). */
   materials?: InvoiceItemMaterialInput[] | null;
+  /** Empleados asignados al tipo de trabajo de la línea. */
+  assignments?: CreateInvoiceItemAssignmentPayload[] | null;
+}
+
+/**
+ * Asignación de empleado al crear/editar un ítem.
+ */
+export interface CreateInvoiceItemAssignmentPayload {
+  employeeId: number;
+  customUnitCost?: number | null;
 }
 
 /**

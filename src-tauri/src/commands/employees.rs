@@ -684,8 +684,99 @@ pub fn work_batches_for_employee(employee_id: i64) -> Result<Vec<WorkBatchDto>, 
 }
 
 /// Marks a work batch as paid and registers the salary as a cash egress.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkBatchPayPayload {
+    pub batch_id: i64,
+    #[serde(default)]
+    pub payment_method: Option<String>,
+    #[serde(default)]
+    pub currency: Option<String>,
+    #[serde(default)]
+    pub denomination_breakdown: Option<String>,
+    #[serde(default)]
+    pub amount_cup: Option<f64>,
+    #[serde(default)]
+    pub amount_usd: Option<f64>,
+    #[serde(default)]
+    pub exchange_rate: Option<f64>,
+}
+
+/// Lote pendiente de pago (resumen para UI de pago).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnpaidBatchDto {
+    pub id: i64,
+    pub employee_id: i64,
+    pub employee_name: String,
+    pub work_type: String,
+    pub date: String,
+    pub total_cost: f64,
+    pub paid: f64,
+    pub pending: f64,
+}
+
+/// Lists unpaid work batches for a given date (default today).
 #[tauri::command]
-pub fn work_batch_pay(batch_id: i64) -> Result<(), String> {
+pub fn work_batches_unpaid_for_date(date: Option<String>) -> Result<Vec<UnpaidBatchDto>, String> {
+    let conn = db::open_connection()?;
+    let day = date
+        .map(|d| d.trim().to_string())
+        .filter(|d| !d.is_empty())
+        .unwrap_or_else(|| {
+            chrono_lite_today()
+        });
+    let mut stmt = conn
+        .prepare(
+            "SELECT pb.id, pb.employee_id, COALESCE(e.name, ''), pb.type, pb.date,
+                    pb.total_cost, pb.paid
+             FROM production_batches pb
+             LEFT JOIN employees e ON e.id = pb.employee_id
+             WHERE pb.status = 'pendiente'
+               AND (pb.total_cost - pb.paid) > 1e-9
+               AND substr(pb.date, 1, 10) = substr(?1, 1, 10)
+             ORDER BY e.name COLLATE NOCASE, pb.id",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![day], |row| {
+            let total: f64 = row.get(5)?;
+            let paid: f64 = row.get(6)?;
+            Ok(UnpaidBatchDto {
+                id: row.get(0)?,
+                employee_id: row.get(1)?,
+                employee_name: row.get(2)?,
+                work_type: row.get(3)?,
+                date: row.get(4)?,
+                total_cost: total,
+                paid,
+                pending: (total - paid).max(0.0),
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+fn chrono_lite_today() -> String {
+    // SQLite date('now') via a short connection-less fallback using local date from OS is fine;
+    // keep ISO YYYY-MM-DD from Rust.
+    use std::time::SystemTime;
+    let _ = SystemTime::now();
+    // Prefer asking SQLite for consistency with the rest of the app.
+    db::open_connection()
+        .ok()
+        .and_then(|c| {
+            c.query_row("SELECT date('now', 'localtime')", [], |row| row.get::<_, String>(0))
+                .ok()
+        })
+        .unwrap_or_else(|| "1970-01-01".to_string())
+}
+
+/// Marks a work batch as paid and registers the salary as a cash egress.
+#[tauri::command]
+pub fn work_batch_pay(payload: WorkBatchPayPayload) -> Result<(), String> {
+    let batch_id = payload.batch_id;
     let mut conn = db::open_connection()?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
@@ -702,6 +793,35 @@ pub fn work_batch_pay(batch_id: i64) -> Result<(), String> {
         return Err("El lote ya está pagado".to_string());
     }
 
+    let method = payload
+        .payment_method
+        .as_deref()
+        .unwrap_or("efectivo")
+        .trim()
+        .to_lowercase();
+    let currency = payload
+        .currency
+        .as_deref()
+        .unwrap_or("CUP")
+        .trim()
+        .to_uppercase();
+    let amount_cup = payload.amount_cup.unwrap_or(remaining);
+    let amount_usd = payload.amount_usd.unwrap_or(0.0);
+    let breakdown = payload
+        .denomination_breakdown
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    if method == "efectivo" && currency == "CUP" {
+        if (amount_cup - remaining).abs() > 0.05 {
+            return Err(format!(
+                "El desglose ({:.2}) debe coincidir con el monto a pagar ({:.2})",
+                amount_cup, remaining
+            ));
+        }
+    }
+
     tx.execute(
         "UPDATE production_batches SET paid = total_cost, status = 'pagado' WHERE id = ?1",
         params![batch_id],
@@ -710,14 +830,116 @@ pub fn work_batch_pay(batch_id: i64) -> Result<(), String> {
 
     tx.execute(
         "INSERT INTO cash_transactions
-            (type, concept, reference_type, reference_id, amount_cup, payment_method, date)
-         VALUES ('egreso', ?1, 'salario', ?2, ?3, 'efectivo', datetime('now'))",
-        params![format!("Pago lote {} ({})", batch_id, work_type), batch_id, remaining],
+            (type, concept, reference_type, reference_id, amount_cup, amount_usd, payment_method, denomination_breakdown, date)
+         VALUES ('egreso', ?1, 'salario', ?2, ?3, ?4, ?5, ?6, datetime('now'))",
+        params![
+            format!("Pago lote {} ({})", batch_id, work_type),
+            batch_id,
+            amount_cup,
+            amount_usd,
+            method,
+            breakdown
+        ],
     )
     .map_err(|e| e.to_string())?;
 
     tx.commit().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Paga varios lotes pendientes en una sola operación de caja (suma + desglose).
+#[tauri::command]
+pub fn work_batches_pay_many(payload: WorkBatchesPayManyPayload) -> Result<(), String> {
+    if payload.batch_ids.is_empty() {
+        return Err("No hay lotes para pagar".to_string());
+    }
+    let mut conn = db::open_connection()?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let mut total_remaining = 0.0_f64;
+    let mut labels = Vec::new();
+    for &batch_id in &payload.batch_ids {
+        let (total_cost, paid, work_type): (f64, f64, String) = tx
+            .query_row(
+                "SELECT total_cost, paid, type FROM production_batches WHERE id = ?1",
+                params![batch_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .map_err(|_| format!("Lote {} no encontrado", batch_id))?;
+        let remaining = (total_cost - paid).max(0.0);
+        if remaining <= 1e-9 {
+            return Err(format!("El lote {} ya está pagado", batch_id));
+        }
+        total_remaining += remaining;
+        labels.push(format!("{} ({})", batch_id, work_type));
+    }
+
+    let method = payload
+        .payment_method
+        .as_deref()
+        .unwrap_or("efectivo")
+        .trim()
+        .to_lowercase();
+    let currency = payload
+        .currency
+        .as_deref()
+        .unwrap_or("CUP")
+        .trim()
+        .to_uppercase();
+    let amount_cup = payload.amount_cup.unwrap_or(total_remaining);
+    let amount_usd = payload.amount_usd.unwrap_or(0.0);
+    let breakdown = payload
+        .denomination_breakdown
+        .as_ref()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    if method == "efectivo" && currency == "CUP" {
+        if (amount_cup - total_remaining).abs() > 0.05 {
+            return Err(format!(
+                "El desglose ({:.2}) debe coincidir con el monto a pagar ({:.2})",
+                amount_cup, total_remaining
+            ));
+        }
+    }
+
+    for &batch_id in &payload.batch_ids {
+        tx.execute(
+            "UPDATE production_batches SET paid = total_cost, status = 'pagado' WHERE id = ?1",
+            params![batch_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    let concept = format!("Pago empleados lotes: {}", labels.join(", "));
+    // reference_id = first batch for traceability
+    let ref_id = payload.batch_ids[0];
+    tx.execute(
+        "INSERT INTO cash_transactions
+            (type, concept, reference_type, reference_id, amount_cup, amount_usd, payment_method, denomination_breakdown, date)
+         VALUES ('egreso', ?1, 'salario', ?2, ?3, ?4, ?5, ?6, datetime('now'))",
+        params![concept, ref_id, amount_cup, amount_usd, method, breakdown],
+    )
+    .map_err(|e| e.to_string())?;
+
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkBatchesPayManyPayload {
+    pub batch_ids: Vec<i64>,
+    #[serde(default)]
+    pub payment_method: Option<String>,
+    #[serde(default)]
+    pub currency: Option<String>,
+    #[serde(default)]
+    pub denomination_breakdown: Option<String>,
+    #[serde(default)]
+    pub amount_cup: Option<f64>,
+    #[serde(default)]
+    pub amount_usd: Option<f64>,
 }
 
 /// Lists the extra roles assigned to an employee.

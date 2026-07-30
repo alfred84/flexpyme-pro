@@ -58,7 +58,7 @@ pub struct InvoiceHeaderDto {
 }
 
 /// Invoice line with joined labels.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceItemDto {
     pub id: i64,
@@ -74,11 +74,30 @@ pub struct InvoiceItemDto {
     pub completed_quantity: i64,
     pub resource_missing: bool,
     pub resource_note: Option<String>,
+    pub production_line_status: String,
     pub materials: Vec<InvoiceItemMaterialDto>,
+    pub assignments: Vec<InvoiceItemAssignmentDto>,
 }
 
-/// Material fijado en una línea de pedido.
-#[derive(Debug, Serialize, Deserialize)]
+/// Empleado asignado a una l?nea de pedido.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceItemAssignmentDto {
+    pub employee_id: i64,
+    pub employee_name: String,
+    pub custom_unit_cost: Option<f64>,
+}
+
+/// Asignaci?n entrante al crear/editar pedido.
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceItemAssignmentInput {
+    pub employee_id: i64,
+    pub custom_unit_cost: Option<f64>,
+}
+
+/// Material fijado en una l?nea de pedido.
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceItemMaterialDto {
     pub inventory_item_id: i64,
@@ -108,6 +127,8 @@ pub struct CreateInvoiceItemPayload {
     pub quantity: i64,
     pub unit_price: f64,
     pub materials: Option<Vec<crate::commands::inventory::InvoiceItemMaterialInput>>,
+    #[serde(default)]
+    pub assignments: Option<Vec<InvoiceItemAssignmentInput>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -166,6 +187,113 @@ fn trim_optional(value: &Option<String>) -> Option<String> {
     })
 }
 
+/// Valida y persiste asignaciones de empleados a una l?nea de pedido.
+fn insert_invoice_item_assignments(
+    tx: &rusqlite::Transaction<'_>,
+    invoice_item_id: i64,
+    quantity: i64,
+    service: &Option<String>,
+    assignments: &[InvoiceItemAssignmentInput],
+) -> Result<(), String> {
+    if assignments.is_empty() {
+        return Ok(());
+    }
+    if assignments.len() as i64 > quantity {
+        return Err(format!(
+            "No se pueden asignar m?s de {} empleado(s) para la cantidad de la l?nea",
+            quantity
+        ));
+    }
+    let mut seen = std::collections::HashSet::new();
+    for a in assignments {
+        if !seen.insert(a.employee_id) {
+            return Err("Empleado duplicado en la asignaci?n de la l?nea".to_string());
+        }
+        if let Some(cost) = a.custom_unit_cost {
+            if cost < 0.0 {
+                return Err("La tarifa personalizada no puede ser negativa".to_string());
+            }
+        }
+        let active: i64 = tx
+            .query_row(
+                "SELECT COUNT(*) FROM employees WHERE id = ?1 AND is_active = 1 AND deleted_at IS NULL",
+                params![a.employee_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if active == 0 {
+            return Err(format!(
+                "El empleado {} no est? activo o no existe",
+                a.employee_id
+            ));
+        }
+        if let Some(svc) = service {
+            let eligible: i64 = tx
+                .query_row(
+                    "SELECT COUNT(*) FROM employees e
+                     WHERE e.id = ?1 AND e.is_active = 1 AND e.deleted_at IS NULL
+                       AND (
+                         EXISTS (
+                           SELECT 1 FROM role_work_types rwt
+                           JOIN work_types wt ON wt.id = rwt.work_type_id
+                           WHERE rwt.role_id = e.role_id
+                             AND (lower(wt.name) = lower(?2) OR lower(wt.code) = lower(?2))
+                         )
+                         OR EXISTS (
+                           SELECT 1 FROM employee_extra_roles eer
+                           JOIN role_work_types rwt2 ON rwt2.role_id = eer.role_id
+                           JOIN work_types wt2 ON wt2.id = rwt2.work_type_id
+                           WHERE eer.employee_id = e.id
+                             AND (lower(wt2.name) = lower(?2) OR lower(wt2.code) = lower(?2))
+                         )
+                       )",
+                    params![a.employee_id, svc],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            if eligible == 0 {
+                return Err(format!(
+                    "El empleado {} no tiene un rol asociado al tipo de trabajo ?{}?",
+                    a.employee_id, svc
+                ));
+            }
+        }
+        tx.execute(
+            "INSERT INTO invoice_item_assignments (invoice_item_id, employee_id, custom_unit_cost)
+             VALUES (?1, ?2, ?3)",
+            params![invoice_item_id, a.employee_id, a.custom_unit_cost],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn load_item_assignments(
+    conn: &rusqlite::Connection,
+    invoice_item_id: i64,
+) -> Result<Vec<InvoiceItemAssignmentDto>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT a.employee_id, e.name, a.custom_unit_cost
+             FROM invoice_item_assignments a
+             JOIN employees e ON e.id = a.employee_id
+             WHERE a.invoice_item_id = ?1
+             ORDER BY e.name COLLATE NOCASE",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![invoice_item_id], |row| {
+            Ok(InvoiceItemAssignmentDto {
+                employee_id: row.get(0)?,
+                employee_name: row.get(1)?,
+                custom_unit_cost: row.get(2)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
 fn compute_invoice_status(balance: f64, paid: f64) -> String {
     const EPS: f64 = 1e-6;
     if balance <= EPS {
@@ -177,7 +305,7 @@ fn compute_invoice_status(balance: f64, paid: f64) -> String {
     }
 }
 
-/// Evalúa si un pedido puede editarse (aún sin trabajo de producción).
+/// Eval?a si un pedido puede editarse (a?n sin trabajo de producci?n).
 fn invoice_editability(
     tx: &rusqlite::Transaction<'_>,
     invoice_id: i64,
@@ -191,7 +319,7 @@ fn invoice_editability(
         )
         .map_err(|_| "Pedido no encontrado".to_string())?;
     if cancelled_at.is_some() {
-        return Ok((false, Some("El pedido está anulado.".to_string())));
+        return Ok((false, Some("El pedido est? anulado.".to_string())));
     }
     if production_status == "listo" {
         return Ok((
@@ -209,7 +337,7 @@ fn invoice_editability(
     if completed > 0 {
         return Ok((
             false,
-            Some("Ya hay trabajo registrado en líneas del pedido.".to_string()),
+            Some("Ya hay trabajo registrado en l?neas del pedido.".to_string()),
         ));
     }
     let batches: i64 = tx
@@ -228,7 +356,7 @@ fn invoice_editability(
     Ok((true, None))
 }
 
-/// Evalúa editabilidad sobre una conexión (solo lectura).
+/// Eval?a editabilidad sobre una conexi?n (solo lectura).
 fn evaluate_editability_conn(
     conn: &rusqlite::Connection,
     invoice_id: i64,
@@ -242,7 +370,7 @@ fn evaluate_editability_conn(
         )
         .map_err(|_| "Pedido no encontrado".to_string())?;
     if cancelled_at.is_some() {
-        return Ok((false, Some("El pedido está anulado.".to_string())));
+        return Ok((false, Some("El pedido est? anulado.".to_string())));
     }
     if production_status == "listo" {
         return Ok((
@@ -260,7 +388,7 @@ fn evaluate_editability_conn(
     if completed > 0 {
         return Ok((
             false,
-            Some("Ya hay trabajo registrado en líneas del pedido.".to_string()),
+            Some("Ya hay trabajo registrado en l?neas del pedido.".to_string()),
         ));
     }
     let batches: i64 = conn
@@ -423,7 +551,7 @@ fn sync_legacy_status(production: &str, payment: &str, balance: f64, paid: f64) 
 pub fn invoices_update_production_status(id: i64, status: String) -> Result<InvoiceHeaderDto, String> {
     let status = status.trim().to_lowercase();
     if status != "en_produccion" && status != "listo" {
-        return Err("Estado de producción inválido".to_string());
+        return Err("Estado de producci?n inv?lido".to_string());
     }
     let mut conn = db::open_connection()?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -438,7 +566,7 @@ pub fn invoices_update_production_status(id: i64, status: String) -> Result<Invo
     let legacy = sync_legacy_status(&status, &payment_status, balance, paid);
 
     if status == "listo" {
-        // El inventario se descuenta por línea concluida (vía lotes de trabajo),
+        // El inventario se descuenta por l?nea concluida (v?a lotes de trabajo),
         // no al marcar todo el pedido listo. Ver `deduct_inventory_for_line`.
         tx.execute(
             "UPDATE invoices SET production_status = ?1, status = ?2,
@@ -464,7 +592,7 @@ pub fn invoices_update_production_status(id: i64, status: String) -> Result<Invo
 pub fn invoices_update_payment_status(id: i64, status: String) -> Result<InvoiceHeaderDto, String> {
     let status = status.trim().to_lowercase();
     if status != "pendiente" && status != "cobrado" {
-        return Err("Estado de cobro inválido".to_string());
+        return Err("Estado de cobro inv?lido".to_string());
     }
     let conn = db::open_connection()?;
     let (balance, paid, production_status): (f64, f64, String) = conn
@@ -535,7 +663,8 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                     ii.format_id,
                     COALESCE(ii.format_label_snapshot, f.label) AS format_label,
                     ii.finish, ii.service, ii.quantity, ii.unit_price, ii.subtotal, ii.completed_quantity,
-                    ii.resource_missing, ii.resource_note
+                    ii.resource_missing, ii.resource_note,
+                    COALESCE(ii.production_line_status, 'en_produccion')
              FROM invoice_items ii
              JOIN product_categories pc ON pc.id = ii.category_id
              LEFT JOIN formats f ON f.id = ii.format_id
@@ -559,7 +688,9 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                 completed_quantity: row.get(10)?,
                 resource_missing: row.get::<_, i64>(11)? != 0,
                 resource_note: row.get(12)?,
+                production_line_status: row.get(13)?,
                 materials: Vec::new(),
+                assignments: Vec::new(),
             })
         })
         .map_err(|e| e.to_string())?
@@ -585,6 +716,7 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
             .map_err(|e| e.to_string())?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?;
+        item.assignments = load_item_assignments(&conn, item.id)?;
     }
 
     let can_cancel = header.cancelled_at.is_none()
@@ -657,14 +789,14 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
 
     let payment_method = payload.payment_method.trim().to_lowercase();
     if payment_method != "efectivo" && payment_method != "transferencia" {
-        return Err("Método de pago inválido".to_string());
+        return Err("M?todo de pago inv?lido".to_string());
     }
     let mut payment_currency = payload.payment_currency.trim().to_uppercase();
     if payment_method == "transferencia" {
         payment_currency = "CUP".to_string();
     }
     if payment_currency != "CUP" && payment_currency != "USD" {
-        return Err("Moneda de pago inválida".to_string());
+        return Err("Moneda de pago inv?lida".to_string());
     }
     let exchange_rate = if payment_currency == "USD" {
         if payload.exchange_rate_snapshot <= 0.0 {
@@ -774,6 +906,15 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
                 )?;
             }
         }
+        if let Some(ref assignments) = item.assignments {
+            insert_invoice_item_assignments(
+                &tx,
+                invoice_item_id,
+                item.quantity,
+                &service,
+                assignments,
+            )?;
+        }
     }
 
     tx.execute(
@@ -802,19 +943,19 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
     })
 }
 
-/// Actualiza cliente, fecha, notas y líneas de un pedido editable.
+/// Actualiza cliente, fecha, notas y l?neas de un pedido editable.
 #[tauri::command]
 pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto, String> {
     if payload.items.is_empty() {
-        return Err("El pedido debe tener al menos una línea".to_string());
+        return Err("El pedido debe tener al menos una l?nea".to_string());
     }
     let date_trim = payload.date.trim().to_string();
     if date_trim.len() < 4 {
-        return Err("Fecha inválida".to_string());
+        return Err("Fecha inv?lida".to_string());
     }
     for item in &payload.items {
         if item.quantity <= 0 {
-            return Err("Cada línea debe tener cantidad mayor que cero".to_string());
+            return Err("Cada l?nea debe tener cantidad mayor que cero".to_string());
         }
         if item.unit_price < 0.0 {
             return Err("El precio unitario no puede ser negativo".to_string());
@@ -856,7 +997,7 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
     let balance = total - paid;
     if balance < -EPS {
         return Err(
-            "El nuevo total es menor que lo ya cobrado. Ajusta las líneas o registra un ajuste en caja."
+            "El nuevo total es menor que lo ya cobrado. Ajusta las l?neas o registra un ajuste en caja."
                 .to_string(),
         );
     }
@@ -866,6 +1007,12 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
 
     tx.execute(
         "DELETE FROM invoice_item_materials
+         WHERE invoice_item_id IN (SELECT id FROM invoice_items WHERE invoice_id = ?1)",
+        params![payload.id],
+    )
+    .map_err(|e| e.to_string())?;
+    tx.execute(
+        "DELETE FROM invoice_item_assignments
          WHERE invoice_item_id IN (SELECT id FROM invoice_items WHERE invoice_id = ?1)",
         params![payload.id],
     )
@@ -918,6 +1065,15 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
                 )?;
             }
         }
+        if let Some(ref assignments) = item.assignments {
+            insert_invoice_item_assignments(
+                &tx,
+                invoice_item_id,
+                item.quantity,
+                &service,
+                assignments,
+            )?;
+        }
     }
 
     tx.execute(
@@ -965,7 +1121,7 @@ pub async fn export_invoice_pdf(app: tauri::AppHandle, id: i64) -> Result<String
         .add_filter("PDF", &["pdf"])
         .set_file_name(format!("{}.pdf", inv.invoice_number))
         .blocking_save_file()
-        .ok_or_else(|| "Exportación cancelada".to_string())?;
+        .ok_or_else(|| "Exportaci?n cancelada".to_string())?;
     let path = dest.into_path().map_err(|e| e.to_string())?;
 
     let (doc, page1, layer1) =
@@ -1111,7 +1267,7 @@ pub fn get_invoice_metrics() -> Result<InvoiceMetricsDto, String> {
 pub fn cancel_invoice(invoice_id: i64, reason: String) -> Result<InvoiceHeaderDto, String> {
     let reason = reason.trim().to_string();
     if reason.is_empty() {
-        return Err("El motivo de anulación es obligatorio".to_string());
+        return Err("El motivo de anulaci?n es obligatorio".to_string());
     }
     let mut conn = db::open_connection()?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -1130,7 +1286,7 @@ pub fn cancel_invoice(invoice_id: i64, reason: String) -> Result<InvoiceHeaderDt
         )
         .map_err(|_| "Factura no encontrada".to_string())?;
     if cancelled_at.is_some() {
-        return Err("La factura ya está anulada".to_string());
+        return Err("La factura ya est? anulada".to_string());
     }
     if payment_status == "cobrado" && balance <= EPS {
         return Err("No se puede anular una factura totalmente cobrada".to_string());
@@ -1169,7 +1325,7 @@ pub fn cancel_invoice(invoice_id: i64, reason: String) -> Result<InvoiceHeaderDt
                 (type, concept, reference_type, reference_id, amount_cup, amount_usd, exchange_rate, payment_method, date)
              VALUES ('egreso', ?1, 'pedido', ?2, ?3, ?4, ?5, ?6, datetime('now'))",
             params![
-                format!("Reverso anulación {}", invoice_number),
+                format!("Reverso anulaci?n {}", invoice_number),
                 invoice_id,
                 amount_cup,
                 amount_usd,
@@ -1220,3 +1376,331 @@ pub fn cancel_invoice(invoice_id: i64, reason: String) -> Result<InvoiceHeaderDt
     invoices_get_detail(invoice_id).map(|d| d.invoice)
 }
 
+/// Fila de trabajador al marcar una linea como listo.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkListoWorkerPayload {
+    pub employee_id: i64,
+    pub quantity: i64,
+    pub unit_cost: f64,
+}
+
+/// Payload para marcar una linea de pedido como listo (crea lotes).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkInvoiceItemListoPayload {
+    pub invoice_item_id: i64,
+    pub date: String,
+    pub workers: Vec<MarkListoWorkerPayload>,
+}
+
+fn resolve_work_type_for_service(
+    tx: &rusqlite::Transaction<'_>,
+    service: &str,
+) -> Result<(i64, String, String), String> {
+    tx.query_row(
+        "SELECT id, code, name FROM work_types
+         WHERE is_active = 1
+           AND (lower(name) = lower(?1) OR lower(code) = lower(?1))
+         LIMIT 1",
+        params![service],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )
+    .map_err(|_| format!("No se encontro el tipo de trabajo '{}' en el catalogo", service))
+}
+
+fn sync_invoice_production_status_from_lines(
+    tx: &rusqlite::Transaction<'_>,
+    invoice_id: i64,
+) -> Result<(), String> {
+    let pending: i64 = tx
+        .query_row(
+            "SELECT COUNT(*) FROM invoice_items
+             WHERE invoice_id = ?1
+               AND COALESCE(production_line_status, 'en_produccion') != 'listo'",
+            params![invoice_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if pending == 0 {
+        tx.execute(
+            "UPDATE invoices
+             SET production_status = 'listo', production_completed_at = datetime('now')
+             WHERE id = ?1 AND cancelled_at IS NULL",
+            params![invoice_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn default_unit_cost_for_item(
+    conn: &rusqlite::Connection,
+    service: &str,
+    format_id: Option<i64>,
+) -> f64 {
+    conn.query_row(
+        "SELECT cl.unit_cost FROM cost_list cl
+         JOIN work_types wt ON (cl.work_type = wt.code OR lower(cl.work_type) = lower(wt.name))
+         WHERE wt.is_active = 1 AND cl.is_active = 1
+           AND (lower(wt.name) = lower(?1) OR lower(wt.code) = lower(?1))
+           AND (cl.format_id = ?2 OR (?2 IS NULL AND cl.format_id IS NULL))
+         ORDER BY cl.id DESC LIMIT 1",
+        params![service, format_id],
+        |row| row.get(0),
+    )
+    .unwrap_or(0.0)
+}
+
+/// Marca una linea como listo creando un lote por cada trabajador confirmado.
+#[tauri::command]
+pub fn invoice_item_mark_listo(payload: MarkInvoiceItemListoPayload) -> Result<InvoiceDetailDto, String> {
+    if payload.workers.is_empty() {
+        return Err("Debes indicar al menos un empleado para marcar listo".to_string());
+    }
+    let date = payload.date.trim().to_string();
+    if date.len() < 4 {
+        return Err("Fecha invalida".to_string());
+    }
+    let total_qty: i64 = payload.workers.iter().map(|w| w.quantity).sum();
+    if total_qty <= 0 {
+        return Err("La cantidad total debe ser mayor que cero".to_string());
+    }
+
+    let mut conn = db::open_connection()?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let (invoice_id, client_id, service, quantity, completed, format_id, category_id, finish, status, invoice_number): (
+        i64, i64, Option<String>, i64, i64, Option<i64>, i64, Option<String>, String, String,
+    ) = tx
+        .query_row(
+            "SELECT ii.invoice_id, i.client_id, ii.service, ii.quantity, ii.completed_quantity,
+                    ii.format_id, ii.category_id, ii.finish,
+                    COALESCE(ii.production_line_status, 'en_produccion'), i.invoice_number
+             FROM invoice_items ii
+             JOIN invoices i ON i.id = ii.invoice_id
+             WHERE ii.id = ?1 AND i.deleted_at IS NULL AND i.cancelled_at IS NULL",
+            params![payload.invoice_item_id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
+                ))
+            },
+        )
+        .map_err(|_| "Linea de pedido no encontrada".to_string())?;
+
+    if status == "listo" {
+        return Err("Esta linea ya esta marcada como listo".to_string());
+    }
+    let pending = (quantity - completed).max(0);
+    if total_qty > pending {
+        return Err(format!(
+            "La cantidad asignada ({}) supera lo pendiente ({})",
+            total_qty, pending
+        ));
+    }
+    if (payload.workers.len() as i64) > quantity {
+        return Err(format!(
+            "No se pueden asignar mas de {} empleado(s) para esta linea",
+            quantity
+        ));
+    }
+
+    let service_name = service.clone().unwrap_or_default();
+    if service_name.trim().is_empty() {
+        return Err("La linea no tiene tipo de trabajo".to_string());
+    }
+    let (work_type_id, work_code, work_name) =
+        resolve_work_type_for_service(&tx, service_name.trim())?;
+
+    let mut seen = std::collections::HashSet::new();
+    for w in &payload.workers {
+        if w.quantity <= 0 {
+            return Err("Cada trabajador debe tener cantidad mayor que cero".to_string());
+        }
+        if w.unit_cost < 0.0 {
+            return Err("La tarifa no puede ser negativa".to_string());
+        }
+        if !seen.insert(w.employee_id) {
+            return Err("Empleado duplicado en la confirmacion".to_string());
+        }
+        let active: i64 = tx
+            .query_row(
+                "SELECT COUNT(*) FROM employees WHERE id = ?1 AND is_active = 1 AND deleted_at IS NULL",
+                params![w.employee_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if active == 0 {
+            return Err(format!("Empleado {} no activo", w.employee_id));
+        }
+    }
+
+    for w in &payload.workers {
+        let batch_cost = w.unit_cost * w.quantity as f64;
+        tx.execute(
+            "INSERT INTO production_batches (type, work_type_id, work_type_snapshot, date, employee_id, total_cost, paid, status, notes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 'pendiente', ?7)",
+            params![
+                work_code,
+                work_type_id,
+                work_name,
+                date,
+                w.employee_id,
+                batch_cost,
+                format!("Pedido {} linea {}", invoice_number, payload.invoice_item_id)
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        let batch_id = tx.last_insert_rowid();
+        tx.execute(
+            "INSERT INTO production_batch_items
+                (batch_id, client_id, format_id, category, quantity, unit_cost, subtotal, invoice_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                batch_id,
+                client_id,
+                format_id,
+                service_name.trim(),
+                w.quantity,
+                w.unit_cost,
+                batch_cost,
+                invoice_id
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    tx.execute(
+        "UPDATE invoice_items
+         SET completed_quantity = completed_quantity + ?1,
+             completed_at = datetime('now'),
+             production_line_status = 'listo'
+         WHERE id = ?2",
+        params![total_qty, payload.invoice_item_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let service_filter = if service_name.trim().is_empty() {
+        None
+    } else {
+        Some(service_name.as_str())
+    };
+    let deficit = crate::commands::inventory::deduct_inventory_for_line(
+        &tx,
+        invoice_id,
+        &invoice_number,
+        payload.invoice_item_id,
+        category_id,
+        service_filter,
+        format_id,
+        finish.as_deref(),
+        total_qty,
+    )?;
+    if !deficit.is_empty() {
+        let note = format!("Recurso insuficiente: {}", deficit.join(", "));
+        tx.execute(
+            "UPDATE invoice_items SET resource_missing = 1, resource_note = ?1 WHERE id = ?2",
+            params![note, payload.invoice_item_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    tx.execute(
+        "UPDATE invoices SET resource_missing = (
+             SELECT CASE WHEN EXISTS (
+                 SELECT 1 FROM invoice_items
+                 WHERE invoice_id = ?1 AND resource_missing = 1
+             ) THEN 1 ELSE 0 END
+         ) WHERE id = ?1",
+        params![invoice_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    sync_invoice_production_status_from_lines(&tx, invoice_id)?;
+    tx.commit().map_err(|e| e.to_string())?;
+    invoices_get_detail(invoice_id)
+}
+
+/// Marca todas las lineas pendientes como listo (1 unidad por empleado; resto al ultimo).
+#[tauri::command]
+pub fn invoice_mark_all_listo(invoice_id: i64, date: String) -> Result<InvoiceDetailDto, String> {
+    let date = date.trim().to_string();
+    if date.len() < 4 {
+        return Err("Fecha invalida".to_string());
+    }
+    let detail = invoices_get_detail(invoice_id)?;
+    if detail.invoice.cancelled_at.is_some() {
+        return Err("El pedido esta anulado".to_string());
+    }
+    if detail.invoice.production_status == "listo" {
+        return Err("El pedido ya esta listo".to_string());
+    }
+
+    let pending_items: Vec<_> = detail
+        .items
+        .iter()
+        .filter(|i| i.production_line_status != "listo")
+        .cloned()
+        .collect();
+    if pending_items.is_empty() {
+        return Err("No hay lineas pendientes".to_string());
+    }
+    for item in &pending_items {
+        if item.assignments.is_empty() {
+            return Err(format!(
+                "La linea '{}' no tiene empleados asignados. Edita el pedido y asignalos antes de marcar listo.",
+                item.service.clone().unwrap_or_else(|| format!("#{}", item.id))
+            ));
+        }
+    }
+
+    let conn = db::open_connection()?;
+    for item in pending_items {
+        let pending = (item.quantity - item.completed_quantity).max(0);
+        if pending <= 0 {
+            continue;
+        }
+        let service = item.service.clone().unwrap_or_default();
+        let default_cost = default_unit_cost_for_item(&conn, &service, item.format_id);
+        let n = item.assignments.len();
+        let mut remaining = pending;
+        let mut workers: Vec<MarkListoWorkerPayload> = Vec::new();
+        for (idx, a) in item.assignments.iter().enumerate() {
+            let is_last = idx + 1 == n;
+            let qty = if is_last {
+                remaining
+            } else {
+                let q = 1i64.min(remaining);
+                remaining -= q;
+                q
+            };
+            if qty <= 0 {
+                continue;
+            }
+            workers.push(MarkListoWorkerPayload {
+                employee_id: a.employee_id,
+                quantity: qty,
+                unit_cost: a.custom_unit_cost.unwrap_or(default_cost),
+            });
+        }
+        if workers.is_empty() {
+            return Err(format!("No se pudo repartir cantidad en la linea '{}'", service));
+        }
+        invoice_item_mark_listo(MarkInvoiceItemListoPayload {
+            invoice_item_id: item.id,
+            date: date.clone(),
+            workers,
+        })?;
+    }
+    invoices_get_detail(invoice_id)
+}

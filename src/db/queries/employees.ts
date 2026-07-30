@@ -82,10 +82,56 @@ export async function fetchWorkBatchesForInvoice(invoiceId: number): Promise<Inv
 }
 
 /**
- * Marks a work batch as paid (registers cash egress).
+ * Marks a work batch as paid (registers cash egress with optional denominations).
+ *
+ * @param payload - Id del lote y datos de caja.
  */
-export async function payWorkBatch(batchId: number): Promise<void> {
-  return invoke<void>("work_batch_pay", { batchId });
+export async function payWorkBatch(payload: {
+  batchId: number;
+  paymentMethod?: string;
+  currency?: string;
+  denominationBreakdown?: string | null;
+  amountCup?: number;
+  amountUsd?: number;
+}): Promise<void> {
+  return invoke<void>("work_batch_pay", { payload });
+}
+
+/** Lote pendiente de pago. */
+export interface UnpaidBatchDto {
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  workType: string;
+  date: string;
+  totalCost: number;
+  paid: number;
+  pending: number;
+}
+
+/**
+ * Lista lotes pendientes de pago para una fecha (por defecto hoy).
+ *
+ * @param date - Fecha ISO opcional.
+ */
+export async function fetchUnpaidBatchesForDate(date?: string): Promise<UnpaidBatchDto[]> {
+  return invoke<UnpaidBatchDto[]>("work_batches_unpaid_for_date", { date: date ?? null });
+}
+
+/**
+ * Paga varios lotes en un solo egreso de caja.
+ *
+ * @param payload - Ids de lotes y desglose.
+ */
+export async function payWorkBatchesMany(payload: {
+  batchIds: number[];
+  paymentMethod?: string;
+  currency?: string;
+  denominationBreakdown?: string | null;
+  amountCup?: number;
+  amountUsd?: number;
+}): Promise<void> {
+  return invoke<void>("work_batches_pay_many", { payload });
 }
 
 /**

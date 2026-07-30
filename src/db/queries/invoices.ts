@@ -74,6 +74,41 @@ export async function updateInvoiceProductionStatus(id: number, status: string):
 }
 
 /**
+ * Trabajador confirmado al marcar una línea como listo.
+ */
+export interface MarkListoWorkerPayload {
+  employeeId: number;
+  quantity: number;
+  unitCost: number;
+}
+
+/**
+ * Marca una línea de pedido como listo creando lotes de producción.
+ *
+ * @param payload - Línea, fecha y trabajadores con cantidades/tarifas.
+ */
+export async function markInvoiceItemListo(payload: {
+  invoiceItemId: number;
+  date: string;
+  workers: MarkListoWorkerPayload[];
+}): Promise<InvoiceDetailDto> {
+  return invoke<InvoiceDetailDto>("invoice_item_mark_listo", { payload });
+}
+
+/**
+ * Marca todas las líneas pendientes del pedido como listo (defaults).
+ *
+ * @param invoiceId - Id del pedido.
+ * @param date - Fecha de los lotes.
+ */
+export async function markInvoiceAllListo(
+  invoiceId: number,
+  date: string,
+): Promise<InvoiceDetailDto> {
+  return invoke<InvoiceDetailDto>("invoice_mark_all_listo", { invoiceId, date });
+}
+
+/**
  * Actualiza el estado de cobro del pedido.
  */
 export async function updateInvoicePaymentStatus(id: number, status: string): Promise<InvoiceHeaderDto> {
