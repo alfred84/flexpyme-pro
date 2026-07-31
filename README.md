@@ -118,7 +118,7 @@ Si la migración falla por tablas duplicadas, borra `.local/flexpyme.db` y vuelv
 En **Configuración > Backup**:
 
 - Crear respaldo manual con nombre `flexpyme-backup-manual-YYYYMMDD-HHMMSS.db`.
-- Configurar backup automático cada N días (por defecto 5).
+- Configurar backup automático cada N días (por defecto 1, alineado a cierres diarios).
 - Ver los últimos 5 backups también visibles desde Inicio.
 - Restaurar/importar una BD `.db` compatible. La app valida integridad y esquema, crea un respaldo previo y reemplaza la BD activa conservando el nombre `flexpyme.db`.
 

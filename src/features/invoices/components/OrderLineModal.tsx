@@ -13,6 +13,7 @@ import {
   type DraftMaterialMode,
   type DraftServiceAssignment,
 } from "@/features/invoices/lib/order-draft";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import { formatMoney } from "@/lib/format-money";
 import type {
   CategoryFinishDto,
@@ -191,12 +192,13 @@ export function OrderLineModal(props: OrderLineModalProps) {
     onClose,
     onSave,
   } = props;
+  const { usdExchangeRate } = useAppSettings();
   const [draft, setDraft] = useState<DraftLine | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [employeesForService, setEmployeesForService] = useState<string | null>(null);
 
   /**
-   * Construye la lista de tipos de trabajo preseleccionados con su precio.
+   * Construye la lista de tipos de trabajo preseleccionados con su precio en CUP.
    */
   const buildDefaultWorkTypes = (
     categoryId: number,
@@ -206,7 +208,14 @@ export function OrderLineModal(props: OrderLineModalProps) {
     const options = workTypeOptionsFor(categoryWorkTypes, prices, categoryId, formatId);
     const defaults = options.filter((o) => o.isDefault);
     return defaults.map((o) => {
-      const price = resolveServicePrice(prices, categoryId, formatId, o.name, finish);
+      const price = resolveServicePrice(
+        prices,
+        categoryId,
+        formatId,
+        o.name,
+        finish,
+        usdExchangeRate,
+      );
       return {
         service: o.name,
         unitPrice: price !== null ? String(price) : "",
@@ -273,7 +282,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
 
   const hasConfiguredWorkTypes = workTypeOptions.length > 0;
 
-  /** Recalcula el precio de los tipos seleccionados tras cambiar formato/acabado. */
+  /** Recalcula el precio (CUP) de los tipos seleccionados tras cambiar formato/acabado. */
   const recalcWorkTypePrices = (
     services: DraftLineService[],
     categoryId: number,
@@ -281,7 +290,14 @@ export function OrderLineModal(props: OrderLineModalProps) {
     finish: string,
   ): DraftLineService[] =>
     services.map((s) => {
-      const price = resolveServicePrice(prices, categoryId, formatId, s.service, finish);
+      const price = resolveServicePrice(
+        prices,
+        categoryId,
+        formatId,
+        s.service,
+        finish,
+        usdExchangeRate,
+      );
       return price !== null ? { ...s, unitPrice: String(price) } : s;
     });
 
@@ -345,7 +361,14 @@ export function OrderLineModal(props: OrderLineModalProps) {
         if (prev.services.some((s) => s.service === name)) {
           return prev;
         }
-        const price = resolveServicePrice(prices, prev.categoryId, prev.formatId, name, prev.finish);
+        const price = resolveServicePrice(
+          prices,
+          prev.categoryId,
+          prev.formatId,
+          name,
+          prev.finish,
+          usdExchangeRate,
+        );
         return {
           ...prev,
           services: [

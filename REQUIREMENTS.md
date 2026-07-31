@@ -129,7 +129,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 ### 3.7 Configuración
 - Datos del negocio (nombre, dirección, teléfono, logo)
 - Tasa de cambio USD → CUP (actualizable desde cabecera o Configuración; histórico de cambios)
-- **Precios** como entrada del sidebar (debajo de Flujo de Caja), no como tab de Configuración. Incluye precios de venta y **tarifas de pago** a trabajadores (antes «Costos»); la ruta legacy `/costos` redirige a `/precios`.
+- **Precios** como entrada del sidebar (debajo de Flujo de Caja), no como tab de Configuración. Incluye precios de venta (**CUP y/o USD**, activables por fila) y **tarifas de pago** a trabajadores en CUP (antes «Costos»); la ruta legacy `/costos` redirige a `/precios`. Cada moneda se define de forma independiente; se puede aplicar la tasa vigente de la app para derivar un precio a partir del otro.
 - **Categorías** de productos (CRUD con `is_system`, snapshot en pedidos)
 - **Roles de empleados**: catálogo `employee_roles`; cada rol puede asociarse a uno o más **tipos de trabajo** (`role_work_types`) que definen qué trabajos pueden realizar los empleados con ese rol (principal o secundario)
 - **Tipos de trabajo, formatos y acabados por categoría**: tablas `category_work_types`, `category_formats` y `category_finishes` (vinculadas a los catálogos `work_types`, `formats` y `finishes`). Catálogo global de acabados en Configuración → Acabados. Al crear líneas se preseleccionan tipos y acabados «por defecto», se limitan formatos asociados y cada tipo se expande en un `invoice_item`.
@@ -175,7 +175,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - La ubicación de BD no se mueve desde la UI; Configuración > Backup solo muestra ruta, abre carpeta, respalda y restaura.
 - Backups manuales y programados se guardan en `backups/` junto a `flexpyme.db`.
 - Nombre de backups: `flexpyme-backup-<tipo>-YYYYMMDD-HHMMSS.db`.
-- Backup programado configurable por usuario; valor por defecto: 5 días.
+- Backup programado configurable por usuario; valor por defecto: **1 día** (cierres diarios).
 - Inicio y Configuración > Backup muestran el histórico de los 5 últimos backups.
 - La restauración manual permite seleccionar un fichero `.db` compatible, valida integridad/esquema, crea un backup de seguridad previo y reemplaza la BD activa conservando el nombre `flexpyme.db`.
 
@@ -233,8 +233,8 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 ## 7. Reglas de Negocio
 
 1. Un pedido siempre está asociado a un cliente
-2. Los precios se toman de la lista de precios configurada (no se hardcodean)
-3. Los pagos a empleados usan los precios de COSTO (distintos a precios de VENTA)
+2. Los precios se toman de la lista de precios configurada (no se hardcodean). Cada fila puede ofrecer CUP, USD o ambas; en pedidos/facturas el unitario se resuelve en **CUP** (prioridad CUP activo; si solo USD, `precio_usd × tasa` vigente)
+3. Los pagos a empleados usan las **tarifas de pago** en CUP (distintas a precios de VENTA)
 4. La deuda anterior del cliente **no** se incluye en el total del pedido; al guardar se actualiza el balance del cliente (`balance += subtotal - anticipo - pagado`)
 5. El flujo de caja registra TODA operación de dinero (cobros a clientes, anticipos de pedido, pagos a empleados, gastos)
 6. Los empleados dados de baja no aparecen en nuevas asignaciones pero su historial se conserva
@@ -298,7 +298,7 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 ### v2.3 — BD portable, backups y restauración (2026)
 - **BD portable**: release crea/carga `flexpyme.db` junto al ejecutable.
 - **Backup manual**: genera copias fechadas en la carpeta `backups`.
-- **Backup programado**: intervalo configurable en días, por defecto 5.
+- **Backup programado**: intervalo configurable en días, por defecto 1 (cierres diarios).
 - **Histórico**: Configuración > Backup e Inicio muestran los últimos 5 backups.
 - **Restauración**: importa una BD compatible, valida integridad/esquema, crea backup de seguridad y reemplaza `flexpyme.db`.
 
@@ -338,10 +338,15 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.6 — Precios y tarifas de pago (2026-07)
 - **Costos** retirado del sidebar; gestión unificada en **Precios** (ruta `/costos` → `/precios`).
-- **UX Precios**: mosaico por categoría → pestañas por tipo de trabajo de la categoría → tabla (formato, acabado, precio, tarifa de pago).
+- **UX Precios**: mosaico por categoría → pestañas por tipo de trabajo de la categoría → tabla (formato, acabado, precio CUP, precio USD, tarifa de pago).
 - Columna/modal **Tarifa de Pago** (obligatoria, default 0); al guardar se sincroniza `cost_list` para salarios.
 - Formato base **Sin formato** (0×0); filas pendientes en Precios cuando hay tipos de trabajo sin precio definido.
 - Click en Precios del sidebar limpia `?categoria=` y vuelve al mosaico.
+
+### v2.8 — Precios duales CUP/USD (2026-07)
+- `price_list`: `price_cup`, `price_usd`, `is_cup_active`, `is_usd_active` (columna legada `price` espejo de CUP).
+- UI: toggles por moneda, edición independiente y botones «Aplicar tasa» CUP↔USD con la tasa de Configuración.
+- Pedidos/lookup: unitario siempre en CUP según monedas activas; cobros en caja siguen eligiendo moneda de pago de forma independiente.
 
 ### v2.6.1 — Inventario por categorías y normas (2026-07)
 - Categorías de material (`inventory_material_categories`); ítems con categoría obligatoria; listado en acordeón.

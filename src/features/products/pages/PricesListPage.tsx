@@ -23,13 +23,14 @@ import {
   buildPriceTableRows,
   type PriceTableRow,
 } from "@/features/products/lib/price-table-rows";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import { categoryMosaicTone, resolveCategoryIcon } from "@/lib/category-icons";
 import { formatMoney } from "@/lib/format-money";
 import { isSinFormatoLabel, SIN_FORMATO_LABEL } from "@/lib/formats";
 import type { CategoryWorkTypeDto, ProductCategoryDto } from "@/types/category";
 
 /**
- * Formatea un importe CUP o muestra guión si no hay valor.
+ * Formatea un importe o muestra guión si no hay valor.
  *
  * @param value - Importe o nulo.
  * @returns Texto formateado.
@@ -42,7 +43,49 @@ function formatCell(value: number | null | undefined): string {
 }
 
 /**
- * Precios: mosaico por categoría → tipos de trabajo → tabla con precio y tarifa de pago.
+ * Celda de precio por moneda: valor + indicador si la moneda no está activa.
+ *
+ * @param value - Importe o nulo.
+ * @param active - Si la moneda está ofertada.
+ * @param suffix - Etiqueta de moneda (CUP/USD).
+ * @returns Nodo de celda.
+ */
+function PriceCurrencyCell(props: {
+  value: number | null | undefined;
+  active: boolean;
+  suffix: "CUP" | "USD";
+}) {
+  const { value, active, suffix } = props;
+  const hasValue = value !== null && value !== undefined && Number.isFinite(value) && value > 0;
+  return (
+    <span className={active ? undefined : "text-base-content/45"}>
+      {hasValue ? (
+        <>
+          {formatMoney(value)}{" "}
+          <span className="text-xs opacity-70">{suffix}</span>
+        </>
+      ) : (
+        "—"
+      )}
+      {!active && hasValue ? (
+        <span className="ml-1 badge badge-ghost badge-xs">off</span>
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * Parsea un campo decimal del formulario (coma o punto).
+ *
+ * @param raw - Texto del input.
+ * @returns Número finito o `NaN`.
+ */
+function parseDecimal(raw: string): number {
+  return Number.parseFloat(raw.trim().replace(",", "."));
+}
+
+/**
+ * Precios: mosaico por categoría → tipos de trabajo → tabla con precios CUP/USD y tarifa de pago.
  * La categoría activa vive en `?categoria=` para que el sidebar vuelva siempre al mosaico.
  *
  * @returns Pantalla de administración de precios.
@@ -51,13 +94,17 @@ export function PricesListPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate({ from: "/precios" });
   const { categoria: selectedCategoryId } = useSearch({ from: "/precios" });
+  const { usdExchangeRate } = useAppSettings();
 
   const [selectedWorkTypeId, setSelectedWorkTypeId] = useState<number | null>(null);
   const [includeInactive, setIncludeInactive] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [editing, setEditing] = useState<PriceTableRow | null>(null);
-  const [editPrice, setEditPrice] = useState("");
+  const [editPriceCup, setEditPriceCup] = useState("");
+  const [editPriceUsd, setEditPriceUsd] = useState("");
+  const [editCupActive, setEditCupActive] = useState(true);
+  const [editUsdActive, setEditUsdActive] = useState(false);
   const [editTarifa, setEditTarifa] = useState("0");
   const [editActive, setEditActive] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
@@ -99,7 +146,10 @@ export function PricesListPage() {
   const saveMutation = useMutation({
     mutationFn: async (input: {
       draft: PriceTableRow;
-      price: number;
+      priceCup: number | null;
+      priceUsd: number | null;
+      isCupActive: boolean;
+      isUsdActive: boolean;
       cost: number;
       isActive: boolean;
     }) => {
@@ -109,14 +159,20 @@ export function PricesListPage() {
           formatId: input.draft.formatId,
           finish: input.draft.finish,
           service: input.draft.service ?? "",
-          price: input.price,
+          priceCup: input.priceCup,
+          priceUsd: input.priceUsd,
+          isCupActive: input.isCupActive,
+          isUsdActive: input.isUsdActive,
           cost: input.cost,
           isActive: input.isActive,
         });
       }
       return updatePrice({
         id: input.draft.id,
-        price: input.price,
+        priceCup: input.priceCup,
+        priceUsd: input.priceUsd,
+        isCupActive: input.isCupActive,
+        isUsdActive: input.isUsdActive,
         cost: input.cost,
         isActive: input.isActive,
       });
@@ -200,7 +256,11 @@ export function PricesListPage() {
 
   const openEdit = useCallback((row: PriceTableRow) => {
     setEditing(row);
-    setEditPrice(String(row.price));
+    const cup = row.priceCup ?? (row.price > 0 ? row.price : null);
+    setEditPriceCup(cup != null && cup > 0 ? String(cup) : "");
+    setEditPriceUsd(row.priceUsd != null && row.priceUsd > 0 ? String(row.priceUsd) : "");
+    setEditCupActive(row.isCupActive);
+    setEditUsdActive(row.isUsdActive);
     setEditTarifa(row.cost === null || row.cost === undefined ? "0" : String(row.cost));
     setEditActive(row.isActive);
     setFormError(null);
@@ -219,9 +279,28 @@ export function PricesListPage() {
         cell: (info) => info.getValue<string | null>() ?? "—",
       },
       {
-        accessorKey: "price",
-        header: "Precio",
-        cell: (info) => formatCell(info.getValue<number>()),
+        id: "priceCup",
+        accessorFn: (row) => row.priceCup ?? row.price,
+        header: "Precio CUP",
+        cell: ({ row }) => (
+          <PriceCurrencyCell
+            value={row.original.priceCup ?? (row.original.price > 0 ? row.original.price : null)}
+            active={row.original.isCupActive}
+            suffix="CUP"
+          />
+        ),
+      },
+      {
+        id: "priceUsd",
+        accessorFn: (row) => row.priceUsd,
+        header: "Precio USD",
+        cell: ({ row }) => (
+          <PriceCurrencyCell
+            value={row.original.priceUsd}
+            active={row.original.isUsdActive}
+            suffix="USD"
+          />
+        ),
       },
       {
         accessorKey: "cost",
@@ -281,28 +360,103 @@ export function PricesListPage() {
     void navigate({ search: { categoria: undefined } });
   };
 
+  /**
+   * Calcula USD a partir de CUP con la tasa vigente de la app.
+   */
+  const applyRateToUsd = () => {
+    if (!(usdExchangeRate > 0)) {
+      setFormError("Configura la tasa de cambio USD→CUP antes de aplicarla.");
+      return;
+    }
+    const cup = parseDecimal(editPriceCup);
+    if (!Number.isFinite(cup) || cup <= 0) {
+      setFormError("Introduce un precio CUP válido para convertir a USD.");
+      return;
+    }
+    setFormError(null);
+    setEditPriceUsd((cup / usdExchangeRate).toFixed(2));
+    if (!editUsdActive) {
+      setEditUsdActive(true);
+    }
+  };
+
+  /**
+   * Calcula CUP a partir de USD con la tasa vigente de la app.
+   */
+  const applyRateToCup = () => {
+    if (!(usdExchangeRate > 0)) {
+      setFormError("Configura la tasa de cambio USD→CUP antes de aplicarla.");
+      return;
+    }
+    const usd = parseDecimal(editPriceUsd);
+    if (!Number.isFinite(usd) || usd <= 0) {
+      setFormError("Introduce un precio USD válido para convertir a CUP.");
+      return;
+    }
+    setFormError(null);
+    setEditPriceCup((usd * usdExchangeRate).toFixed(2));
+    if (!editCupActive) {
+      setEditCupActive(true);
+    }
+  };
+
   const handleSaveEdit = () => {
     if (!editing) {
       return;
     }
-    const price = Number.parseFloat(editPrice.replace(",", "."));
-    if (!Number.isFinite(price) || price <= 0) {
-      setFormError("Introduce un precio válido mayor que cero.");
+    if (editActive && !editCupActive && !editUsdActive) {
+      setFormError("Activa al menos una moneda (CUP o USD) para el precio.");
       return;
     }
-    const tarifa = Number.parseFloat(editTarifa.replace(",", "."));
+
+    const cupRaw = editPriceCup.trim();
+    const usdRaw = editPriceUsd.trim();
+    const cupParsed = cupRaw === "" ? null : parseDecimal(cupRaw);
+    const usdParsed = usdRaw === "" ? null : parseDecimal(usdRaw);
+
+    if (editCupActive) {
+      if (cupParsed === null || !Number.isFinite(cupParsed) || cupParsed <= 0) {
+        setFormError("El precio CUP debe ser mayor que cero cuando CUP está activo.");
+        return;
+      }
+    } else if (cupParsed !== null && (!Number.isFinite(cupParsed) || cupParsed < 0)) {
+      setFormError("El precio CUP no es válido.");
+      return;
+    }
+
+    if (editUsdActive) {
+      if (usdParsed === null || !Number.isFinite(usdParsed) || usdParsed <= 0) {
+        setFormError("El precio USD debe ser mayor que cero cuando USD está activo.");
+        return;
+      }
+    } else if (usdParsed !== null && (!Number.isFinite(usdParsed) || usdParsed < 0)) {
+      setFormError("El precio USD no es válido.");
+      return;
+    }
+
+    const tarifa = parseDecimal(editTarifa);
     if (!Number.isFinite(tarifa) || tarifa < 0) {
       setFormError("Introduce una tarifa de pago válida (0 o mayor).");
       return;
     }
-    if (tarifa > price) {
-      setFormError("La tarifa de pago no puede ser mayor que el precio.");
+
+    const saleCupForTarifa = editCupActive
+      ? (cupParsed ?? 0)
+      : editUsdActive && usdExchangeRate > 0
+        ? (usdParsed ?? 0) * usdExchangeRate
+        : 0;
+    if (saleCupForTarifa > 0 && tarifa > saleCupForTarifa) {
+      setFormError("La tarifa de pago no puede ser mayor que el precio de venta (en CUP).");
       return;
     }
+
     setFormError(null);
     void saveMutation.mutateAsync({
       draft: editing,
-      price,
+      priceCup: cupParsed,
+      priceUsd: usdParsed,
+      isCupActive: editCupActive,
+      isUsdActive: editUsdActive,
       cost: tarifa,
       isActive: editActive,
     });
@@ -314,7 +468,8 @@ export function PricesListPage() {
         <div>
           <h1 className="text-2xl font-bold">Precios</h1>
           <p className="text-sm text-base-content/70">
-            Elige una categoría para gestionar precios de venta y tarifas de pago a trabajadores.
+            Elige una categoría para gestionar precios de venta (CUP y/o USD) y tarifas de pago a
+            trabajadores.
           </p>
         </div>
 
@@ -500,7 +655,7 @@ export function PricesListPage() {
       {editing && (
         <ModalPortal>
           <dialog className="modal modal-open">
-          <div className="modal-box max-w-lg">
+          <div className="modal-box max-w-xl">
             <h3 className="text-lg font-bold">
               {editing.isDraft ? "Definir precio" : "Editar precio"}
             </h3>
@@ -510,22 +665,78 @@ export function PricesListPage() {
               {` · ${editing.formatLabel ?? SIN_FORMATO_LABEL}`}
               {editing.finish ? ` · ${editing.finish}` : ""}
             </p>
-            <div className="form-control py-2">
-              <label className="label" htmlFor="edit-price">
-                <span className="label-text">Precio de venta</span>
-              </label>
-              <input
-                id="edit-price"
-                type="text"
-                inputMode="decimal"
-                className="input input-bordered"
-                value={editPrice}
-                onChange={(e) => setEditPrice(e.target.value)}
-              />
+            <p className="mb-2 text-xs text-base-content/60">
+              Tasa vigente:{" "}
+              {usdExchangeRate > 0
+                ? `1 USD = ${formatMoney(usdExchangeRate)} CUP`
+                : "no configurada"}
+            </p>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-base-300 p-3">
+                <label className="label cursor-pointer justify-start gap-3 py-0">
+                  <input
+                    type="checkbox"
+                    className="toggle toggle-primary toggle-sm"
+                    checked={editCupActive}
+                    onChange={(e) => setEditCupActive(e.target.checked)}
+                  />
+                  <span className="label-text font-medium">Precio CUP</span>
+                </label>
+                <input
+                  id="edit-price-cup"
+                  type="text"
+                  inputMode="decimal"
+                  className="input input-bordered input-sm mt-2 w-full"
+                  value={editPriceCup}
+                  onChange={(e) => setEditPriceCup(e.target.value)}
+                  placeholder="0.00"
+                  aria-label="Precio en CUP"
+                />
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs mt-2"
+                  onClick={applyRateToCup}
+                  disabled={!(usdExchangeRate > 0)}
+                >
+                  Aplicar tasa desde USD
+                </button>
+              </div>
+
+              <div className="rounded-lg border border-base-300 p-3">
+                <label className="label cursor-pointer justify-start gap-3 py-0">
+                  <input
+                    type="checkbox"
+                    className="toggle toggle-primary toggle-sm"
+                    checked={editUsdActive}
+                    onChange={(e) => setEditUsdActive(e.target.checked)}
+                  />
+                  <span className="label-text font-medium">Precio USD</span>
+                </label>
+                <input
+                  id="edit-price-usd"
+                  type="text"
+                  inputMode="decimal"
+                  className="input input-bordered input-sm mt-2 w-full"
+                  value={editPriceUsd}
+                  onChange={(e) => setEditPriceUsd(e.target.value)}
+                  placeholder="0.00"
+                  aria-label="Precio en USD"
+                />
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs mt-2"
+                  onClick={applyRateToUsd}
+                  disabled={!(usdExchangeRate > 0)}
+                >
+                  Aplicar tasa desde CUP
+                </button>
+              </div>
             </div>
+
             <div className="form-control py-2">
               <label className="label" htmlFor="edit-tarifa">
-                <span className="label-text">Tarifa de Pago</span>
+                <span className="label-text">Tarifa de Pago (CUP)</span>
               </label>
               <input
                 id="edit-tarifa"
@@ -538,12 +749,13 @@ export function PricesListPage() {
               />
               <label className="label">
                 <span className="label-text-alt text-base-content/60">
-                  Importe unitario que se paga al trabajador (por defecto 0).
+                  Importe unitario al trabajador en CUP (por defecto 0). Se compara con el precio de
+                  venta en CUP (o USD×tasa si solo USD está activo).
                 </span>
               </label>
             </div>
             <label className="label cursor-pointer justify-start gap-3 py-2">
-              <span className="label-text">Activo</span>
+              <span className="label-text">Fila activa</span>
               <input
                 type="checkbox"
                 className="toggle toggle-primary"

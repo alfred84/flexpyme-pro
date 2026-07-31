@@ -256,7 +256,7 @@ export function DashboardPage() {
               </Link>
             </div>
             <p className="text-xs text-base-content/60">
-              Backup automático cada {backupOverviewQuery.data?.intervalDays ?? 5} días. Último programado:{" "}
+              Backup automático cada {backupOverviewQuery.data?.intervalDays ?? 1} día(s). Último programado:{" "}
               {backupOverviewQuery.data?.lastScheduledBackupAt ?? "Sin registro"}
             </p>
             {backupOverviewQuery.isLoading ? (

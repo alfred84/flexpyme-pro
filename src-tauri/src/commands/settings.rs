@@ -50,7 +50,8 @@ pub struct RestoreDatabaseDto {
 const BACKUP_INTERVAL_DAYS_KEY: &str = "backup_interval_days";
 const LAST_SCHEDULED_BACKUP_AT_KEY: &str = "last_scheduled_backup_at";
 const USD_EXCHANGE_RATE_KEY: &str = "usd_exchange_rate";
-const DEFAULT_BACKUP_INTERVAL_DAYS: i64 = 5;
+/// Intervalo por defecto (1 día) alineado a cierres diarios del taller.
+const DEFAULT_BACKUP_INTERVAL_DAYS: i64 = 1;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -159,6 +160,15 @@ fn normalize_backup_interval(value: i64) -> i64 {
 
 fn backup_interval_days(conn: &rusqlite::Connection) -> i64 {
     let stored = read_setting(conn, BACKUP_INTERVAL_DAYS_KEY);
+    if stored.trim().is_empty() {
+        // Primera ejecución: persiste 1 día para que el valor quede explícito en Configuración.
+        let _ = upsert_setting(
+            conn,
+            BACKUP_INTERVAL_DAYS_KEY,
+            &DEFAULT_BACKUP_INTERVAL_DAYS.to_string(),
+        );
+        return DEFAULT_BACKUP_INTERVAL_DAYS;
+    }
     let parsed = stored
         .parse::<i64>()
         .unwrap_or(DEFAULT_BACKUP_INTERVAL_DAYS);

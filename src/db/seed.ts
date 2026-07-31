@@ -107,11 +107,22 @@ async function main() {
       sqlite
         .prepare(
           `
-          INSERT INTO price_list (category_id, format_id, finish, service, price, cost, is_active)
-          VALUES (?, ?, ?, ?, ?, ?, 1)
+          INSERT INTO price_list (
+            category_id, format_id, finish, service, price, price_cup, price_usd,
+            is_cup_active, is_usd_active, cost, is_active
+          )
+          VALUES (?, ?, ?, ?, ?, ?, NULL, 1, 0, ?, 1)
         `,
         )
-        .run(categoryId, formatId ?? null, row.finish, row.service, row.price, row.cost);
+        .run(
+          categoryId,
+          formatId ?? null,
+          row.finish,
+          row.service,
+          row.price,
+          row.price,
+          row.cost,
+        );
     }
   }
 

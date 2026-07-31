@@ -21,7 +21,7 @@ pub struct FormatDto {
     pub label: String,
 }
 
-/// Price list row with joined labels.
+/// Price list row with joined labels and dual-currency sale prices.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PriceRowDto {
@@ -32,7 +32,12 @@ pub struct PriceRowDto {
     pub format_label: Option<String>,
     pub finish: Option<String>,
     pub service: Option<String>,
+    /// Precio CUP legado (espejo de `price_cup` cuando CUP está activo).
     pub price: f64,
+    pub price_cup: Option<f64>,
+    pub price_usd: Option<f64>,
+    pub is_cup_active: bool,
+    pub is_usd_active: bool,
     pub cost: Option<f64>,
     pub valid_from: String,
     pub is_active: bool,
@@ -45,7 +50,7 @@ pub struct PricesListArgs {
     pub include_inactive: bool,
 }
 
-/// Payload for creating a price list row.
+/// Payload for creating a price list row (CUP and/or USD).
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreatePricePayload {
@@ -53,20 +58,131 @@ pub struct CreatePricePayload {
     pub format_id: Option<i64>,
     pub finish: Option<String>,
     pub service: String,
-    pub price: f64,
+    pub price_cup: Option<f64>,
+    pub price_usd: Option<f64>,
+    pub is_cup_active: bool,
+    pub is_usd_active: bool,
     pub cost: Option<f64>,
     pub is_active: bool,
 }
 
-/// Payload for updating a price list row.
+/// Payload for updating a price list row (CUP and/or USD).
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdatePricePayload {
     pub id: i64,
-    pub price: f64,
+    pub price_cup: Option<f64>,
+    pub price_usd: Option<f64>,
+    pub is_cup_active: bool,
+    pub is_usd_active: bool,
     pub cost: Option<f64>,
     pub is_active: bool,
 }
+
+fn read_usd_exchange_rate(conn: &rusqlite::Connection) -> f64 {
+    conn.query_row(
+        "SELECT value FROM settings WHERE key = 'usd_exchange_rate'",
+        [],
+        |row| row.get::<_, String>(0),
+    )
+    .ok()
+    .and_then(|v| v.parse::<f64>().ok())
+    .filter(|r| *r > 0.0)
+    .unwrap_or(0.0)
+}
+
+/// Valida precios duales y tarifa; devuelve (price_cup, price_usd, legacy_price).
+fn validate_dual_prices(
+    price_cup: Option<f64>,
+    price_usd: Option<f64>,
+    is_cup_active: bool,
+    is_usd_active: bool,
+    is_active: bool,
+    cost: Option<f64>,
+    exchange_rate: f64,
+) -> Result<(Option<f64>, Option<f64>, f64), String> {
+    if is_active && !is_cup_active && !is_usd_active {
+        return Err("Activa al menos una moneda (CUP o USD) para el precio".to_string());
+    }
+    let cup = price_cup.filter(|v| v.is_finite() && *v >= 0.0);
+    let usd = price_usd.filter(|v| v.is_finite() && *v >= 0.0);
+    if is_cup_active {
+        let Some(c) = cup else {
+            return Err("El precio CUP es obligatorio cuando CUP está activo".to_string());
+        };
+        if c <= 0.0 {
+            return Err("El precio CUP debe ser mayor que cero".to_string());
+        }
+    }
+    if is_usd_active {
+        let Some(u) = usd else {
+            return Err("El precio USD es obligatorio cuando USD está activo".to_string());
+        };
+        if u <= 0.0 {
+            return Err("El precio USD debe ser mayor que cero".to_string());
+        }
+    }
+    let tarifa = cost.unwrap_or(0.0);
+    if tarifa < 0.0 {
+        return Err("La tarifa de pago no puede ser negativa".to_string());
+    }
+    let sale_cup_for_tarifa = if is_cup_active {
+        cup.unwrap_or(0.0)
+    } else if is_usd_active && exchange_rate > 0.0 {
+        usd.unwrap_or(0.0) * exchange_rate
+    } else {
+        0.0
+    };
+    if sale_cup_for_tarifa > 0.0 && tarifa > sale_cup_for_tarifa + 1e-9 {
+        return Err(
+            "La tarifa de pago no puede ser mayor que el precio de venta (en CUP)".to_string(),
+        );
+    }
+    let legacy_price = if is_cup_active {
+        cup.unwrap_or(0.0)
+    } else {
+        0.0
+    };
+    // Se conservan ambos importes aunque la moneda esté desactivada (para reactivar luego).
+    Ok((cup, usd, legacy_price))
+}
+
+fn map_price_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PriceRowDto> {
+    let price: f64 = row.get(7)?;
+    let price_cup: Option<f64> = row.get(8)?;
+    let price_usd: Option<f64> = row.get(9)?;
+    let is_cup_active = row.get::<_, i64>(10)? != 0;
+    let is_usd_active = row.get::<_, i64>(11)? != 0;
+    let is_active = row.get::<_, i64>(14)? != 0;
+    Ok(PriceRowDto {
+        id: row.get(0)?,
+        category_id: row.get(1)?,
+        category_name: row.get(2)?,
+        format_id: row.get(3)?,
+        format_label: row.get(4)?,
+        finish: row.get(5)?,
+        service: row.get(6)?,
+        price: price_cup.unwrap_or(price),
+        price_cup: price_cup.or(Some(price)),
+        price_usd,
+        is_cup_active,
+        is_usd_active,
+        cost: row.get(12)?,
+        valid_from: row.get(13)?,
+        is_active,
+    })
+}
+
+const PRICE_SELECT: &str = "SELECT p.id, p.category_id, c.name, p.format_id, f.label, p.finish, p.service,
+        p.price,
+        COALESCE(p.price_cup, p.price),
+        p.price_usd,
+        COALESCE(p.is_cup_active, 1),
+        COALESCE(p.is_usd_active, 0),
+        p.cost, p.valid_from, p.is_active
+     FROM price_list p
+     JOIN product_categories c ON c.id = p.category_id
+     LEFT JOIN formats f ON f.id = p.format_id";
 
 /// Lists all product categories.
 #[tauri::command]
@@ -115,58 +231,42 @@ pub fn formats_list() -> Result<Vec<FormatDto>, String> {
 pub fn prices_list(args: PricesListArgs) -> Result<Vec<PriceRowDto>, String> {
     let conn = db::open_connection()?;
     let sql = if args.include_inactive {
-        "SELECT p.id, p.category_id, c.name, p.format_id, f.label, p.finish, p.service, p.price, p.cost, p.valid_from, p.is_active
-         FROM price_list p
-         JOIN product_categories c ON c.id = p.category_id
-         LEFT JOIN formats f ON f.id = p.format_id
-         ORDER BY c.name COLLATE NOCASE, f.label COLLATE NOCASE NULLS LAST, p.service, p.finish"
+        format!(
+            "{PRICE_SELECT}
+             ORDER BY c.name COLLATE NOCASE, f.label COLLATE NOCASE NULLS LAST, p.service, p.finish"
+        )
     } else {
-        "SELECT p.id, p.category_id, c.name, p.format_id, f.label, p.finish, p.service, p.price, p.cost, p.valid_from, p.is_active
-         FROM price_list p
-         JOIN product_categories c ON c.id = p.category_id
-         LEFT JOIN formats f ON f.id = p.format_id
-         WHERE p.is_active = 1
-         ORDER BY c.name COLLATE NOCASE, f.label COLLATE NOCASE NULLS LAST, p.service, p.finish"
+        format!(
+            "{PRICE_SELECT}
+             WHERE p.is_active = 1
+             ORDER BY c.name COLLATE NOCASE, f.label COLLATE NOCASE NULLS LAST, p.service, p.finish"
+        )
     };
 
-    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| {
-            let is_active_i: i64 = row.get(10)?;
-            Ok(PriceRowDto {
-                id: row.get(0)?,
-                category_id: row.get(1)?,
-                category_name: row.get(2)?,
-                format_id: row.get(3)?,
-                format_label: row.get(4)?,
-                finish: row.get(5)?,
-                service: row.get(6)?,
-                price: row.get(7)?,
-                cost: row.get(8)?,
-                valid_from: row.get(9)?,
-                is_active: is_active_i != 0,
-            })
-        })
+        .query_map([], map_price_row)
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
-/// Updates sale price, payment tariff (`cost`), and active flag for a price list row.
+/// Updates dual sale prices, payment tariff (`cost`), and active flags.
 /// Also syncs the matching `cost_list` row used for employee salary calculations.
 #[tauri::command]
 pub fn prices_update(payload: UpdatePricePayload) -> Result<(), String> {
-    if payload.price <= 0.0 {
-        return Err("El precio debe ser mayor que cero".to_string());
-    }
-    let tarifa = payload.cost.unwrap_or(0.0);
-    if tarifa < 0.0 {
-        return Err("La tarifa de pago no puede ser negativa".to_string());
-    }
-    if tarifa > payload.price {
-        return Err("La tarifa de pago no puede ser mayor que el precio de venta".to_string());
-    }
-
     let mut conn = db::open_connection()?;
+    let rate = read_usd_exchange_rate(&conn);
+    let (price_cup, price_usd, legacy_price) = validate_dual_prices(
+        payload.price_cup,
+        payload.price_usd,
+        payload.is_cup_active,
+        payload.is_usd_active,
+        payload.is_active,
+        payload.cost,
+        rate,
+    )?;
+    let tarifa = payload.cost.unwrap_or(0.0);
+
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
     let (format_id, service): (Option<i64>, Option<String>) = tx
@@ -179,9 +279,17 @@ pub fn prices_update(payload: UpdatePricePayload) -> Result<(), String> {
 
     let updated = tx
         .execute(
-            "UPDATE price_list SET price = ?1, cost = ?2, is_active = ?3 WHERE id = ?4",
+            "UPDATE price_list
+             SET price = ?1, price_cup = ?2, price_usd = ?3,
+                 is_cup_active = ?4, is_usd_active = ?5,
+                 cost = ?6, is_active = ?7
+             WHERE id = ?8",
             params![
-                payload.price,
+                legacy_price,
+                price_cup,
+                price_usd,
+                if payload.is_cup_active { 1i64 } else { 0i64 },
+                if payload.is_usd_active { 1i64 } else { 0i64 },
                 tarifa,
                 if payload.is_active { 1i64 } else { 0i64 },
                 payload.id
@@ -204,16 +312,6 @@ pub fn prices_update(payload: UpdatePricePayload) -> Result<(), String> {
 /// Creates a new price list row and syncs the matching employee pay tariff.
 #[tauri::command]
 pub fn prices_create(payload: CreatePricePayload) -> Result<PriceRowDto, String> {
-    if payload.price <= 0.0 {
-        return Err("El precio debe ser mayor que cero".to_string());
-    }
-    let tarifa = payload.cost.unwrap_or(0.0);
-    if tarifa < 0.0 {
-        return Err("La tarifa de pago no puede ser negativa".to_string());
-    }
-    if tarifa > payload.price {
-        return Err("La tarifa de pago no puede ser mayor que el precio de venta".to_string());
-    }
     let service = payload.service.trim().to_string();
     if service.is_empty() {
         return Err("El tipo de trabajo es obligatorio".to_string());
@@ -228,6 +326,18 @@ pub fn prices_create(payload: CreatePricePayload) -> Result<PriceRowDto, String>
     });
 
     let mut conn = db::open_connection()?;
+    let rate = read_usd_exchange_rate(&conn);
+    let (price_cup, price_usd, legacy_price) = validate_dual_prices(
+        payload.price_cup,
+        payload.price_usd,
+        payload.is_cup_active,
+        payload.is_usd_active,
+        payload.is_active,
+        payload.cost,
+        rate,
+    )?;
+    let tarifa = payload.cost.unwrap_or(0.0);
+
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
     let category_ok: i64 = tx
@@ -254,14 +364,20 @@ pub fn prices_create(payload: CreatePricePayload) -> Result<PriceRowDto, String>
     }
 
     tx.execute(
-        "INSERT INTO price_list (category_id, format_id, finish, service, price, cost, is_active)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO price_list
+            (category_id, format_id, finish, service, price, price_cup, price_usd,
+             is_cup_active, is_usd_active, cost, is_active)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             payload.category_id,
             payload.format_id,
             finish,
             service,
-            payload.price,
+            legacy_price,
+            price_cup,
+            price_usd,
+            if payload.is_cup_active { 1i64 } else { 0i64 },
+            if payload.is_usd_active { 1i64 } else { 0i64 },
             tarifa,
             if payload.is_active { 1i64 } else { 0i64 }
         ],
@@ -279,29 +395,9 @@ pub fn prices_create(payload: CreatePricePayload) -> Result<PriceRowDto, String>
 
     let row = tx
         .query_row(
-            "SELECT p.id, p.category_id, c.name, p.format_id, f.label, p.finish, p.service,
-                    p.price, p.cost, p.valid_from, p.is_active
-             FROM price_list p
-             JOIN product_categories c ON c.id = p.category_id
-             LEFT JOIN formats f ON f.id = p.format_id
-             WHERE p.id = ?1",
+            &format!("{PRICE_SELECT} WHERE p.id = ?1"),
             params![id],
-            |row| {
-                let is_active_i: i64 = row.get(10)?;
-                Ok(PriceRowDto {
-                    id: row.get(0)?,
-                    category_id: row.get(1)?,
-                    category_name: row.get(2)?,
-                    format_id: row.get(3)?,
-                    format_label: row.get(4)?,
-                    finish: row.get(5)?,
-                    service: row.get(6)?,
-                    price: row.get(7)?,
-                    cost: row.get(8)?,
-                    valid_from: row.get(9)?,
-                    is_active: is_active_i != 0,
-                })
-            },
+            map_price_row,
         )
         .map_err(|e| e.to_string())?;
 
@@ -458,13 +554,17 @@ pub struct PriceLookupArgs {
     pub service: Option<String>,
 }
 
-/// Returns the first matching active unit price for the given dimensions.
+/// Returns the matching active unit price in CUP (converts USD with current rate if needed).
 #[tauri::command]
 pub fn prices_lookup(args: PriceLookupArgs) -> Result<Option<f64>, String> {
     let conn = db::open_connection()?;
+    let rate = read_usd_exchange_rate(&conn);
     let mut stmt = conn
         .prepare(
-            "SELECT format_id, finish, service, price FROM price_list WHERE category_id = ?1 AND is_active = 1",
+            "SELECT format_id, finish, service,
+                    COALESCE(price_cup, price), price_usd,
+                    COALESCE(is_cup_active, 1), COALESCE(is_usd_active, 0)
+             FROM price_list WHERE category_id = ?1 AND is_active = 1",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
@@ -473,7 +573,10 @@ pub fn prices_lookup(args: PriceLookupArgs) -> Result<Option<f64>, String> {
                 row.get::<_, Option<i64>>(0)?,
                 row.get::<_, Option<String>>(1)?,
                 row.get::<_, Option<String>>(2)?,
-                row.get::<_, f64>(3)?,
+                row.get::<_, Option<f64>>(3)?,
+                row.get::<_, Option<f64>>(4)?,
+                row.get::<_, i64>(5)? != 0,
+                row.get::<_, i64>(6)? != 0,
             ))
         })
         .map_err(|e| e.to_string())?;
@@ -482,7 +585,8 @@ pub fn prices_lookup(args: PriceLookupArgs) -> Result<Option<f64>, String> {
     let want_service = normalize_lookup_token(&args.service);
 
     for r in rows {
-        let (fid, finish, service, price) = r.map_err(|e| e.to_string())?;
+        let (fid, finish, service, price_cup, price_usd, cup_on, usd_on) =
+            r.map_err(|e| e.to_string())?;
         if args.format_id != fid {
             continue;
         }
@@ -492,7 +596,23 @@ pub fn prices_lookup(args: PriceLookupArgs) -> Result<Option<f64>, String> {
         if normalize_lookup_token(&service) != want_service {
             continue;
         }
-        return Ok(Some(price));
+        if cup_on {
+            if let Some(c) = price_cup.filter(|v| *v > 0.0) {
+                return Ok(Some(c));
+            }
+        }
+        if usd_on {
+            if let Some(u) = price_usd.filter(|v| *v > 0.0) {
+                if rate <= 0.0 {
+                    return Err(
+                        "Hay precio solo en USD pero la tasa de cambio no está configurada"
+                            .to_string(),
+                    );
+                }
+                return Ok(Some(u * rate));
+            }
+        }
+        return Ok(None);
     }
     Ok(None)
 }

@@ -117,7 +117,16 @@ export const priceList = sqliteTable("price_list", {
   formatId: integer("format_id").references(() => formats.id),
   finish: text("finish"),
   service: text("service"),
+  /** @deprecated Preferir priceCup; se mantiene sincronizado con CUP para compatibilidad. */
   price: real("price").notNull(),
+  /** Precio de venta en CUP. */
+  priceCup: real("price_cup"),
+  /** Precio de venta en USD (opcional). */
+  priceUsd: real("price_usd"),
+  /** Si el producto se ofrece en CUP. */
+  isCupActive: integer("is_cup_active", { mode: "boolean" }).notNull().default(true),
+  /** Si el producto se ofrece en USD. */
+  isUsdActive: integer("is_usd_active", { mode: "boolean" }).notNull().default(false),
   cost: real("cost"),
   validFrom: text("valid_from").notNull().default(sql`(date('now'))`),
   isActive: integer("is_active").notNull().default(1),

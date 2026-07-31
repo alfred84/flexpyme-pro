@@ -355,7 +355,8 @@ function BackupTab() {
               <DatabaseBackup className="h-5 w-5" /> Backup automático
             </h2>
             <p className="text-sm text-base-content/70">
-              Se crea un respaldo programado al abrir Inicio o Configuración cuando se cumple el intervalo.
+              Se crea un respaldo programado al abrir Inicio o Configuración cuando se cumple el
+              intervalo. Por defecto es <strong>1 día</strong> (cierres diarios); puedes cambiarlo.
             </p>
             <label className="form-control max-w-xs">
               <span className="label-text">Cada cuántos días</span>

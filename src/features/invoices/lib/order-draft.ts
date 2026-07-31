@@ -244,17 +244,55 @@ export function serviceAndFinishOptions(
 }
 
 /**
- * Resuelve precio unitario desde filas filtradas según servicio y acabado.
+ * Convierte una fila de precio a importe unitario en CUP según monedas activas.
+ * Prioriza CUP; si solo USD está activo, convierte con la tasa indicada.
+ *
+ * @param row - Fila de precio.
+ * @param exchangeRate - Tasa USD→CUP vigente.
+ * @returns Precio en CUP o `null` si no hay oferta usable.
+ */
+export function resolveSaleUnitPriceCup(
+  row: PriceRowDto | undefined,
+  exchangeRate: number,
+): number | null {
+  if (!row || !row.isActive) {
+    return null;
+  }
+  if (row.isCupActive) {
+    const cup = row.priceCup ?? row.price;
+    if (Number.isFinite(cup) && cup > 0) {
+      return cup;
+    }
+  }
+  if (row.isUsdActive) {
+    const usd = row.priceUsd;
+    if (usd != null && Number.isFinite(usd) && usd > 0) {
+      if (!(exchangeRate > 0)) {
+        return null;
+      }
+      return usd * exchangeRate;
+    }
+  }
+  if (Number.isFinite(row.price) && row.price > 0) {
+    return row.price;
+  }
+  return null;
+}
+
+/**
+ * Resuelve precio unitario (CUP) desde filas filtradas según servicio y acabado.
  *
  * @param rows - Filas de precio ya filtradas.
  * @param service - Servicio buscado.
  * @param finish - Acabado buscado.
- * @returns Precio o `null` si no hay coincidencia.
+ * @param exchangeRate - Tasa USD→CUP para filas solo-USD.
+ * @returns Precio en CUP o `null` si no hay coincidencia usable.
  */
 export function resolvePriceFromRows(
   rows: PriceRowDto[],
   service: string,
   finish: string,
+  exchangeRate = 0,
 ): number | null {
   const norm = (v: string) => v.trim().toLowerCase();
   const wantService = norm(service);
@@ -267,18 +305,19 @@ export function resolvePriceFromRows(
     }) ??
     // Coincidencia por servicio ignorando el acabado si no hay exacta.
     rows.find((row) => norm(row.service ?? "") === wantService);
-  return match?.price ?? null;
+  return resolveSaleUnitPriceCup(match, exchangeRate);
 }
 
 /**
- * Resuelve el precio de un servicio concreto para una categoría/formato/acabado.
+ * Resuelve el precio de un servicio concreto para una categoría/formato/acabado (en CUP).
  *
  * @param prices - Lista de precios.
  * @param categoryId - Categoría.
  * @param formatId - Formato opcional.
  * @param service - Servicio.
  * @param finish - Acabado.
- * @returns Precio unitario o `null`.
+ * @param exchangeRate - Tasa USD→CUP vigente.
+ * @returns Precio unitario en CUP o `null`.
  */
 export function resolveServicePrice(
   prices: PriceRowDto[],
@@ -286,9 +325,10 @@ export function resolveServicePrice(
   formatId: number | null,
   service: string,
   finish: string,
+  exchangeRate = 0,
 ): number | null {
   const rows = filterPricesByCategory(prices, categoryId, formatId);
-  return resolvePriceFromRows(rows, service, finish);
+  return resolvePriceFromRows(rows, service, finish, exchangeRate);
 }
 
 /**
