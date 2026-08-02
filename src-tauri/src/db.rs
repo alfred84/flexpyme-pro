@@ -104,6 +104,8 @@ const EMBEDDED_ROLE_WORK_ASSIGNMENTS_SCHEMA: &str =
     include_str!("../../src/db/migrations/0024_role_work_and_line_assignments.sql");
 const EMBEDDED_PRICE_DUAL_CURRENCY_SCHEMA: &str =
     include_str!("../../src/db/migrations/0025_price_list_dual_currency.sql");
+const EMBEDDED_CLIENT_CREDIT_BALANCE_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0026_client_credit_balance.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -380,6 +382,13 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             conn,
             EMBEDDED_PRICE_DUAL_CURRENCY_SCHEMA,
             "0025_price_list_dual_currency",
+        )?;
+    }
+    if !column_exists(conn, "clients", "credit_balance") {
+        execute_migration(
+            conn,
+            EMBEDDED_CLIENT_CREDIT_BALANCE_SCHEMA,
+            "0026_client_credit_balance",
         )?;
     }
     Ok(())

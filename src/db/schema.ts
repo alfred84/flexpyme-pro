@@ -10,7 +10,10 @@ export const clients = sqliteTable(
     phone: text("phone"),
     address: text("address"),
     notes: text("notes"),
+    /** Deuda abierta (suma de saldos de pedidos). */
     balance: real("balance").notNull().default(0),
+    /** Saldo a favor del cliente (crédito disponible). */
+    creditBalance: real("credit_balance").notNull().default(0),
     deletedAt: text("deleted_at"),
     createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
@@ -145,6 +148,10 @@ export const invoices = sqliteTable("invoices", {
   total: real("total").notNull().default(0),
   paid: real("paid").notNull().default(0),
   balance: real("balance").notNull().default(0),
+  /** Crédito de cliente aplicado a este pedido. */
+  creditApplied: real("credit_applied").notNull().default(0),
+  /** Exceso de cobro dejado como saldo a favor. */
+  creditAdded: real("credit_added").notNull().default(0),
   status: text("status").notNull().default("pending"),
   productionStatus: text("production_status").notNull().default("en_produccion"),
   paymentStatus: text("payment_status").notNull().default("pendiente"),
