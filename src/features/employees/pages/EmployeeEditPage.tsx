@@ -26,7 +26,7 @@ export function EmployeeEditPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       pushFlashMessage({ kind: "success", text: "Empleado actualizado." });
-      await navigate({ to: "/empleados/$employeeId", params: { employeeId: String(employeeId) } });
+      await navigate({ to: "/empleados" });
     },
   });
 

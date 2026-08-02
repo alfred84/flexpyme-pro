@@ -15,10 +15,10 @@ export function EmployeeNewPage() {
 
   const mutation = useMutation({
     mutationFn: createEmployee,
-    onSuccess: async (id) => {
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       pushFlashMessage({ kind: "success", text: "Empleado creado correctamente." });
-      await navigate({ to: "/empleados/$employeeId", params: { employeeId: String(id) } });
+      await navigate({ to: "/empleados" });
     },
   });
 
