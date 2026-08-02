@@ -33,16 +33,13 @@ export function EmployeeForm(props: EmployeeFormProps) {
       phone: defaultValues?.phone ?? "",
       notes: defaultValues?.notes ?? "",
       extraRoleIds: defaultValues?.extraRoleIds ?? [],
-      hasFixedDailySalary: defaultValues?.hasFixedDailySalary ?? false,
+      payMode: defaultValues?.payMode ?? "production",
       fixedDailySalaryCup: defaultValues?.fixedDailySalaryCup ?? 0,
     },
   });
 
   const roleId = useWatch({ control: form.control, name: "roleId" });
-  const hasFixedDailySalary = useWatch({
-    control: form.control,
-    name: "hasFixedDailySalary",
-  });
+  const payMode = useWatch({ control: form.control, name: "payMode" });
   const roles = rolesQuery.data ?? [];
   const extraRoleOptions = roles.filter((r) => r.id !== roleId);
 
@@ -154,35 +151,73 @@ export function EmployeeForm(props: EmployeeFormProps) {
         )}
       </fieldset>
 
-      <div className="rounded-lg border border-base-300 bg-base-100 p-3 space-y-3">
+      <fieldset className="rounded-lg border border-base-300 bg-base-100 p-3 space-y-3">
+        <legend className="label px-0 pb-0">
+          <span className="label-text font-medium">Forma de salario</span>
+        </legend>
+        <p className="text-xs text-base-content/60">
+          Elige cómo se calcula el pago diario. Las opciones son excluyentes.
+        </p>
         <Controller
           control={form.control}
-          name="hasFixedDailySalary"
+          name="payMode"
           render={({ field }) => (
-            <label className="label cursor-pointer justify-start gap-3 py-0">
-              <input
-                type="checkbox"
-                className="toggle toggle-primary"
-                disabled={isSubmitting}
-                checked={field.value}
-                onChange={(e) => {
-                  field.onChange(e.target.checked);
-                  if (!e.target.checked) {
+            <div className="flex flex-col gap-2">
+              <label className="label cursor-pointer justify-start gap-3 py-1">
+                <input
+                  type="radio"
+                  className="radio radio-sm radio-primary"
+                  disabled={isSubmitting}
+                  checked={field.value === "production"}
+                  onChange={() => {
+                    field.onChange("production");
                     form.setValue("fixedDailySalaryCup", 0, { shouldValidate: true });
-                  }
-                }}
-              />
-              <span className="label-text">
-                <span className="font-medium">Salario fijo diario</span>
-                <span className="mt-0.5 block text-xs text-base-content/60">
-                  Si está activo, cobra este importe cada día en lugar de las tarifas por
-                  producción.
+                  }}
+                />
+                <span className="label-text">
+                  <span className="font-medium">Por producción</span>
+                  <span className="mt-0.5 block text-xs text-base-content/60">
+                    Cobra según las tarifas de los trabajos realizados.
+                  </span>
                 </span>
-              </span>
-            </label>
+              </label>
+              <label className="label cursor-pointer justify-start gap-3 py-1">
+                <input
+                  type="radio"
+                  className="radio radio-sm radio-primary"
+                  disabled={isSubmitting}
+                  checked={field.value === "fixed"}
+                  onChange={() => field.onChange("fixed")}
+                />
+                <span className="label-text">
+                  <span className="font-medium">Salario fijo diario</span>
+                  <span className="mt-0.5 block text-xs text-base-content/60">
+                    Cobro diario con un importe fijo predefinido.
+                  </span>
+                </span>
+              </label>
+              <label className="label cursor-pointer justify-start gap-3 py-1">
+                <input
+                  type="radio"
+                  className="radio radio-sm radio-primary"
+                  disabled={isSubmitting}
+                  checked={field.value === "destajo"}
+                  onChange={() => {
+                    field.onChange("destajo");
+                    form.setValue("fixedDailySalaryCup", 0, { shouldValidate: true });
+                  }}
+                />
+                <span className="label-text">
+                  <span className="font-medium">Salario por destajo diario</span>
+                  <span className="mt-0.5 block text-xs text-base-content/60">
+                    El importe se debe definir obligatoriamente cada día antes de pagar.
+                  </span>
+                </span>
+              </label>
+            </div>
           )}
         />
-        {hasFixedDailySalary && (
+        {payMode === "fixed" && (
           <div className="form-control w-full">
             <label className="label" htmlFor="employee-fixed-salary">
               <span className="label-text">Importe diario (CUP)</span>
@@ -204,7 +239,7 @@ export function EmployeeForm(props: EmployeeFormProps) {
             )}
           </div>
         )}
-      </div>
+      </fieldset>
 
       <div className="form-control w-full">
         <label className="label" htmlFor="employee-phone">

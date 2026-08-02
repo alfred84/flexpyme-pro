@@ -370,11 +370,18 @@ export const employees = sqliteTable("employees", {
   role: text("role"),
   phone: text("phone"),
   notes: text("notes"),
-  /** Si true, cobra un salario fijo diario en lugar de tarifas por producción. */
+  /**
+   * Modo de pago: `production` | `fixed` | `destajo`.
+   * - production: tarifas por trabajo
+   * - fixed: salario fijo diario predefinido
+   * - destajo: importe obligatorio a definir cada día
+   */
+  payMode: text("pay_mode").notNull().default("production"),
+  /** @deprecated Preferir payMode === 'fixed'; se mantiene sincronizado. */
   hasFixedDailySalary: integer("has_fixed_daily_salary", { mode: "boolean" })
     .notNull()
     .default(false),
-  /** Importe CUP del salario fijo diario (cuando está habilitado). */
+  /** Importe CUP del salario fijo diario (solo modo `fixed`). */
   fixedDailySalaryCup: real("fixed_daily_salary_cup").notNull().default(0),
   isActive: integer("is_active").notNull().default(1),
   deletedAt: text("deleted_at"),
@@ -396,6 +403,8 @@ export const employeeDailySalaries = sqliteTable(
     amountCup: real("amount_cup").notNull(),
     paid: real("paid").notNull().default(0),
     status: text("status").notNull().default("pendiente"),
+    /** `fixed` | `destajo` */
+    kind: text("kind").notNull().default("fixed"),
     createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
   },
   (table) => ({

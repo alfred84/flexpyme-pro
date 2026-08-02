@@ -46,10 +46,9 @@ export function EmployeeNewPage() {
             phone: values.phone || null,
             notes: values.notes || null,
             extraRoleIds: values.extraRoleIds,
-            hasFixedDailySalary: values.hasFixedDailySalary,
-            fixedDailySalaryCup: values.hasFixedDailySalary
-              ? values.fixedDailySalaryCup
-              : 0,
+            payMode: values.payMode,
+            fixedDailySalaryCup:
+              values.payMode === "fixed" ? values.fixedDailySalaryCup : 0,
           });
         }}
       />

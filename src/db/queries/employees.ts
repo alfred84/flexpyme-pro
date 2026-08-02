@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   CreateEmployeePayload,
   CreateWorkBatchPayload,
+  DestajoPendingDto,
   EmployeeDto,
   EmployeeExtraRoleDto,
   InvoiceWorkBatchDto,
@@ -118,6 +119,29 @@ export interface UnpaidBatchDto {
  */
 export async function fetchUnpaidBatchesForDate(date?: string): Promise<UnpaidBatchDto[]> {
   return invoke<UnpaidBatchDto[]>("work_batches_unpaid_for_date", { date: date ?? null });
+}
+
+/**
+ * Empleados con destajo pendiente de definir para una fecha (por defecto hoy).
+ *
+ * @param date - Fecha ISO opcional.
+ */
+export async function fetchDestajoPendingForDate(date?: string): Promise<DestajoPendingDto[]> {
+  return invoke<DestajoPendingDto[]>("destajo_pending_for_date", { date: date ?? null });
+}
+
+/**
+ * Define o actualiza el destajo diario de un empleado.
+ *
+ * @param payload - Empleado, fecha opcional e importe CUP.
+ * @returns Id del registro diario.
+ */
+export async function setDestajoDailySalary(payload: {
+  employeeId: number;
+  date?: string;
+  amountCup: number;
+}): Promise<number> {
+  return invoke<number>("set_destajo_daily_salary", { payload });
 }
 
 /**

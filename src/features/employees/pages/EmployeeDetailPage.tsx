@@ -56,9 +56,11 @@ export function EmployeeDetailPage() {
           {emp && (
             <p className="text-sm capitalize text-base-content/60">
               {emp.role ?? "Sin rol"} · {emp.phone ?? "Sin teléfono"}
-              {emp.hasFixedDailySalary
+              {emp.payMode === "fixed"
                 ? ` · Salario fijo ${formatMoney(emp.fixedDailySalaryCup)}/día`
-                : " · Pago por producción"}
+                : emp.payMode === "destajo"
+                  ? " · Salario por destajo diario"
+                  : " · Pago por producción"}
             </p>
           )}
         </div>

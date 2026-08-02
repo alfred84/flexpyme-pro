@@ -153,6 +153,8 @@ pub fn run() {
             commands::employees::work_batch_pay,
             commands::employees::work_batches_unpaid_for_date,
             commands::employees::work_batches_pay_many,
+            commands::employees::destajo_pending_for_date,
+            commands::employees::set_destajo_daily_salary,
             commands::employees::employee_extra_roles_list,
             commands::employees::employee_extra_role_add,
             commands::employees::employee_extra_role_remove,

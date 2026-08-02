@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.5 | Última actualización: 2026-07-16
+### Versión: 2.11 | Última actualización: 2026-08-02
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -94,7 +94,11 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Registro de lotes de trabajo: fecha, tipo, cantidades por formato y cliente
 - Los lotes pueden vincularse a un **pedido** (`production_batch_items.invoice_id`) al marcar Listo en el detalle (o Marcar listo en listado)
 - Cálculo automático del salario a pagar (tarifa de Precios o personalizada en la asignación del pedido)
-- **Salario fijo diario (opcional)**: en alta/edición, switch bajo roles adicionales; si está activo, el empleado cobra ese importe CUP cada día (vía «Pago de empleados») en lugar de las tarifas por producción. Los lotes de trabajo se registran con costo 0 para no duplicar el pago
+- **Forma de salario (excluyente)**: en alta/edición, el empleado elige una de:
+  - **Por producción**: cobra según tarifas de trabajo
+  - **Salario fijo diario**: importe CUP predefinido; se genera cada día y se paga vía «Pago de empleados»
+  - **Salario por destajo diario**: igual que el fijo (no acumula tarifas de producción), pero el importe **debe definirse obligatoriamente cada día** en el listado de empleados antes de poder pagar
+  - Los lotes de trabajo de empleados fijo/destajo se registran con costo 0 para no duplicar el pago
 - Historial de pagos al empleado
 - Dar de baja (soft delete, no eliminar)
 - **Multi-rol (v2.5)**: cada empleado tiene un rol principal (`employees.role_id`) y puede tener roles adicionales (`employee_extra_roles`) para cuando cubre otra Área
@@ -237,7 +241,7 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 
 1. Un pedido siempre está asociado a un cliente
 2. Los precios se toman de la lista de precios configurada (no se hardcodean). Cada fila puede ofrecer CUP, USD o ambas; en pedidos/facturas el unitario se resuelve en **CUP** (prioridad CUP activo; si solo USD, `precio_usd × tasa` vigente)
-3. Los pagos a empleados usan las **tarifas de pago** en CUP (distintas a precios de VENTA), salvo empleados con **salario fijo diario** habilitado
+3. Los pagos a empleados usan las **tarifas de pago** en CUP (distintas a precios de VENTA), salvo empleados con **salario fijo diario** o **salario por destajo diario**
 4. La deuda anterior del cliente **no** se incluye en el total del pedido; al guardar se actualiza `clients.balance` (deuda abierta). El saldo a favor vive en `clients.credit_balance` y se puede aplicar al pedido/cobro
 5. El flujo de caja registra TODA operación de dinero (cobros a clientes, anticipos de pedido, pagos a empleados, gastos)
 6. Los empleados dados de baja no aparecen en nuevas asignaciones pero su historial se conserva
@@ -375,6 +379,12 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - `employees.has_fixed_daily_salary` + `fixed_daily_salary_cup`; tabla `employee_daily_salaries` (pendiente/pagado por día).
 - Formulario alta/edición: toggle bajo roles adicionales + importe CUP.
 - Pago del día y nómina diaria incluyen salarios fijos; lotes de producción de esos empleados no acumulan tarifa.
+
+### v2.11 — Salario por destajo diario (2026-08)
+- `employees.pay_mode`: `production` | `fixed` | `destajo` (excluyentes); columnas legacy de fijo se mantienen sincronizadas.
+- `employee_daily_salaries.kind`: `fixed` | `destajo`.
+- Destajo: importe obligatorio a definir cada día en el listado; «Pago de empleados» se bloquea mientras queden destajos sin definir.
+- Misma lógica que fijo respecto a producción (costo de lote 0) y nómina/pago del día.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

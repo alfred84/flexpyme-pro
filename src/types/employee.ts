@@ -1,4 +1,12 @@
 /**
+ * Modo de pago del empleado.
+ * - `production`: tarifas por trabajo realizado
+ * - `fixed`: salario fijo diario predefinido
+ * - `destajo`: importe a definir obligatoriamente cada día
+ */
+export type EmployeePayMode = "production" | "fixed" | "destajo";
+
+/**
  * Empleado del taller.
  */
 export interface EmployeeDto {
@@ -8,9 +16,10 @@ export interface EmployeeDto {
   role: string | null;
   phone: string | null;
   notes: string | null;
-  /** Cobra salario fijo diario en vez de tarifas por producción. */
+  payMode: EmployeePayMode;
+  /** @deprecated Usar `payMode === 'fixed'`. */
   hasFixedDailySalary: boolean;
-  /** Importe CUP del salario fijo diario. */
+  /** Importe CUP del salario fijo diario (modo `fixed`). */
   fixedDailySalaryCup: number;
   isActive: boolean;
   createdAt: string;
@@ -29,7 +38,7 @@ export interface CreateEmployeePayload {
   phone: string | null;
   notes: string | null;
   extraRoleIds: number[];
-  hasFixedDailySalary: boolean;
+  payMode: EmployeePayMode;
   fixedDailySalaryCup: number;
 }
 
@@ -38,6 +47,18 @@ export interface CreateEmployeePayload {
  */
 export interface UpdateEmployeePayload extends CreateEmployeePayload {
   id: number;
+}
+
+/**
+ * Empleado con destajo pendiente de definir para una fecha.
+ */
+export interface DestajoPendingDto {
+  employeeId: number;
+  employeeName: string;
+  date: string;
+  /** Id del registro diario si ya existe (importe 0 / sin definir). */
+  dailySalaryId: number | null;
+  currentAmountCup: number | null;
 }
 
 /**

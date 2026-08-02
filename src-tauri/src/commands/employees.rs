@@ -15,6 +15,8 @@ pub struct EmployeeDto {
     pub role: Option<String>,
     pub phone: Option<String>,
     pub notes: Option<String>,
+    /// `production` | `fixed` | `destajo`
+    pub pay_mode: String,
     pub has_fixed_daily_salary: bool,
     pub fixed_daily_salary_cup: f64,
     pub is_active: bool,
@@ -35,6 +37,8 @@ pub struct CreateEmployeePayload {
     pub notes: Option<String>,
     pub extra_role_ids: Option<Vec<i64>>,
     #[serde(default)]
+    pub pay_mode: Option<String>,
+    #[serde(default)]
     pub has_fixed_daily_salary: Option<bool>,
     #[serde(default)]
     pub fixed_daily_salary_cup: Option<f64>,
@@ -51,35 +55,95 @@ pub struct UpdateEmployeePayload {
     pub notes: Option<String>,
     pub extra_role_ids: Option<Vec<i64>>,
     #[serde(default)]
+    pub pay_mode: Option<String>,
+    #[serde(default)]
     pub has_fixed_daily_salary: Option<bool>,
     #[serde(default)]
     pub fixed_daily_salary_cup: Option<f64>,
 }
 
-fn resolve_fixed_salary(has: Option<bool>, amount: Option<f64>) -> Result<(bool, f64), String> {
-    let enabled = has.unwrap_or(false);
+/// Empleado con destajo pendiente de definir para una fecha.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DestajoPendingDto {
+    pub employee_id: i64,
+    pub employee_name: String,
+    pub date: String,
+    pub daily_salary_id: Option<i64>,
+    pub current_amount_cup: Option<f64>,
+}
+
+/// Payload para definir/actualizar el destajo de un día.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetDestajoDailyPayload {
+    pub employee_id: i64,
+    pub date: Option<String>,
+    pub amount_cup: f64,
+}
+
+fn normalize_pay_mode(
+    pay_mode: Option<&str>,
+    has_fixed: Option<bool>,
+    amount: Option<f64>,
+) -> Result<(String, bool, f64), String> {
     let cup = amount.unwrap_or(0.0);
     if !cup.is_finite() || cup < 0.0 {
         return Err("El salario fijo diario no es válido".to_string());
     }
-    if enabled && cup <= 1e-9 {
-        return Err("Indica un salario fijo diario mayor que cero".to_string());
+    let mode = pay_mode
+        .map(|m| m.trim().to_lowercase())
+        .filter(|m| !m.is_empty())
+        .unwrap_or_else(|| {
+            if has_fixed.unwrap_or(false) {
+                "fixed".to_string()
+            } else {
+                "production".to_string()
+            }
+        });
+    match mode.as_str() {
+        "production" => Ok(("production".to_string(), false, 0.0)),
+        "fixed" => {
+            if cup <= 1e-9 {
+                return Err("Indica un salario fijo diario mayor que cero".to_string());
+            }
+            Ok(("fixed".to_string(), true, cup))
+        }
+        "destajo" => Ok(("destajo".to_string(), false, 0.0)),
+        _ => Err("Modo de pago inválido".to_string()),
     }
-    Ok((enabled, if enabled { cup } else { 0.0 }))
 }
 
-/// Returns true when the employee uses a fixed daily salary (not production tariffs).
+fn read_pay_mode(row_mode: Option<String>, has_fixed: bool) -> String {
+    let mode = row_mode
+        .unwrap_or_default()
+        .trim()
+        .to_lowercase();
+    if mode == "fixed" || mode == "destajo" || mode == "production" {
+        return mode;
+    }
+    if has_fixed {
+        "fixed".to_string()
+    } else {
+        "production".to_string()
+    }
+}
+
+/// Returns true when the employee is paid by daily salary (fixed or destajo), not production tariffs.
 pub fn employee_has_fixed_daily_salary(
     conn: &rusqlite::Connection,
     employee_id: i64,
 ) -> Result<bool, String> {
-    conn.query_row(
-        "SELECT COALESCE(has_fixed_daily_salary, 0) FROM employees
-         WHERE id = ?1 AND deleted_at IS NULL",
-        params![employee_id],
-        |row| Ok(row.get::<_, i64>(0)? != 0),
-    )
-    .map_err(|_| "Empleado no encontrado".to_string())
+    let (pay_mode, has_fixed): (Option<String>, i64) = conn
+        .query_row(
+            "SELECT pay_mode, COALESCE(has_fixed_daily_salary, 0) FROM employees
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![employee_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Empleado no encontrado".to_string())?;
+    let mode = read_pay_mode(pay_mode, has_fixed != 0);
+    Ok(mode == "fixed" || mode == "destajo")
 }
 
 /// Ensures a pending daily-salary row exists for each active fixed-salary employee on `day`.
@@ -96,7 +160,10 @@ fn ensure_fixed_daily_salaries_for_date(
         .prepare(
             "SELECT id, fixed_daily_salary_cup FROM employees
              WHERE deleted_at IS NULL AND is_active = 1
-               AND COALESCE(has_fixed_daily_salary, 0) = 1
+               AND (
+                 COALESCE(pay_mode, '') = 'fixed'
+                 OR (COALESCE(pay_mode, '') = '' AND COALESCE(has_fixed_daily_salary, 0) = 1)
+               )
                AND fixed_daily_salary_cup > 1e-9",
         )
         .map_err(|e| e.to_string())?;
@@ -106,14 +173,14 @@ fn ensure_fixed_daily_salaries_for_date(
     for r in rows {
         let (emp_id, amount) = r.map_err(|e| e.to_string())?;
         conn.execute(
-            "INSERT OR IGNORE INTO employee_daily_salaries (employee_id, date, amount_cup, paid, status)
-             VALUES (?1, ?2, ?3, 0, 'pendiente')",
+            "INSERT OR IGNORE INTO employee_daily_salaries
+                (employee_id, date, amount_cup, paid, status, kind)
+             VALUES (?1, ?2, ?3, 0, 'pendiente', 'fixed')",
             params![emp_id, day, amount],
         )
         .map_err(|e| e.to_string())?;
-        // Si ya existía pendiente, actualizar importe al valor actual del empleado.
         conn.execute(
-            "UPDATE employee_daily_salaries SET amount_cup = ?1
+            "UPDATE employee_daily_salaries SET amount_cup = ?1, kind = 'fixed'
              WHERE employee_id = ?2 AND substr(date, 1, 10) = ?3 AND status = 'pendiente'",
             params![amount, emp_id, day],
         )
@@ -290,7 +357,7 @@ pub fn employees_list(active_only: Option<bool>) -> Result<Vec<EmployeeDto>, Str
     let sql = if only_active {
         "SELECT e.id, e.name, e.role_id,
                 COALESCE(e.role_snapshot, er.name, e.role) AS role_label,
-                e.phone, e.notes,
+                e.phone, e.notes, e.pay_mode,
                 COALESCE(e.has_fixed_daily_salary, 0), COALESCE(e.fixed_daily_salary_cup, 0),
                 e.is_active, e.created_at
          FROM employees e
@@ -300,7 +367,7 @@ pub fn employees_list(active_only: Option<bool>) -> Result<Vec<EmployeeDto>, Str
     } else {
         "SELECT e.id, e.name, e.role_id,
                 COALESCE(e.role_snapshot, er.name, e.role) AS role_label,
-                e.phone, e.notes,
+                e.phone, e.notes, e.pay_mode,
                 COALESCE(e.has_fixed_daily_salary, 0), COALESCE(e.fixed_daily_salary_cup, 0),
                 e.is_active, e.created_at
          FROM employees e
@@ -318,10 +385,11 @@ pub fn employees_list(active_only: Option<bool>) -> Result<Vec<EmployeeDto>, Str
                 row.get::<_, Option<String>>(3)?,
                 row.get::<_, Option<String>>(4)?,
                 row.get::<_, Option<String>>(5)?,
-                row.get::<_, i64>(6)? != 0,
-                row.get::<_, f64>(7)?,
-                row.get::<_, i64>(8)? != 0,
-                row.get::<_, String>(9)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, i64>(7)? != 0,
+                row.get::<_, f64>(8)?,
+                row.get::<_, i64>(9)? != 0,
+                row.get::<_, String>(10)?,
             ))
         })
         .map_err(|e| e.to_string())?;
@@ -335,11 +403,13 @@ pub fn employees_list(active_only: Option<bool>) -> Result<Vec<EmployeeDto>, Str
             role,
             phone,
             notes,
+            pay_mode_raw,
             has_fixed,
             fixed_cup,
             is_active,
             created_at,
         ) = r.map_err(|e| e.to_string())?;
+        let pay_mode = read_pay_mode(pay_mode_raw, has_fixed);
         let (extra_role_ids, extra_roles) = load_extra_roles(&conn, id)?;
         out.push(EmployeeDto {
             id,
@@ -348,8 +418,9 @@ pub fn employees_list(active_only: Option<bool>) -> Result<Vec<EmployeeDto>, Str
             role,
             phone,
             notes,
-            has_fixed_daily_salary: has_fixed,
-            fixed_daily_salary_cup: fixed_cup,
+            pay_mode: pay_mode.clone(),
+            has_fixed_daily_salary: pay_mode == "fixed",
+            fixed_daily_salary_cup: if pay_mode == "fixed" { fixed_cup } else { 0.0 },
             is_active,
             created_at,
             extra_roles,
@@ -363,34 +434,47 @@ pub fn employees_list(active_only: Option<bool>) -> Result<Vec<EmployeeDto>, Str
 #[tauri::command]
 pub fn employees_get_by_id(id: i64) -> Result<EmployeeDto, String> {
     let conn = db::open_connection()?;
-    let (emp_id, name, role_id, role, phone, notes, has_fixed, fixed_cup, is_active, created_at) =
-        conn
-            .query_row(
-                "SELECT e.id, e.name, e.role_id,
-                        COALESCE(e.role_snapshot, er.name, e.role) AS role_label,
-                        e.phone, e.notes,
-                        COALESCE(e.has_fixed_daily_salary, 0), COALESCE(e.fixed_daily_salary_cup, 0),
-                        e.is_active, e.created_at
-                 FROM employees e
-                 LEFT JOIN employee_roles er ON er.id = e.role_id
-                 WHERE e.id = ?1 AND e.deleted_at IS NULL",
-                params![id],
-                |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, Option<i64>>(2)?,
-                        row.get::<_, Option<String>>(3)?,
-                        row.get::<_, Option<String>>(4)?,
-                        row.get::<_, Option<String>>(5)?,
-                        row.get::<_, i64>(6)? != 0,
-                        row.get::<_, f64>(7)?,
-                        row.get::<_, i64>(8)? != 0,
-                        row.get::<_, String>(9)?,
-                    ))
-                },
-            )
-            .map_err(|_| "Empleado no encontrado".to_string())?;
+    let (
+        emp_id,
+        name,
+        role_id,
+        role,
+        phone,
+        notes,
+        pay_mode_raw,
+        has_fixed,
+        fixed_cup,
+        is_active,
+        created_at,
+    ) = conn
+        .query_row(
+            "SELECT e.id, e.name, e.role_id,
+                    COALESCE(e.role_snapshot, er.name, e.role) AS role_label,
+                    e.phone, e.notes, e.pay_mode,
+                    COALESCE(e.has_fixed_daily_salary, 0), COALESCE(e.fixed_daily_salary_cup, 0),
+                    e.is_active, e.created_at
+             FROM employees e
+             LEFT JOIN employee_roles er ON er.id = e.role_id
+             WHERE e.id = ?1 AND e.deleted_at IS NULL",
+            params![id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<i64>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, i64>(7)? != 0,
+                    row.get::<_, f64>(8)?,
+                    row.get::<_, i64>(9)? != 0,
+                    row.get::<_, String>(10)?,
+                ))
+            },
+        )
+        .map_err(|_| "Empleado no encontrado".to_string())?;
+    let pay_mode = read_pay_mode(pay_mode_raw, has_fixed);
     let (extra_role_ids, extra_roles) = load_extra_roles(&conn, emp_id)?;
     Ok(EmployeeDto {
         id: emp_id,
@@ -399,8 +483,9 @@ pub fn employees_get_by_id(id: i64) -> Result<EmployeeDto, String> {
         role,
         phone,
         notes,
-        has_fixed_daily_salary: has_fixed,
-        fixed_daily_salary_cup: fixed_cup,
+        pay_mode: pay_mode.clone(),
+        has_fixed_daily_salary: pay_mode == "fixed",
+        fixed_daily_salary_cup: if pay_mode == "fixed" { fixed_cup } else { 0.0 },
         is_active,
         created_at,
         extra_roles,
@@ -424,21 +509,23 @@ pub fn employees_create(payload: CreateEmployeePayload) -> Result<i64, String> {
             |row| row.get(0),
         )
         .map_err(|_| "Rol no válido".to_string())?;
-    let (has_fixed, fixed_cup) = resolve_fixed_salary(
+    let (pay_mode, has_fixed, fixed_cup) = normalize_pay_mode(
+        payload.pay_mode.as_deref(),
         payload.has_fixed_daily_salary,
         payload.fixed_daily_salary_cup,
     )?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     tx.execute(
         "INSERT INTO employees (name, role_id, role_snapshot, phone, notes,
-         has_fixed_daily_salary, fixed_daily_salary_cup, is_active, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, datetime('now'))",
+         pay_mode, has_fixed_daily_salary, fixed_daily_salary_cup, is_active, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1, datetime('now'))",
         params![
             name,
             role_id,
             role_name,
             normalize_optional(payload.phone),
             normalize_optional(payload.notes),
+            pay_mode,
             if has_fixed { 1i64 } else { 0i64 },
             fixed_cup
         ],
@@ -467,7 +554,8 @@ pub fn employees_update(payload: UpdateEmployeePayload) -> Result<(), String> {
             |row| row.get(0),
         )
         .map_err(|_| "Rol no válido".to_string())?;
-    let (has_fixed, fixed_cup) = resolve_fixed_salary(
+    let (pay_mode, has_fixed, fixed_cup) = normalize_pay_mode(
+        payload.pay_mode.as_deref(),
         payload.has_fixed_daily_salary,
         payload.fixed_daily_salary_cup,
     )?;
@@ -476,15 +564,16 @@ pub fn employees_update(payload: UpdateEmployeePayload) -> Result<(), String> {
         .execute(
             "UPDATE employees
              SET name = ?1, role_id = ?2, role_snapshot = ?3, phone = ?4, notes = ?5,
-                 has_fixed_daily_salary = ?6, fixed_daily_salary_cup = ?7,
+                 pay_mode = ?6, has_fixed_daily_salary = ?7, fixed_daily_salary_cup = ?8,
                  updated_at = datetime('now')
-             WHERE id = ?8 AND deleted_at IS NULL",
+             WHERE id = ?9 AND deleted_at IS NULL",
             params![
                 name,
                 role_id,
                 role_name,
                 normalize_optional(payload.phone),
                 normalize_optional(payload.notes),
+                pay_mode,
                 if has_fixed { 1i64 } else { 0i64 },
                 fixed_cup,
                 payload.id
@@ -824,7 +913,7 @@ pub struct WorkBatchPayPayload {
     pub exchange_rate: Option<f64>,
 }
 
-/// Lote o salario fijo pendiente de pago (resumen para UI de pago).
+/// Lote o salario diario pendiente de pago (resumen para UI de pago).
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UnpaidBatchDto {
@@ -836,11 +925,11 @@ pub struct UnpaidBatchDto {
     pub total_cost: f64,
     pub paid: f64,
     pub pending: f64,
-    /// `true` si el ítem es un salario fijo diario (no un lote de producción).
+    /// `true` si el ítem es un salario diario (fijo o destajo), no un lote de producción.
     pub is_fixed_salary: bool,
 }
 
-/// Lists unpaid work batches and fixed daily salaries for a given date (default today).
+/// Lists unpaid work batches and daily salaries for a given date (default today).
 #[tauri::command]
 pub fn work_batches_unpaid_for_date(date: Option<String>) -> Result<Vec<UnpaidBatchDto>, String> {
     let conn = db::open_connection()?;
@@ -852,7 +941,7 @@ pub fn work_batches_unpaid_for_date(date: Option<String>) -> Result<Vec<UnpaidBa
 
     let mut out = Vec::new();
 
-    // Lotes de producción: omitir empleados con salario fijo (no acumulan tarifa).
+    // Lotes de producción: omitir empleados con salario diario (fijo/destajo).
     let mut stmt = conn
         .prepare(
             "SELECT pb.id, pb.employee_id, COALESCE(e.name, ''), pb.type, pb.date,
@@ -862,6 +951,7 @@ pub fn work_batches_unpaid_for_date(date: Option<String>) -> Result<Vec<UnpaidBa
              WHERE pb.status = 'pendiente'
                AND (pb.total_cost - pb.paid) > 1e-9
                AND substr(pb.date, 1, 10) = substr(?1, 1, 10)
+               AND COALESCE(e.pay_mode, '') NOT IN ('fixed', 'destajo')
                AND COALESCE(e.has_fixed_daily_salary, 0) = 0
              ORDER BY e.name COLLATE NOCASE, pb.id",
         )
@@ -887,12 +977,15 @@ pub fn work_batches_unpaid_for_date(date: Option<String>) -> Result<Vec<UnpaidBa
         out.push(r.map_err(|e| e.to_string())?);
     }
 
+    // Solo salarios con importe definido (> 0). Destajos sin definir no aparecen.
     let mut salary_stmt = conn
         .prepare(
-            "SELECT eds.id, eds.employee_id, e.name, eds.date, eds.amount_cup, eds.paid
+            "SELECT eds.id, eds.employee_id, e.name, eds.date, eds.amount_cup, eds.paid,
+                    COALESCE(eds.kind, 'fixed')
              FROM employee_daily_salaries eds
              JOIN employees e ON e.id = eds.employee_id
              WHERE eds.status = 'pendiente'
+               AND eds.amount_cup > 1e-9
                AND (eds.amount_cup - eds.paid) > 1e-9
                AND substr(eds.date, 1, 10) = substr(?1, 1, 10)
              ORDER BY e.name COLLATE NOCASE, eds.id",
@@ -902,11 +995,17 @@ pub fn work_batches_unpaid_for_date(date: Option<String>) -> Result<Vec<UnpaidBa
         .query_map(params![day], |row| {
             let total: f64 = row.get(4)?;
             let paid: f64 = row.get(5)?;
+            let kind: String = row.get(6)?;
+            let work_type = if kind == "destajo" {
+                "salario_destajo".to_string()
+            } else {
+                "salario_fijo".to_string()
+            };
             Ok(UnpaidBatchDto {
                 id: row.get(0)?,
                 employee_id: row.get(1)?,
                 employee_name: row.get(2)?,
-                work_type: "salario_fijo".to_string(),
+                work_type,
                 date: row.get(3)?,
                 total_cost: total,
                 paid,
@@ -926,6 +1025,115 @@ pub fn work_batches_unpaid_for_date(date: Option<String>) -> Result<Vec<UnpaidBa
             .then(a.id.cmp(&b.id))
     });
     Ok(out)
+}
+
+/// Lista empleados con destajo que aún no tienen importe definido para la fecha.
+#[tauri::command]
+pub fn destajo_pending_for_date(date: Option<String>) -> Result<Vec<DestajoPendingDto>, String> {
+    let conn = db::open_connection()?;
+    let day = date
+        .map(|d| d.trim().to_string())
+        .filter(|d| !d.is_empty())
+        .unwrap_or_else(chrono_lite_today);
+    let day = day[..day.len().min(10)].to_string();
+    if day.len() < 10 {
+        return Err("Fecha inválida".to_string());
+    }
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT e.id, e.name,
+                    eds.id,
+                    eds.amount_cup
+             FROM employees e
+             LEFT JOIN employee_daily_salaries eds
+               ON eds.employee_id = e.id
+              AND substr(eds.date, 1, 10) = ?1
+             WHERE e.deleted_at IS NULL
+               AND e.is_active = 1
+               AND e.pay_mode = 'destajo'
+               AND (
+                 eds.id IS NULL
+                 OR COALESCE(eds.amount_cup, 0) <= 1e-9
+               )
+             ORDER BY e.name COLLATE NOCASE",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![day], |row| {
+            Ok(DestajoPendingDto {
+                employee_id: row.get(0)?,
+                employee_name: row.get(1)?,
+                date: day.clone(),
+                daily_salary_id: row.get(2)?,
+                current_amount_cup: row.get(3)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Define o actualiza el salario por destajo de un empleado para una fecha.
+#[tauri::command]
+pub fn set_destajo_daily_salary(payload: SetDestajoDailyPayload) -> Result<i64, String> {
+    if !payload.amount_cup.is_finite() || payload.amount_cup <= 1e-9 {
+        return Err("Indica un importe de destajo mayor que cero".to_string());
+    }
+    let conn = db::open_connection()?;
+    let day = payload
+        .date
+        .as_deref()
+        .map(|d| d.trim().to_string())
+        .filter(|d| !d.is_empty())
+        .unwrap_or_else(chrono_lite_today);
+    let day = day[..day.len().min(10)].to_string();
+    if day.len() < 10 {
+        return Err("Fecha inválida".to_string());
+    }
+
+    let pay_mode: String = conn
+        .query_row(
+            "SELECT COALESCE(pay_mode, 'production') FROM employees
+             WHERE id = ?1 AND deleted_at IS NULL AND is_active = 1",
+            params![payload.employee_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "Empleado no encontrado o inactivo".to_string())?;
+    if pay_mode != "destajo" {
+        return Err("El empleado no tiene modo destajo diario".to_string());
+    }
+
+    let existing: Option<(i64, String)> = conn
+        .query_row(
+            "SELECT id, status FROM employee_daily_salaries
+             WHERE employee_id = ?1 AND substr(date, 1, 10) = ?2",
+            params![payload.employee_id, day],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .ok();
+
+    if let Some((id, status)) = existing {
+        if status == "pagado" {
+            return Err("El destajo de ese día ya está pagado".to_string());
+        }
+        conn.execute(
+            "UPDATE employee_daily_salaries
+             SET amount_cup = ?1, kind = 'destajo', paid = 0, status = 'pendiente'
+             WHERE id = ?2",
+            params![payload.amount_cup, id],
+        )
+        .map_err(|e| e.to_string())?;
+        return Ok(id);
+    }
+
+    conn.execute(
+        "INSERT INTO employee_daily_salaries
+            (employee_id, date, amount_cup, paid, status, kind)
+         VALUES (?1, ?2, ?3, 0, 'pendiente', 'destajo')",
+        params![payload.employee_id, day, payload.amount_cup],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(conn.last_insert_rowid())
 }
 
 fn chrono_lite_today() -> String {
@@ -1254,6 +1462,7 @@ pub fn payroll_daily(month: String) -> Result<Vec<PayrollDailyRowDto>, String> {
                FROM production_batches pb
                JOIN employees e ON e.id = pb.employee_id
                WHERE pb.employee_id IS NOT NULL
+                 AND COALESCE(e.pay_mode, '') NOT IN ('fixed', 'destajo')
                  AND COALESCE(e.has_fixed_daily_salary, 0) = 0
                  AND strftime('%Y-%m', pb.date) = ?1
                UNION ALL
@@ -1262,6 +1471,7 @@ pub fn payroll_daily(month: String) -> Result<Vec<PayrollDailyRowDto>, String> {
                FROM employee_daily_salaries eds
                JOIN employees e ON e.id = eds.employee_id
                WHERE strftime('%Y-%m', eds.date) = ?1
+                 AND eds.amount_cup > 1e-9
              )
              GROUP BY employee_id, date
              ORDER BY date DESC, employee_name COLLATE NOCASE",
