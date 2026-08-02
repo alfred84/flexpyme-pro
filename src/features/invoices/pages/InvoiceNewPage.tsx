@@ -4,8 +4,17 @@ import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { fetchClients } from "@/db/queries/clients";
 import { createInvoice } from "@/db/queries/invoices";
-import { fetchCategories, fetchCategoryFinishes, fetchAllCategoryFormats, fetchAllCategoryWorkTypes } from "@/db/queries/categories";
-import { fetchInventoryItems, fetchInventoryRecipes, fetchMaterialCategories } from "@/db/queries/inventory";
+import {
+  fetchCategories,
+  fetchCategoryFinishes,
+  fetchAllCategoryFormats,
+  fetchAllCategoryWorkTypes,
+} from "@/db/queries/categories";
+import {
+  fetchInventoryItems,
+  fetchInventoryRecipes,
+  fetchMaterialCategories,
+} from "@/db/queries/inventory";
 import { fetchFormats, fetchPrices } from "@/db/queries/prices";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 import {
@@ -13,7 +22,8 @@ import {
   buildCountsPayload,
   computeChangePending,
   computeReceivedAmount,
-  emptyDenominationCounts,
+  computeReceivedUsd,
+  emptyOrderCashierState,
   type OrderCashierState,
 } from "@/features/invoices/components/OrderCashierSection";
 import { OrderHeaderSection } from "@/features/invoices/components/OrderHeaderSection";
@@ -23,7 +33,10 @@ import {
   OrderWorkTypeSummary,
   aggregateWorkTypeSummary,
 } from "@/features/invoices/components/OrderWorkTypeSummary";
-import { OrderPaymentSection, type OrderPaymentState } from "@/features/invoices/components/OrderPaymentSection";
+import {
+  OrderPaymentSection,
+  type OrderPaymentState,
+} from "@/features/invoices/components/OrderPaymentSection";
 import {
   draftLineSubtotal,
   draftLineToItems,
@@ -34,11 +47,20 @@ import { useAppSettings } from "@/hooks/use-app-settings";
 import { todayIso } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
-import type { CreateInvoiceItemPayload } from "@/types/invoice";
+import type { AdvancePaymentPayload, CreateInvoiceItemPayload } from "@/types/invoice";
+
+function defaultPaymentState(rate: number): OrderPaymentState {
+  return {
+    paymentMethod: "efectivo",
+    paymentCurrency: "CUP",
+    exchangeRate: rate > 0 ? String(rate) : "",
+    transferConcept: "",
+  };
+}
 
 /**
  * Formulario de nuevo pedido: encabezado compacto, líneas en tabla/modal,
- * resumen del pedido y cobro integrado.
+ * anticipo con denominaciones, resumen y cobro integrado.
  *
  * @returns Página de alta de pedido.
  */
@@ -47,9 +69,15 @@ export function InvoiceNewPage() {
   const queryClient = useQueryClient();
   const appSettings = useAppSettings();
   const clientsQuery = useQuery({ queryKey: ["clients", "list"], queryFn: fetchClients });
-  const categoriesQuery = useQuery({ queryKey: ["categories", "active"], queryFn: () => fetchCategories(true) });
+  const categoriesQuery = useQuery({
+    queryKey: ["categories", "active"],
+    queryFn: () => fetchCategories(true),
+  });
   const formatsQuery = useQuery({ queryKey: ["formats"], queryFn: fetchFormats });
-  const pricesQuery = useQuery({ queryKey: ["prices", "active"], queryFn: () => fetchPrices(false) });
+  const pricesQuery = useQuery({
+    queryKey: ["prices", "active"],
+    queryFn: () => fetchPrices(false),
+  });
   const categoryWorkTypesQuery = useQuery({
     queryKey: ["category-work-types"],
     queryFn: fetchAllCategoryWorkTypes,
@@ -80,25 +108,27 @@ export function InvoiceNewPage() {
   const [clientId, setClientId] = useState(0);
   const [date, setDate] = useState(() => todayIso());
   const [notes, setNotes] = useState("");
-  const [advancePayment, setAdvancePayment] = useState("0");
+  const [registerAdvance, setRegisterAdvance] = useState(false);
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [lineModalOpen, setLineModalOpen] = useState(false);
   const [editingLineKey, setEditingLineKey] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [payment, setPayment] = useState<OrderPaymentState>(() => ({
-    paymentMethod: "efectivo",
-    paymentCurrency: "CUP",
-    exchangeRate: "",
-    transferConcept: "",
-  }));
-  const [cashier, setCashier] = useState<OrderCashierState>(() => ({
-    counts: emptyDenominationCounts(),
-    usdCounts: emptyDenominationCounts("USD"),
-    amountCup: "",
-    amountUsd: "",
-    transferConcept: "",
-    changeCounts: emptyDenominationCounts(),
-  }));
+  const [payment, setPayment] = useState<OrderPaymentState>(() =>
+    defaultPaymentState(appSettings.usdExchangeRate),
+  );
+  const [cashier, setCashier] = useState<OrderCashierState>(() => emptyOrderCashierState());
+  const [advancePayment, setAdvancePayment] = useState<OrderPaymentState>(() =>
+    defaultPaymentState(appSettings.usdExchangeRate),
+  );
+  const [advanceCashier, setAdvanceCashier] = useState<OrderCashierState>(() =>
+    emptyOrderCashierState(),
+  );
+
+  const selectedClient = useMemo(
+    () => (clientsQuery.data ?? []).find((c) => c.id === clientId) ?? null,
+    [clientsQuery.data, clientId],
+  );
+  const clientCredit = selectedClient?.creditBalance ?? 0;
 
   const categoryNames = useMemo(() => {
     const map = new Map<number, string>();
@@ -121,7 +151,28 @@ export function InvoiceNewPage() {
     [lines],
   );
 
-  const advanceNum = Number.parseFloat(advancePayment.replace(",", ".")) || 0;
+  const advanceRate =
+    advancePayment.paymentCurrency === "USD" && advancePayment.paymentMethod === "efectivo"
+      ? Number.parseFloat(advancePayment.exchangeRate.replace(",", ".")) ||
+        appSettings.usdExchangeRate
+      : 0;
+
+  const advancePaymentWithRate: OrderPaymentState = advancePayment.exchangeRate
+    ? advancePayment
+    : {
+        ...advancePayment,
+        exchangeRate: advancePayment.exchangeRate || String(appSettings.usdExchangeRate || ""),
+      };
+
+  const advanceReceived = useMemo(
+    () =>
+      registerAdvance
+        ? computeReceivedAmount(advancePaymentWithRate, advanceCashier, advanceRate)
+        : 0,
+    [registerAdvance, advancePaymentWithRate, advanceCashier, advanceRate],
+  );
+
+  const advanceNum = Math.min(advanceReceived, linesSubtotal);
   const orderTotal = Math.max(linesSubtotal - advanceNum, 0);
 
   const exchangeRate =
@@ -137,16 +188,76 @@ export function InvoiceNewPage() {
   const headerValid = clientId > 0;
   const canCheckout = headerValid && linesValid;
 
+  const creditAppliedPreview = cashier.applyClientCredit
+    ? Math.min(clientCredit, orderTotal)
+    : 0;
+  const effectiveDue = Math.max(0, orderTotal - creditAppliedPreview);
+
   const received = useMemo(
     () => (canCheckout ? computeReceivedAmount(paymentWithRate, cashier, exchangeRate) : 0),
     [canCheckout, paymentWithRate, cashier, exchangeRate],
   );
 
-  const pendingAfterPay = Math.max(orderTotal - received, 0);
+  const pendingAfterPay = Math.max(effectiveDue - received, 0);
   const changePending = useMemo(
-    () => (canCheckout ? computeChangePending(received, orderTotal, cashier.changeCounts) : false),
-    [canCheckout, received, orderTotal, cashier.changeCounts],
+    () =>
+      canCheckout
+        ? computeChangePending(
+            received,
+            effectiveDue,
+            cashier.changeCounts,
+            cashier.overpaymentDisposition,
+          )
+        : false,
+    [canCheckout, received, effectiveDue, cashier.changeCounts, cashier.overpaymentDisposition],
   );
+
+  const advanceChangePending = useMemo(
+    () =>
+      registerAdvance
+        ? computeChangePending(
+            advanceReceived,
+            linesSubtotal,
+            advanceCashier.changeCounts,
+            advanceCashier.overpaymentDisposition,
+          )
+        : false,
+    [
+      registerAdvance,
+      advanceReceived,
+      linesSubtotal,
+      advanceCashier.changeCounts,
+      advanceCashier.overpaymentDisposition,
+    ],
+  );
+
+  const buildAdvanceDetail = (): AdvancePaymentPayload | null => {
+    if (!registerAdvance || advanceReceived <= 1e-6) {
+      return null;
+    }
+    const isUsd =
+      advancePayment.paymentMethod === "efectivo" && advancePayment.paymentCurrency === "USD";
+    const isTransfer = advancePayment.paymentMethod === "transferencia";
+    return {
+      paymentMethod: advancePayment.paymentMethod,
+      paymentCurrency: isTransfer ? "CUP" : advancePayment.paymentCurrency,
+      counts: !isUsd && !isTransfer ? buildCountsPayload(advanceCashier.counts) : null,
+      amountCup: advanceCashier.amountCup.trim()
+        ? Number.parseFloat(advanceCashier.amountCup.replace(",", "."))
+        : isTransfer
+          ? advanceReceived
+          : null,
+      amountUsd: isUsd ? computeReceivedUsd(advanceCashier) : null,
+      exchangeRate: isUsd ? advanceRate : null,
+      transferConcept:
+        (advanceCashier.transferConcept || advancePayment.transferConcept).trim() || null,
+      changeCounts:
+        !isTransfer && advanceCashier.overpaymentDisposition === "change"
+          ? buildCountsPayload(advanceCashier.changeCounts)
+          : null,
+      overpaymentDisposition: advanceCashier.overpaymentDisposition,
+    };
+  };
 
   const saveMutation = useMutation({
     mutationFn: async (collectPayment: boolean) => {
@@ -154,14 +265,30 @@ export function InvoiceNewPage() {
         draftLineToItems(line, recipesQuery.data ?? [], categoryWorkTypesQuery.data ?? []),
       );
 
-      if (payment.paymentMethod === "efectivo" && payment.paymentCurrency === "USD" && exchangeRate <= 0) {
-        throw new Error("Indica una tasa USD→CUP válida.");
+      if (
+        payment.paymentMethod === "efectivo" &&
+        payment.paymentCurrency === "USD" &&
+        exchangeRate <= 0 &&
+        collectPayment
+      ) {
+        throw new Error("Indica una tasa USD→CUP válida para el cobro.");
+      }
+      if (
+        registerAdvance &&
+        advancePayment.paymentMethod === "efectivo" &&
+        advancePayment.paymentCurrency === "USD" &&
+        advanceRate <= 0
+      ) {
+        throw new Error("Indica una tasa USD→CUP válida para el anticipo.");
       }
 
       const isUsd = payment.paymentMethod === "efectivo" && payment.paymentCurrency === "USD";
       const isTransfer = payment.paymentMethod === "transferencia";
       const counts = !isUsd && !isTransfer ? buildCountsPayload(cashier.counts) : null;
-      const changeCounts = !isTransfer ? buildCountsPayload(cashier.changeCounts) : null;
+      const changeCounts =
+        !isTransfer && cashier.overpaymentDisposition === "change"
+          ? buildCountsPayload(cashier.changeCounts)
+          : null;
 
       const res = await createInvoice({
         clientId,
@@ -171,21 +298,25 @@ export function InvoiceNewPage() {
         paid: 0,
         paymentMethod: payment.paymentMethod,
         paymentCurrency: payment.paymentMethod === "transferencia" ? "CUP" : payment.paymentCurrency,
-        exchangeRateSnapshot: exchangeRate,
+        exchangeRateSnapshot: exchangeRate || advanceRate,
         transferConcept: (cashier.transferConcept || payment.transferConcept).trim() || null,
+        advancePaymentDetail: buildAdvanceDetail(),
+        applyClientCredit: cashier.applyClientCredit,
         initialPayment:
           collectPayment && received > 1e-6
             ? {
                 counts,
                 amountCup: cashier.amountCup.trim()
                   ? Number.parseFloat(cashier.amountCup.replace(",", "."))
-                  : null,
-                amountUsd: cashier.amountUsd.trim()
-                  ? Number.parseFloat(cashier.amountUsd.replace(",", "."))
-                  : null,
+                  : isTransfer
+                    ? received
+                    : null,
+                amountUsd: isUsd ? computeReceivedUsd(cashier) : null,
                 exchangeRate: isUsd ? exchangeRate : null,
                 transferConcept: (cashier.transferConcept || payment.transferConcept).trim() || null,
                 changeCounts,
+                overpaymentDisposition: cashier.overpaymentDisposition,
+                applyClientCredit: cashier.applyClientCredit,
               }
             : null,
         items,
@@ -197,7 +328,10 @@ export function InvoiceNewPage() {
       await queryClient.invalidateQueries({ queryKey: ["invoices"] });
       await queryClient.invalidateQueries({ queryKey: ["clients"] });
       await queryClient.invalidateQueries({ queryKey: ["cashflow"] });
-      pushFlashMessage({ kind: "success", text: `Pedido ${res.invoiceNumber} creado correctamente.` });
+      pushFlashMessage({
+        kind: "success",
+        text: `Pedido ${res.invoiceNumber} creado correctamente.`,
+      });
       await navigate({ to: "/pedidos/$invoiceId", params: { invoiceId: String(res.id) } });
     },
   });
@@ -236,13 +370,19 @@ export function InvoiceNewPage() {
       setFormError("Añade al menos una línea válida con categoría, cantidad y precio.");
       return false;
     }
-    if (advanceNum < 0) {
-      setFormError("El anticipado no puede ser negativo.");
+    if (registerAdvance && advanceReceived <= 1e-6) {
+      setFormError("Indica el monto o las denominaciones del pago anticipado.");
+      return false;
+    }
+    if (advanceChangePending) {
+      setFormError(
+        "Hay vuelto pendiente en el anticipo. Cuadra el desglose o elige dejar saldo a favor.",
+      );
       return false;
     }
     if (changePending) {
       setFormError(
-        "Hay vuelto pendiente por entregar. Cuadra el desglose de billetes del vuelto antes de cobrar.",
+        "Hay vuelto pendiente por entregar. Cuadra el desglose o elige dejar saldo a favor.",
       );
       return false;
     }
@@ -275,7 +415,9 @@ export function InvoiceNewPage() {
         <div className="alert alert-error py-2 text-sm">
           <span>
             {formError ??
-              (saveMutation.error instanceof Error ? saveMutation.error.message : "Error al guardar el pedido")}
+              (saveMutation.error instanceof Error
+                ? saveMutation.error.message
+                : "Error al guardar el pedido")}
           </span>
         </div>
       )}
@@ -323,18 +465,59 @@ export function InvoiceNewPage() {
             </div>
           </div>
 
-          <OrderPaymentSection totalCup={orderTotal} value={paymentWithRate} onChange={setPayment} />
-
-          {canCheckout && (
-            <div className="transition-all duration-300">
-              <OrderCashierSection
-                balanceDue={orderTotal}
-                payment={paymentWithRate}
-                value={cashier}
-                exchangeRate={exchangeRate}
-                onChange={setCashier}
-              />
+          <div className="card bg-base-100 shadow-sm">
+            <div className="card-body gap-2 p-3">
+              <label className="label cursor-pointer justify-start gap-3 py-0">
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-primary checkbox-sm"
+                  checked={registerAdvance}
+                  onChange={(e) => setRegisterAdvance(e.target.checked)}
+                />
+                <span className="label-text font-medium">Registrar pago anticipado</span>
+              </label>
+              {registerAdvance && (
+                <div className="space-y-3 pt-1">
+                  <OrderPaymentSection
+                    totalCup={linesSubtotal}
+                    value={advancePaymentWithRate}
+                    onChange={setAdvancePayment}
+                  />
+                  <OrderCashierSection
+                    balanceDue={linesSubtotal}
+                    payment={advancePaymentWithRate}
+                    value={advanceCashier}
+                    exchangeRate={advanceRate}
+                    onChange={setAdvanceCashier}
+                    title="Pago anticipado"
+                    hint="El anticipo se registra como ingreso en caja. Si es efectivo, usa la cuadrícula de denominaciones."
+                  />
+                </div>
+              )}
             </div>
+          </div>
+
+          {orderTotal > 1e-6 && (
+            <>
+              <OrderPaymentSection
+                totalCup={orderTotal}
+                value={paymentWithRate}
+                onChange={setPayment}
+              />
+
+              {canCheckout && (
+                <div className="transition-all duration-300">
+                  <OrderCashierSection
+                    balanceDue={orderTotal}
+                    payment={paymentWithRate}
+                    value={cashier}
+                    exchangeRate={exchangeRate}
+                    clientCreditBalance={clientCredit}
+                    onChange={setCashier}
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -345,27 +528,32 @@ export function InvoiceNewPage() {
               <span>Subtotal líneas</span>
               <span>{formatMoney(linesSubtotal)}</span>
             </div>
-            <label className="form-control">
-              <span className="label-text text-xs">Anticipado</span>
-              <input
-                id="inv-advance"
-                type="text"
-                inputMode="decimal"
-                className="input input-bordered input-sm"
-                value={advancePayment}
-                onChange={(e) => setAdvancePayment(e.target.value)}
-              />
-            </label>
+            {registerAdvance && (
+              <div className="flex justify-between text-info">
+                <span>Anticipado</span>
+                <span>{formatMoney(advanceNum)}</span>
+              </div>
+            )}
+            {creditAppliedPreview > 1e-6 && (
+              <div className="flex justify-between text-success">
+                <span>Saldo a favor aplicado</span>
+                <span>−{formatMoney(creditAppliedPreview)}</span>
+              </div>
+            )}
             <div className="divider my-0" />
             <div className="flex justify-between font-semibold">
               <span>Total pedido</span>
               <span>{formatMoney(orderTotal)}</span>
             </div>
+            <div className="flex justify-between text-xs text-base-content/70">
+              <span>Por cobrar ahora</span>
+              <span>{formatMoney(effectiveDue)}</span>
+            </div>
             {canCheckout && received > 0 && (
               <>
                 <div className="flex justify-between text-success">
                   <span>Cobro en esta operación</span>
-                  <span>{formatMoney(Math.min(received, orderTotal))}</span>
+                  <span>{formatMoney(Math.min(received, effectiveDue))}</span>
                 </div>
                 <div className="flex justify-between text-primary">
                   <span>Pendiente</span>
@@ -380,13 +568,22 @@ export function InvoiceNewPage() {
                 disabled={saveMutation.isPending}
                 onClick={() => handleSave(false)}
               >
-                {saveMutation.isPending ? <span className="loading loading-spinner loading-sm" /> : "Guardar sin cobrar"}
+                {saveMutation.isPending ? (
+                  <span className="loading loading-spinner loading-sm" />
+                ) : (
+                  "Guardar sin cobrar"
+                )}
               </button>
-              {canCheckout && (
+              {canCheckout && orderTotal > 1e-6 && (
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
-                  disabled={saveMutation.isPending || received <= 1e-6 || changePending}
+                  disabled={
+                    saveMutation.isPending ||
+                    (received <= 1e-6 && creditAppliedPreview <= 1e-6) ||
+                    changePending ||
+                    advanceChangePending
+                  }
                   onClick={() => handleSave(true)}
                 >
                   {saveMutation.isPending ? (

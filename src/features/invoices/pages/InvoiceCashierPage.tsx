@@ -1,33 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { fetchClientById } from "@/db/queries/clients";
 import { fetchCashSessionsForInvoice, registerCashPayment } from "@/db/queries/cashier";
 import { fetchInvoiceDetail } from "@/db/queries/invoices";
+import {
+  OrderCashierSection,
+  buildCountsPayload,
+  computeChangePending,
+  computeReceivedAmount,
+  computeReceivedUsd,
+  emptyOrderCashierState,
+  type OrderCashierState,
+} from "@/features/invoices/components/OrderCashierSection";
+import type { OrderPaymentState } from "@/features/invoices/components/OrderPaymentSection";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { formatDate } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
-import { CASH_DENOMINATIONS } from "@/types/cashier";
-
-function emptyCounts(): Record<string, number> {
-  const o: Record<string, number> = {};
-  for (const d of CASH_DENOMINATIONS) {
-    o[String(d)] = 0;
-  }
-  return o;
-}
-
-function sumCounts(counts: Record<string, number>): number {
-  let s = 0;
-  for (const d of CASH_DENOMINATIONS) {
-    const n = counts[String(d)] ?? 0;
-    s += d * n;
-  }
-  return s;
-}
+import type { PaymentCurrency, PaymentMethod } from "@/types/invoice";
 
 /**
- * Cobro de pedido: efectivo CUP (conteo), efectivo USD o transferencia, enlazado a `cash_transactions`.
+ * Cobro de pedido: efectivo CUP/USD o transferencia, vuelto o saldo a favor,
+ * enlazado a `cash_transactions`.
  *
  * @returns Página de caja del pedido.
  */
@@ -36,11 +31,7 @@ export function InvoiceCashierPage() {
   const invoiceId = Number(params.invoiceId);
   const queryClient = useQueryClient();
   const appSettings = useAppSettings();
-  const [counts, setCounts] = useState(emptyCounts);
-  const [amountCup, setAmountCup] = useState("");
-  const [amountUsd, setAmountUsd] = useState("");
-  const [exchangeRate, setExchangeRate] = useState("");
-  const [transferConcept, setTransferConcept] = useState("");
+  const [cashier, setCashier] = useState<OrderCashierState>(() => emptyOrderCashierState());
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const detailQuery = useQuery({
@@ -55,15 +46,27 @@ export function InvoiceCashierPage() {
     enabled: Number.isFinite(invoiceId) && invoiceId > 0,
   });
 
+  const inv = detailQuery.data?.invoice;
+  const clientQuery = useQuery({
+    queryKey: ["clients", "detail", inv?.clientId],
+    queryFn: () => fetchClientById(inv!.clientId),
+    enabled: inv != null && inv.clientId > 0,
+  });
+
   const registerMutation = useMutation({
     mutationFn: registerCashPayment,
     onSuccess: (data) => {
-      setFeedback(
-        `Pago registrado (${data.paymentStatus}). Vuelto: ${formatMoney(data.changeGiven)} · Pendiente: ${formatMoney(data.invoiceNewBalance)}`,
-      );
-      setCounts(emptyCounts());
-      setAmountCup("");
-      setAmountUsd("");
+      const parts = [
+        `Pago registrado (${data.paymentStatus}).`,
+        data.changeGiven > 1e-6 ? `Vuelto: ${formatMoney(data.changeGiven)}.` : null,
+        data.creditAdded > 1e-6 ? `Saldo a favor: ${formatMoney(data.creditAdded)}.` : null,
+        data.creditApplied > 1e-6
+          ? `Crédito aplicado: ${formatMoney(data.creditApplied)}.`
+          : null,
+        `Pendiente: ${formatMoney(data.invoiceNewBalance)}.`,
+      ].filter(Boolean);
+      setFeedback(parts.join(" "));
+      setCashier(emptyOrderCashierState());
       void queryClient.invalidateQueries({ queryKey: ["invoices", "detail", invoiceId] });
       void queryClient.invalidateQueries({ queryKey: ["cashier", "sessions", invoiceId] });
       void queryClient.invalidateQueries({ queryKey: ["invoices", "list"] });
@@ -75,34 +78,45 @@ export function InvoiceCashierPage() {
     },
   });
 
-  const inv = detailQuery.data?.invoice;
   const balance = inv?.balance ?? 0;
-  const paymentMethod = inv?.paymentMethod ?? "efectivo";
-  const paymentCurrency = inv?.paymentCurrency ?? "CUP";
+  const paymentMethod = (inv?.paymentMethod ?? "efectivo") as PaymentMethod;
+  const paymentCurrency = (inv?.paymentCurrency ?? "CUP") as PaymentCurrency;
   const isTransfer = paymentMethod === "transferencia";
   const isUsd = !isTransfer && paymentCurrency === "USD";
 
   const rate =
-    Number.parseFloat(exchangeRate.replace(",", ".")) ||
     inv?.exchangeRateSnapshot ||
     appSettings.usdExchangeRate ||
     0;
 
-  const received = useMemo(() => {
-    if (isTransfer || (paymentMethod === "efectivo" && paymentCurrency === "CUP" && !isUsd)) {
-      const direct = Number.parseFloat(amountCup.replace(",", ".")) || 0;
-      const fromCounts = sumCounts(counts);
-      return direct > 0 ? direct : fromCounts;
-    }
-    if (isUsd) {
-      const usd = Number.parseFloat(amountUsd.replace(",", ".")) || 0;
-      return rate > 0 ? usd * rate : 0;
-    }
-    return Number.parseFloat(amountCup.replace(",", ".")) || 0;
-  }, [isTransfer, isUsd, paymentMethod, paymentCurrency, amountCup, amountUsd, rate, counts]);
+  const payment: OrderPaymentState = {
+    paymentMethod,
+    paymentCurrency,
+    exchangeRate: String(rate || ""),
+    transferConcept: "",
+  };
 
-  const changeDue = Math.max(0, received - balance);
-  const applied = Math.min(received, balance);
+  const clientCredit = clientQuery.data?.creditBalance ?? 0;
+  const creditAppliedPreview = cashier.applyClientCredit
+    ? Math.min(clientCredit, balance)
+    : 0;
+  const effectiveDue = Math.max(0, balance - creditAppliedPreview);
+
+  const received = useMemo(
+    () => computeReceivedAmount(payment, cashier, rate),
+    [payment, cashier, rate],
+  );
+
+  const changePending = useMemo(
+    () =>
+      computeChangePending(
+        received,
+        effectiveDue,
+        cashier.changeCounts,
+        cashier.overpaymentDisposition,
+      ),
+    [received, effectiveDue, cashier.changeCounts, cashier.overpaymentDisposition],
+  );
 
   if (!Number.isFinite(invoiceId) || invoiceId <= 0) {
     return (
@@ -112,31 +126,34 @@ export function InvoiceCashierPage() {
     );
   }
 
-  function setDenom(key: string, raw: string) {
-    const digits = raw.replace(/\D/g, "");
-    const value = digits === "" ? 0 : Math.max(0, Math.floor(Number(digits)));
-    setCounts((prev) => ({ ...prev, [key]: Number.isFinite(value) ? value : 0 }));
-  }
-
   function submit() {
     setFeedback(null);
-    const payloadCounts: Record<string, number> = {};
-    for (const d of CASH_DENOMINATIONS) {
-      const k = String(d);
-      payloadCounts[k] = counts[k] ?? 0;
-    }
-    const hasCounts = Object.values(payloadCounts).some((n) => n > 0);
+    const counts = !isUsd && !isTransfer ? buildCountsPayload(cashier.counts) : null;
+    const changeCounts =
+      !isTransfer && cashier.overpaymentDisposition === "change"
+        ? buildCountsPayload(cashier.changeCounts)
+        : null;
     registerMutation.mutate({
       invoiceId,
-      counts: hasCounts ? payloadCounts : null,
-      amountCup: amountCup.trim() ? Number.parseFloat(amountCup.replace(",", ".")) : null,
-      amountUsd: amountUsd.trim() ? Number.parseFloat(amountUsd.replace(",", ".")) : null,
+      counts,
+      amountCup: cashier.amountCup.trim()
+        ? Number.parseFloat(cashier.amountCup.replace(",", "."))
+        : isTransfer
+          ? received
+          : null,
+      amountUsd: isUsd ? computeReceivedUsd(cashier) : null,
       exchangeRate: isUsd ? rate : null,
-      transferConcept: transferConcept.trim() || null,
+      transferConcept: cashier.transferConcept.trim() || null,
+      changeCounts,
+      overpaymentDisposition: cashier.overpaymentDisposition,
+      applyClientCredit: cashier.applyClientCredit,
     });
   }
 
-  const canPay = balance > 1e-6 && received > 1e-6;
+  const canPay =
+    balance > 1e-6 &&
+    (received > 1e-6 || creditAppliedPreview > 1e-6) &&
+    !changePending;
 
   return (
     <section className="space-y-6">
@@ -146,7 +163,11 @@ export function InvoiceCashierPage() {
           {inv && <p className="text-lg font-mono">{inv.invoiceNumber}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/pedidos/$invoiceId" params={{ invoiceId: String(invoiceId) }} className="btn btn-ghost btn-sm">
+          <Link
+            to="/pedidos/$invoiceId"
+            params={{ invoiceId: String(invoiceId) }}
+            className="btn btn-ghost btn-sm"
+          >
             Volver al pedido
           </Link>
           <Link to="/pedidos" search={pedidosListSearch} className="btn btn-ghost btn-sm">
@@ -169,7 +190,8 @@ export function InvoiceCashierPage() {
             <strong>
               {isTransfer ? "Transferencia (CUP)" : isUsd ? "Efectivo USD" : "Efectivo CUP"}
             </strong>
-            . El cobro se registrará en el flujo de caja.
+            . El cobro se registrará en el flujo de caja. Puedes devolver vuelto o dejar el exceso
+            como saldo a favor.
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -185,17 +207,19 @@ export function InvoiceCashierPage() {
                     <dt>Pendiente a cobrar</dt>
                     <dd className="text-primary">{formatMoney(balance)}</dd>
                   </div>
+                  {clientCredit > 1e-6 && (
+                    <div className="flex justify-between text-success">
+                      <dt>Saldo a favor</dt>
+                      <dd>{formatMoney(clientCredit)}</dd>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <dt>Por cobrar ahora</dt>
+                    <dd>{formatMoney(effectiveDue)}</dd>
+                  </div>
                   <div className="flex justify-between">
                     <dt>Recibido</dt>
                     <dd>{formatMoney(received)}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt>Se aplica</dt>
-                    <dd>{formatMoney(applied)}</dd>
-                  </div>
-                  <div className="flex justify-between text-secondary">
-                    <dt>Vuelto</dt>
-                    <dd>{formatMoney(changeDue)}</dd>
                   </div>
                 </dl>
                 {balance <= 1e-6 && (
@@ -204,109 +228,30 @@ export function InvoiceCashierPage() {
               </div>
             </div>
 
-            <div className="card bg-base-100 shadow">
-              <div className="card-body space-y-3">
-                <h2 className="card-title text-base">Registrar cobro</h2>
-
-                {isTransfer && (
-                  <>
-                    <label className="form-control">
-                      <span className="label-text">Monto recibido (CUP)</span>
-                      <input
-                        className="input input-bordered"
-                        inputMode="decimal"
-                        value={amountCup}
-                        onChange={(e) => setAmountCup(e.target.value)}
-                      />
-                    </label>
-                    <label className="form-control">
-                      <span className="label-text">Referencia / concepto</span>
-                      <input
-                        className="input input-bordered"
-                        value={transferConcept}
-                        onChange={(e) => setTransferConcept(e.target.value)}
-                      />
-                    </label>
-                  </>
-                )}
-
-                {isUsd && (
-                  <>
-                    <label className="form-control">
-                      <span className="label-text">Tasa (1 USD = CUP)</span>
-                      <input
-                        className="input input-bordered"
-                        inputMode="decimal"
-                        value={exchangeRate || String(inv.exchangeRateSnapshot ?? appSettings.usdExchangeRate)}
-                        onChange={(e) => setExchangeRate(e.target.value)}
-                      />
-                    </label>
-                    <label className="form-control">
-                      <span className="label-text">Monto recibido (USD)</span>
-                      <input
-                        className="input input-bordered"
-                        inputMode="decimal"
-                        value={amountUsd}
-                        onChange={(e) => setAmountUsd(e.target.value)}
-                      />
-                    </label>
-                    {rate > 0 && (
-                      <p className="text-sm">Equivalente: {formatMoney(received)}</p>
-                    )}
-                  </>
-                )}
-
-                {!isTransfer && !isUsd && (
-                  <>
-                    <p className="text-xs text-base-content/60">Conteo de billetes o monto total:</p>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {CASH_DENOMINATIONS.map((d) => {
-                        const key = String(d);
-                        const count = counts[key] ?? 0;
-                        return (
-                          <label key={d} className="form-control">
-                            <span className="label-text text-xs font-mono">{formatMoney(d)}</span>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              className="input input-bordered input-sm"
-                              value={count === 0 ? "" : String(count)}
-                              placeholder="0"
-                              onChange={(e) => setDenom(key, e.target.value)}
-                            />
-                          </label>
-                        );
-                      })}
-                    </div>
-                    <label className="form-control">
-                      <span className="label-text">O monto total CUP</span>
-                      <input
-                        className="input input-bordered input-sm"
-                        inputMode="decimal"
-                        value={amountCup}
-                        onChange={(e) => setAmountCup(e.target.value)}
-                      />
-                    </label>
-                  </>
-                )}
-
-                <button
-                  type="button"
-                  className="btn btn-primary w-full"
-                  disabled={!canPay || registerMutation.isPending}
-                  onClick={() => submit()}
+            <div className="space-y-3">
+              <OrderCashierSection
+                balanceDue={balance}
+                payment={payment}
+                value={cashier}
+                exchangeRate={rate}
+                clientCreditBalance={clientCredit}
+                onChange={setCashier}
+              />
+              <button
+                type="button"
+                className="btn btn-primary w-full"
+                disabled={!canPay || registerMutation.isPending}
+                onClick={() => submit()}
+              >
+                {registerMutation.isPending ? "Registrando..." : "Registrar cobro"}
+              </button>
+              {feedback && (
+                <div
+                  className={`alert text-sm ${registerMutation.isError ? "alert-error" : "alert-success"}`}
                 >
-                  {registerMutation.isPending ? "Registrando..." : "Registrar cobro"}
-                </button>
-                {feedback && (
-                  <div
-                    className={`alert text-sm ${registerMutation.isError ? "alert-error" : "alert-success"}`}
-                  >
-                    <span>{feedback}</span>
-                  </div>
-                )}
-              </div>
+                  <span>{feedback}</span>
+                </div>
+              )}
             </div>
           </div>
 
