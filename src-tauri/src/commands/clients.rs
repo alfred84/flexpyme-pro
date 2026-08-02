@@ -16,6 +16,7 @@ pub struct ClientDto {
     pub address: Option<String>,
     pub notes: Option<String>,
     pub balance: f64,
+    pub credit_balance: f64,
     pub total_historical: f64,
     pub created_at: String,
     pub updated_at: String,
@@ -44,6 +45,7 @@ pub struct ClientWorkHistoryDto {
 }
 
 const CLIENT_SELECT: &str = "SELECT c.id, c.code, c.name, c.phone, c.address, c.notes, c.balance,
+    COALESCE(c.credit_balance, 0),
     COALESCE((
         SELECT SUM(i.total) FROM invoices i
         WHERE i.client_id = c.id AND i.deleted_at IS NULL
@@ -97,9 +99,10 @@ fn map_client_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClientDto> {
         address: row.get(4)?,
         notes: row.get(5)?,
         balance: row.get(6)?,
-        total_historical: row.get(7)?,
-        created_at: row.get(8)?,
-        updated_at: row.get(9)?,
+        credit_balance: row.get(7)?,
+        total_historical: row.get(8)?,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
     })
 }
 
@@ -296,6 +299,7 @@ pub struct DeletedClientDto {
     pub name: String,
     pub phone: Option<String>,
     pub balance: f64,
+    pub credit_balance: f64,
     pub deleted_at: String,
 }
 
@@ -305,7 +309,7 @@ pub fn clients_list_deleted() -> Result<Vec<DeletedClientDto>, String> {
     let conn = db::open_connection()?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, code, name, phone, balance, deleted_at
+            "SELECT id, code, name, phone, balance, COALESCE(credit_balance, 0), deleted_at
              FROM clients
              WHERE deleted_at IS NOT NULL
              ORDER BY deleted_at DESC, id DESC",
@@ -320,7 +324,8 @@ pub fn clients_list_deleted() -> Result<Vec<DeletedClientDto>, String> {
                 name: row.get(2)?,
                 phone: row.get(3)?,
                 balance: row.get(4)?,
-                deleted_at: row.get(5)?,
+                credit_balance: row.get(5)?,
+                deleted_at: row.get(6)?,
             })
         })
         .map_err(|e| e.to_string())?;

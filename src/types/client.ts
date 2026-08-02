@@ -8,7 +8,10 @@ export interface ClientDto {
   phone: string | null;
   address: string | null;
   notes: string | null;
+  /** Deuda abierta (suma de saldos de pedidos). */
   balance: number;
+  /** Saldo a favor disponible. */
+  creditBalance: number;
   /** Suma de totales de todos los pedidos del cliente. */
   totalHistorical: number;
   createdAt: string;
@@ -46,6 +49,7 @@ export interface DeletedClientDto {
   name: string;
   phone: string | null;
   balance: number;
+  creditBalance: number;
   deletedAt: string;
 }
 

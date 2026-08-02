@@ -165,6 +165,12 @@ export interface UpdateInvoicePayload {
   items: CreateInvoiceItemPayload[];
 }
 
+export type PaymentMethod = "efectivo" | "transferencia";
+export type PaymentCurrency = "CUP" | "USD";
+
+/** Qué hacer con el exceso recibido sobre el saldo. */
+export type OverpaymentDisposition = "change" | "credit";
+
 /**
  * Cobro inicial al crear un pedido (misma forma que caja, sin invoiceId).
  */
@@ -175,13 +181,24 @@ export interface InitialPaymentPayload {
   exchangeRate?: number | null;
   transferConcept?: string | null;
   changeCounts?: Record<string, number> | null;
+  overpaymentDisposition?: OverpaymentDisposition | null;
+  applyClientCredit?: boolean | null;
 }
 
 /**
- * Payload for creating an invoice with lines.
+ * Detalle del pago anticipado (método, moneda y denominaciones).
  */
-export type PaymentMethod = "efectivo" | "transferencia";
-export type PaymentCurrency = "CUP" | "USD";
+export interface AdvancePaymentPayload {
+  paymentMethod: PaymentMethod;
+  paymentCurrency?: PaymentCurrency | null;
+  counts?: Record<string, number> | null;
+  amountCup?: number | null;
+  amountUsd?: number | null;
+  exchangeRate?: number | null;
+  transferConcept?: string | null;
+  changeCounts?: Record<string, number> | null;
+  overpaymentDisposition?: OverpaymentDisposition | null;
+}
 
 export interface CreateInvoicePayload {
   clientId: number;
@@ -193,6 +210,9 @@ export interface CreateInvoicePayload {
   paymentCurrency: PaymentCurrency;
   exchangeRateSnapshot: number;
   transferConcept?: string | null;
+  advancePaymentDetail?: AdvancePaymentPayload | null;
+  /** Aplicar saldo a favor del cliente al crear (default true). */
+  applyClientCredit?: boolean | null;
   initialPayment?: InitialPaymentPayload | null;
   items: CreateInvoiceItemPayload[];
 }

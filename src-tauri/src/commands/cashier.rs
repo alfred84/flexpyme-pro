@@ -24,6 +24,29 @@ fn sync_legacy_status(production: &str, payment: &str, balance: f64, paid: f64) 
     }
 }
 
+/// Disposition of cash received above the amount due.
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OverpaymentDisposition {
+    Change,
+    Credit,
+}
+
+impl Default for OverpaymentDisposition {
+    fn default() -> Self {
+        Self::Change
+    }
+}
+
+impl OverpaymentDisposition {
+    fn parse(raw: Option<&str>) -> Self {
+        match raw.map(|s| s.trim().to_lowercase()).as_deref() {
+            Some("credit") | Some("saldo") | Some("saldo_a_favor") => Self::Credit,
+            _ => Self::Change,
+        }
+    }
+}
+
 /// One saved cash session row.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,6 +60,7 @@ pub struct CashSessionDto {
     pub denomination_breakdown: Option<String>,
 }
 
+/// Cobro inicial al crear un pedido (sin invoiceId).
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InitialPaymentPayload {
@@ -50,6 +74,12 @@ pub struct InitialPaymentPayload {
     pub transfer_concept: Option<String>,
     /// Desglose de billetes CUP entregados como vuelto (denominación -> cantidad).
     pub change_counts: Option<HashMap<String, i64>>,
+    /// `change` | `credit` — qué hacer con el exceso recibido.
+    #[serde(default)]
+    pub overpayment_disposition: Option<String>,
+    /// Si true, aplica saldo a favor del cliente al saldo del pedido antes del cobro.
+    #[serde(default)]
+    pub apply_client_credit: Option<bool>,
 }
 
 impl InitialPaymentPayload {
@@ -63,24 +93,42 @@ impl InitialPaymentPayload {
             exchange_rate: self.exchange_rate,
             transfer_concept: self.transfer_concept,
             change_counts: self.change_counts,
+            overpayment_disposition: self.overpayment_disposition,
+            apply_client_credit: self.apply_client_credit,
         }
     }
+}
+
+/// Detalle de pago anticipado al crear el pedido (CUP/USD, efectivo o transferencia).
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancePaymentPayload {
+    pub payment_method: String,
+    pub payment_currency: Option<String>,
+    pub counts: Option<HashMap<String, i64>>,
+    pub amount_cup: Option<f64>,
+    pub amount_usd: Option<f64>,
+    pub exchange_rate: Option<f64>,
+    pub transfer_concept: Option<String>,
+    pub change_counts: Option<HashMap<String, i64>>,
+    #[serde(default)]
+    pub overpayment_disposition: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CashierRegisterPayload {
     pub invoice_id: i64,
-    /// Map of denomination string (e.g. "1000") to count — solo efectivo CUP con conteo.
     pub counts: Option<HashMap<String, i64>>,
-    /// Monto directo en CUP (transferencia o efectivo sin desglose).
     pub amount_cup: Option<f64>,
-    /// Monto en USD si el cobro es en dólares.
     pub amount_usd: Option<f64>,
     pub exchange_rate: Option<f64>,
     pub transfer_concept: Option<String>,
-    /// Desglose de billetes CUP entregados como vuelto (denominación -> cantidad).
     pub change_counts: Option<HashMap<String, i64>>,
+    #[serde(default)]
+    pub overpayment_disposition: Option<String>,
+    #[serde(default)]
+    pub apply_client_credit: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -90,9 +138,19 @@ pub struct CashierRegisterResponse {
     pub amount_received: f64,
     pub change_given: f64,
     pub amount_applied: f64,
+    pub credit_applied: f64,
+    pub credit_added: f64,
     pub invoice_new_balance: f64,
     pub invoice_status: String,
     pub payment_status: String,
+}
+
+/// Resultado de registrar un anticipo en caja.
+#[derive(Debug)]
+pub struct AdvancePaymentResult {
+    pub advance_cup: f64,
+    pub credit_added: f64,
+    pub change_given: f64,
 }
 
 fn sum_from_counts(counts: &HashMap<String, i64>) -> Result<f64, String> {
@@ -115,16 +173,20 @@ fn sum_from_counts(counts: &HashMap<String, i64>) -> Result<f64, String> {
     Ok(sum)
 }
 
+/// Resuelve el importe recibido en CUP a partir de método/moneda y payload de montos.
 fn resolve_amount_received(
     payment_method: &str,
     payment_currency: &str,
-    payload: &CashierRegisterPayload,
+    counts: &Option<HashMap<String, i64>>,
+    amount_cup: Option<f64>,
+    amount_usd: Option<f64>,
+    exchange_rate: Option<f64>,
 ) -> Result<(f64, f64, f64, String), String> {
     let method = payment_method.trim().to_lowercase();
     let currency = payment_currency.trim().to_uppercase();
 
     if method == "transferencia" {
-        let cup = payload.amount_cup.unwrap_or(0.0);
+        let cup = amount_cup.unwrap_or(0.0);
         if cup <= EPS {
             return Err("Indica el monto recibido en CUP".to_string());
         }
@@ -132,8 +194,8 @@ fn resolve_amount_received(
     }
 
     if currency == "USD" {
-        let usd = payload.amount_usd.unwrap_or(0.0);
-        let rate = payload.exchange_rate.unwrap_or(0.0);
+        let usd = amount_usd.unwrap_or(0.0);
+        let rate = exchange_rate.unwrap_or(0.0);
         if usd <= EPS || rate <= EPS {
             return Err("Indica monto USD y tasa de cambio válidos".to_string());
         }
@@ -141,44 +203,314 @@ fn resolve_amount_received(
         return Ok((cup, usd, rate, "efectivo".to_string()));
     }
 
-    if let Some(counts) = &payload.counts {
-        let from_counts = sum_from_counts(counts)?;
+    if let Some(c) = counts {
+        let from_counts = sum_from_counts(c)?;
         if from_counts > EPS {
             return Ok((from_counts, 0.0, 0.0, "efectivo".to_string()));
         }
     }
-    let cup = payload.amount_cup.unwrap_or(0.0);
+    let cup = amount_cup.unwrap_or(0.0);
     if cup <= EPS {
         return Err("Indica el monto recibido o el conteo de billetes".to_string());
     }
     Ok((cup, 0.0, 0.0, "efectivo".to_string()))
 }
 
-/// Records an advance payment as cash income linked to an invoice.
+fn validate_change_breakdown(
+    change_given: f64,
+    change_counts: &Option<HashMap<String, i64>>,
+    disposition: &OverpaymentDisposition,
+) -> Result<Option<String>, String> {
+    if change_given <= 0.5 {
+        return Ok(None);
+    }
+    if *disposition == OverpaymentDisposition::Credit {
+        return Ok(None);
+    }
+    let Some(counts) = change_counts else {
+        return Err(
+            "Hay vuelto por entregar: desglosa los billetes o elige dejar saldo a favor".to_string(),
+        );
+    };
+    let change_sum = sum_from_counts(counts)?;
+    if (change_sum - change_given).abs() > 0.5 {
+        return Err(format!(
+            "El vuelto entregado ({:.2} CUP) no coincide con el vuelto a devolver ({:.2} CUP).",
+            change_sum, change_given
+        ));
+    }
+    Ok(Some(
+        serde_json::to_string(counts).map_err(|e| e.to_string())?,
+    ))
+}
+
+/// Aplica crédito disponible del cliente al saldo pendiente del pedido (sin movimiento de caja).
+pub fn apply_client_credit_to_invoice_in_tx(
+    tx: &rusqlite::Transaction<'_>,
+    invoice_id: i64,
+    apply: bool,
+) -> Result<f64, String> {
+    if !apply {
+        return Ok(0.0);
+    }
+
+    let (client_id, total, paid, balance, production_status, credit_applied_prev): (
+        i64,
+        f64,
+        f64,
+        f64,
+        String,
+        f64,
+    ) = tx
+        .query_row(
+            "SELECT client_id, total, paid, balance, production_status,
+                    COALESCE(credit_applied, 0)
+             FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
+            params![invoice_id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            },
+        )
+        .map_err(|_| "Pedido no encontrado".to_string())?;
+
+    if balance <= EPS {
+        return Ok(0.0);
+    }
+
+    let (client_balance, credit_balance): (f64, f64) = tx
+        .query_row(
+            "SELECT balance, COALESCE(credit_balance, 0) FROM clients
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![client_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Cliente no encontrado".to_string())?;
+
+    let credit_to_apply = credit_balance.min(balance);
+    if credit_to_apply <= EPS {
+        return Ok(0.0);
+    }
+
+    let new_paid = paid + credit_to_apply;
+    let new_balance = (total - new_paid).max(0.0);
+    let payment_status = if new_balance <= EPS {
+        "cobrado"
+    } else {
+        "pendiente"
+    };
+    let status = sync_legacy_status(&production_status, payment_status, new_balance, new_paid);
+    let new_client_balance = (client_balance - credit_to_apply).max(0.0);
+    let new_credit = credit_balance - credit_to_apply;
+
+    tx.execute(
+        "UPDATE invoices SET paid = ?1, balance = ?2, status = ?3, payment_status = ?4,
+         credit_applied = ?5
+         WHERE id = ?6 AND deleted_at IS NULL",
+        params![
+            new_paid,
+            new_balance,
+            status,
+            payment_status,
+            credit_applied_prev + credit_to_apply,
+            invoice_id
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    tx.execute(
+        "UPDATE clients SET balance = ?1, credit_balance = ?2, updated_at = datetime('now')
+         WHERE id = ?3 AND deleted_at IS NULL",
+        params![new_client_balance, new_credit, client_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(credit_to_apply)
+}
+
+/// Records an advance payment as cash income linked to an invoice (with denominations / USD).
 pub fn record_advance_payment_in_tx(
     tx: &rusqlite::Transaction<'_>,
     invoice_id: i64,
     invoice_number: &str,
-    advance_cup: f64,
-    payment_method: &str,
-) -> Result<(), String> {
-    if advance_cup <= EPS {
-        return Ok(());
+    client_id: i64,
+    subtotal: f64,
+    detail: Option<&AdvancePaymentPayload>,
+    legacy_advance_cup: f64,
+    legacy_payment_method: &str,
+) -> Result<AdvancePaymentResult, String> {
+    // Sin detalle: comportamiento legacy (solo CUP, sin denominaciones).
+    let Some(detail) = detail else {
+        if legacy_advance_cup <= EPS {
+            return Ok(AdvancePaymentResult {
+                advance_cup: 0.0,
+                credit_added: 0.0,
+                change_given: 0.0,
+            });
+        }
+        tx.execute(
+            "INSERT INTO cash_transactions
+                (type, concept, reference_type, reference_id, amount_cup, amount_usd, exchange_rate,
+                 payment_method, denomination_breakdown, date)
+             VALUES ('ingreso', ?1, 'pedido', ?2, ?3, 0, 0, ?4, NULL, datetime('now'))",
+            params![
+                format!("Anticipo pedido {}", invoice_number),
+                invoice_id,
+                legacy_advance_cup,
+                legacy_payment_method
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        return Ok(AdvancePaymentResult {
+            advance_cup: legacy_advance_cup,
+            credit_added: 0.0,
+            change_given: 0.0,
+        });
+    };
+
+    let method = detail.payment_method.trim().to_lowercase();
+    if method != "efectivo" && method != "transferencia" {
+        return Err("Método de pago del anticipo inválido".to_string());
     }
+    let currency = if method == "transferencia" {
+        "CUP".to_string()
+    } else {
+        detail
+            .payment_currency
+            .as_deref()
+            .unwrap_or("CUP")
+            .trim()
+            .to_uppercase()
+    };
+
+    let (received_cup, amount_usd, exchange_rate, tx_method) = resolve_amount_received(
+        &method,
+        &currency,
+        &detail.counts,
+        detail.amount_cup,
+        detail.amount_usd,
+        detail.exchange_rate,
+    )?;
+
+    if received_cup <= EPS {
+        return Ok(AdvancePaymentResult {
+            advance_cup: 0.0,
+            credit_added: 0.0,
+            change_given: 0.0,
+        });
+    }
+
+    let advance_cup = received_cup.min(subtotal);
+    let excess = (received_cup - subtotal).max(0.0);
+    let disposition = OverpaymentDisposition::parse(detail.overpayment_disposition.as_deref());
+
+    let (change_given, credit_added) = if excess > EPS {
+        match disposition {
+            OverpaymentDisposition::Change => (excess, 0.0),
+            OverpaymentDisposition::Credit => (0.0, excess),
+        }
+    } else {
+        (0.0, 0.0)
+    };
+
+    let change_breakdown_json =
+        validate_change_breakdown(change_given, &detail.change_counts, &disposition)?;
+
+    // Neto en caja: con vuelto = anticipo; con crédito = recibido completo.
+    let cash_ingreso = if credit_added > EPS {
+        received_cup
+    } else {
+        advance_cup
+    };
+
+    let breakdown_json = detail
+        .counts
+        .as_ref()
+        .map(|c| serde_json::to_string(c))
+        .transpose()
+        .map_err(|e| e.to_string())?;
+
+    let concept = if method == "transferencia" {
+        let extra = detail
+            .transfer_concept
+            .as_ref()
+            .map(|c| {
+                let t = c.trim();
+                if t.is_empty() {
+                    String::new()
+                } else {
+                    format!(" · {}", t)
+                }
+            })
+            .unwrap_or_default();
+        format!("Anticipo pedido {} (transferencia){}", invoice_number, extra)
+    } else if currency == "USD" {
+        format!(
+            "Anticipo pedido {} (USD {:.2} @ {:.0})",
+            invoice_number, amount_usd, exchange_rate
+        )
+    } else {
+        format!("Anticipo pedido {}", invoice_number)
+    };
+
+    if tx_method == "efectivo" && (breakdown_json.is_some() || change_breakdown_json.is_some()) {
+        tx.execute(
+            "INSERT INTO cash_sessions (invoice_id, total_amount, amount_received, change_given, denomination_breakdown, change_breakdown)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                invoice_id,
+                advance_cup,
+                received_cup,
+                change_given,
+                breakdown_json,
+                change_breakdown_json
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
     tx.execute(
         "INSERT INTO cash_transactions
             (type, concept, reference_type, reference_id, amount_cup, amount_usd, exchange_rate,
              payment_method, denomination_breakdown, date)
-         VALUES ('ingreso', ?1, 'pedido', ?2, ?3, 0, 0, ?4, NULL, datetime('now'))",
+         VALUES ('ingreso', ?1, 'pedido', ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))",
         params![
-            format!("Anticipo pedido {}", invoice_number),
+            concept,
             invoice_id,
-            advance_cup,
-            payment_method
+            cash_ingreso,
+            amount_usd,
+            exchange_rate,
+            tx_method,
+            breakdown_json
         ],
     )
     .map_err(|e| e.to_string())?;
-    Ok(())
+
+    if credit_added > EPS {
+        tx.execute(
+            "UPDATE clients SET credit_balance = COALESCE(credit_balance, 0) + ?1,
+             updated_at = datetime('now') WHERE id = ?2 AND deleted_at IS NULL",
+            params![credit_added, client_id],
+        )
+        .map_err(|e| e.to_string())?;
+        tx.execute(
+            "UPDATE invoices SET credit_added = COALESCE(credit_added, 0) + ?1 WHERE id = ?2",
+            params![credit_added, invoice_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    Ok(AdvancePaymentResult {
+        advance_cup,
+        credit_added,
+        change_given,
+    })
 }
 
 /// Applies a payment to an invoice inside an open database transaction.
@@ -186,6 +518,9 @@ pub fn apply_invoice_payment_in_tx(
     tx: &rusqlite::Transaction<'_>,
     payload: &CashierRegisterPayload,
 ) -> Result<CashierRegisterResponse, String> {
+    let apply_credit = payload.apply_client_credit.unwrap_or(true);
+    let credit_applied = apply_client_credit_to_invoice_in_tx(tx, payload.invoice_id, apply_credit)?;
+
     let (
         client_id,
         total,
@@ -195,10 +530,21 @@ pub fn apply_invoice_payment_in_tx(
         payment_currency,
         exchange_rate_snapshot,
         production_status,
-    ): (i64, f64, f64, f64, Option<String>, Option<String>, Option<f64>, String) = tx
+        credit_added_prev,
+    ): (
+        i64,
+        f64,
+        f64,
+        f64,
+        Option<String>,
+        Option<String>,
+        Option<f64>,
+        String,
+        f64,
+    ) = tx
         .query_row(
             "SELECT client_id, total, paid, balance, payment_method, payment_currency,
-                    exchange_rate_snapshot, production_status
+                    exchange_rate_snapshot, production_status, COALESCE(credit_added, 0)
              FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
             params![payload.invoice_id],
             |row| {
@@ -211,10 +557,42 @@ pub fn apply_invoice_payment_in_tx(
                     row.get(5)?,
                     row.get(6)?,
                     row.get(7)?,
+                    row.get(8)?,
                 ))
             },
         )
         .map_err(|_| "Pedido no encontrado".to_string())?;
+
+    // Tras aplicar crédito: si no hay cobro en efectivo/transferencia, terminar aquí.
+    let has_cash_intent = payload.amount_cup.unwrap_or(0.0) > EPS
+        || payload.amount_usd.unwrap_or(0.0) > EPS
+        || payload
+            .counts
+            .as_ref()
+            .map(|c| c.values().any(|&n| n > 0))
+            .unwrap_or(false);
+
+    if !has_cash_intent {
+        if credit_applied <= EPS && balance <= EPS {
+            return Err("Este pedido no tiene saldo pendiente".to_string());
+        }
+        if credit_applied <= EPS {
+            return Err("Indica el monto recibido o el conteo de billetes".to_string());
+        }
+        let payment_status = if balance <= EPS { "cobrado" } else { "pendiente" };
+        let status = sync_legacy_status(&production_status, payment_status, balance, paid);
+        return Ok(CashierRegisterResponse {
+            session_id: None,
+            amount_received: 0.0,
+            change_given: 0.0,
+            amount_applied: credit_applied,
+            credit_applied,
+            credit_added: 0.0,
+            invoice_new_balance: balance,
+            invoice_status: status,
+            payment_status: payment_status.to_string(),
+        });
+    }
 
     if balance <= EPS {
         return Err("Este pedido no tiene saldo pendiente".to_string());
@@ -233,29 +611,30 @@ pub fn apply_invoice_payment_in_tx(
             .to_uppercase()
     };
 
-    let (amount_received_cup, amount_usd, exchange_rate, tx_method) =
-        resolve_amount_received(&method, &currency, payload)?;
+    let (amount_received_cup, amount_usd, exchange_rate, tx_method) = resolve_amount_received(
+        &method,
+        &currency,
+        &payload.counts,
+        payload.amount_cup,
+        payload.amount_usd,
+        payload.exchange_rate,
+    )?;
 
+    let disposition =
+        OverpaymentDisposition::parse(payload.overpayment_disposition.as_deref());
     let amount_applied = amount_received_cup.min(balance);
-    let change_given = (amount_received_cup - balance).max(0.0);
-
-    // Validación de vuelto: si hay vuelto y se entregó desglose, debe cuadrar.
-    let change_breakdown_json = if let Some(change_counts) = &payload.change_counts {
-        let change_sum = sum_from_counts(change_counts)?;
-        if change_sum > EPS {
-            if (change_sum - change_given).abs() > 0.5 {
-                return Err(format!(
-                    "El vuelto entregado ({:.2} CUP) no coincide con el vuelto a devolver ({:.2} CUP).",
-                    change_sum, change_given
-                ));
-            }
-            Some(serde_json::to_string(change_counts).map_err(|e| e.to_string())?)
-        } else {
-            None
+    let excess = (amount_received_cup - balance).max(0.0);
+    let (change_given, credit_added) = if excess > EPS {
+        match disposition {
+            OverpaymentDisposition::Change => (excess, 0.0),
+            OverpaymentDisposition::Credit => (0.0, excess),
         }
     } else {
-        None
+        (0.0, 0.0)
     };
+
+    let change_breakdown_json =
+        validate_change_breakdown(change_given, &payload.change_counts, &disposition)?;
 
     let new_paid = paid + amount_applied;
     let new_balance = (total - new_paid).max(0.0);
@@ -266,18 +645,17 @@ pub fn apply_invoice_payment_in_tx(
     };
     let status = sync_legacy_status(&production_status, payment_status, new_balance, new_paid);
 
-    let client_balance: f64 = tx
+    let (client_balance, credit_balance): (f64, f64) = tx
         .query_row(
-            "SELECT balance FROM clients WHERE id = ?1 AND deleted_at IS NULL",
+            "SELECT balance, COALESCE(credit_balance, 0) FROM clients
+             WHERE id = ?1 AND deleted_at IS NULL",
             params![client_id],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .map_err(|_| "Cliente no encontrado".to_string())?;
 
-    let new_client_balance = client_balance - amount_applied;
-    if new_client_balance < -EPS {
-        return Err("Inconsistencia de saldo del cliente".to_string());
-    }
+    let new_client_balance = (client_balance - amount_applied).max(0.0);
+    let new_credit_balance = credit_balance + credit_added;
 
     let breakdown_json = payload
         .counts
@@ -326,6 +704,13 @@ pub fn apply_invoice_payment_in_tx(
         exchange_rate_snapshot.unwrap_or(0.0)
     };
 
+    // Con vuelto: ingreso = aplicado (neto). Con crédito: ingreso = recibido completo.
+    let cash_ingreso = if credit_added > EPS {
+        amount_received_cup
+    } else {
+        amount_applied
+    };
+
     tx.execute(
         "INSERT INTO cash_transactions
             (type, concept, reference_type, reference_id, amount_cup, amount_usd, exchange_rate,
@@ -334,7 +719,7 @@ pub fn apply_invoice_payment_in_tx(
         params![
             concept,
             payload.invoice_id,
-            amount_applied,
+            cash_ingreso,
             amount_usd,
             rate_used,
             tx_method,
@@ -344,21 +729,24 @@ pub fn apply_invoice_payment_in_tx(
     .map_err(|e| e.to_string())?;
 
     tx.execute(
-        "UPDATE invoices SET paid = ?1, balance = ?2, status = ?3, payment_status = ?4
-         WHERE id = ?5 AND deleted_at IS NULL",
+        "UPDATE invoices SET paid = ?1, balance = ?2, status = ?3, payment_status = ?4,
+         credit_added = ?5
+         WHERE id = ?6 AND deleted_at IS NULL",
         params![
             new_paid,
             new_balance,
             status,
             payment_status,
+            credit_added_prev + credit_added,
             payload.invoice_id
         ],
     )
     .map_err(|e| e.to_string())?;
 
     tx.execute(
-        "UPDATE clients SET balance = ?1, updated_at = datetime('now') WHERE id = ?2 AND deleted_at IS NULL",
-        params![new_client_balance, client_id],
+        "UPDATE clients SET balance = ?1, credit_balance = ?2, updated_at = datetime('now')
+         WHERE id = ?3 AND deleted_at IS NULL",
+        params![new_client_balance, new_credit_balance, client_id],
     )
     .map_err(|e| e.to_string())?;
 
@@ -366,7 +754,9 @@ pub fn apply_invoice_payment_in_tx(
         session_id,
         amount_received: amount_received_cup,
         change_given,
-        amount_applied,
+        amount_applied: amount_applied + credit_applied,
+        credit_applied,
+        credit_added,
         invoice_new_balance: new_balance,
         invoice_status: status,
         payment_status: payment_status.to_string(),

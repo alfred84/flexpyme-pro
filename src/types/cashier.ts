@@ -40,6 +40,9 @@ export interface CashSessionDto {
   denominationBreakdown: string | null;
 }
 
+/** Qué hacer con el exceso recibido sobre el saldo. */
+export type OverpaymentDisposition = "change" | "credit";
+
 export interface CashierRegisterPayload {
   invoiceId: number;
   /** Conteo de billetes CUP (efectivo con desglose). */
@@ -50,6 +53,12 @@ export interface CashierRegisterPayload {
   amountUsd?: number | null;
   exchangeRate?: number | null;
   transferConcept?: string | null;
+  /** Desglose de billetes CUP del vuelto. */
+  changeCounts?: Record<string, number> | null;
+  /** `change` = devolver vuelto; `credit` = dejar saldo a favor. */
+  overpaymentDisposition?: OverpaymentDisposition | null;
+  /** Aplicar saldo a favor del cliente antes del cobro (default true). */
+  applyClientCredit?: boolean | null;
 }
 
 export interface CashierRegisterResponse {
@@ -57,6 +66,8 @@ export interface CashierRegisterResponse {
   amountReceived: number;
   changeGiven: number;
   amountApplied: number;
+  creditApplied: number;
+  creditAdded: number;
   invoiceNewBalance: number;
   invoiceStatus: string;
   paymentStatus: string;

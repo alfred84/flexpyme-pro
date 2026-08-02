@@ -4,7 +4,10 @@ use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
 use crate::commands::categories::category_display_name;
-use crate::commands::cashier::{apply_invoice_payment_in_tx, record_advance_payment_in_tx, InitialPaymentPayload};
+use crate::commands::cashier::{
+    apply_client_credit_to_invoice_in_tx, apply_invoice_payment_in_tx, record_advance_payment_in_tx,
+    AdvancePaymentPayload, InitialPaymentPayload,
+};
 use crate::db;
 
 const EPS: f64 = 1e-6;
@@ -143,6 +146,11 @@ pub struct CreateInvoicePayload {
     pub payment_currency: String,
     pub exchange_rate_snapshot: f64,
     pub transfer_concept: Option<String>,
+    /// Detalle opcional del anticipo (método, moneda, denominaciones).
+    pub advance_payment_detail: Option<AdvancePaymentPayload>,
+    /// Aplicar saldo a favor del cliente al crear el pedido (default true).
+    #[serde(default)]
+    pub apply_client_credit: Option<bool>,
     pub initial_payment: Option<InitialPaymentPayload>,
     pub items: Vec<CreateInvoiceItemPayload>,
 }
@@ -778,25 +786,23 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
         subtotal += line;
     }
 
-    let total = subtotal - payload.advance_payment;
-    let balance = total;
-    if total < -1e-6 {
-        return Err("El total calculado no puede ser negativo".to_string());
-    }
-    if payload.initial_payment.is_some() && total <= EPS {
-        return Err("No hay saldo pendiente para cobrar en este pedido".to_string());
+    // Anticipo: si hay detalle, el importe real se resuelve tras insertar (desde recibido).
+    // Usamos el valor enviado como tope inicial; se corrige tras `record_advance_payment_in_tx`.
+    let mut advance_payment = payload.advance_payment.max(0.0);
+    if advance_payment > subtotal + EPS && payload.advance_payment_detail.is_none() {
+        return Err("El anticipo no puede ser mayor que el subtotal".to_string());
     }
 
     let payment_method = payload.payment_method.trim().to_lowercase();
     if payment_method != "efectivo" && payment_method != "transferencia" {
-        return Err("M?todo de pago inv?lido".to_string());
+        return Err("Método de pago inválido".to_string());
     }
     let mut payment_currency = payload.payment_currency.trim().to_uppercase();
     if payment_method == "transferencia" {
         payment_currency = "CUP".to_string();
     }
     if payment_currency != "CUP" && payment_currency != "USD" {
-        return Err("Moneda de pago inv?lida".to_string());
+        return Err("Moneda de pago inválida".to_string());
     }
     let exchange_rate = if payment_currency == "USD" {
         if payload.exchange_rate_snapshot <= 0.0 {
@@ -806,6 +812,20 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
     } else {
         0.0
     };
+
+    // Totales provisionales (se ajustan tras el anticipo real).
+    let provisional_advance = if payload.advance_payment_detail.is_some() {
+        0.0
+    } else {
+        advance_payment.min(subtotal)
+    };
+    let total = (subtotal - provisional_advance).max(0.0);
+    let balance = total;
+    if payload.initial_payment.is_some() && total <= EPS && payload.advance_payment_detail.is_none()
+    {
+        return Err("No hay saldo pendiente para cobrar en este pedido".to_string());
+    }
+
     let amount_cup = total.max(0.0);
     let amount_usd = if payment_currency == "USD" && exchange_rate > 0.0 {
         amount_cup / exchange_rate
@@ -819,7 +839,7 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
     let payment_status = if balance <= EPS { "cobrado" } else { "pendiente" };
     let mut notes = trim_notes(payload.notes);
     if payment_method == "transferencia" {
-        if let Some(concept) = trim_notes(payload.transfer_concept) {
+        if let Some(concept) = trim_notes(payload.transfer_concept.clone()) {
             let extra = format!("Ref. transferencia: {}", concept);
             notes = Some(match notes {
                 Some(n) => format!("{}\n{}", n, extra),
@@ -828,18 +848,19 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
         }
     }
 
-    let new_balance = previous_debt + subtotal - payload.advance_payment;
+    let new_client_debt = previous_debt + subtotal - provisional_advance;
 
     tx.execute(
         "INSERT INTO invoices (invoice_number, client_id, date, subtotal, advance_payment, previous_debt, total, paid, balance, status,
-         production_status, payment_status, payment_method, payment_currency, exchange_rate_snapshot, amount_usd, amount_cup, notes)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+         production_status, payment_status, payment_method, payment_currency, exchange_rate_snapshot, amount_usd, amount_cup, notes,
+         credit_applied, credit_added)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 0, 0)",
         params![
             invoice_number,
             payload.client_id,
             date_trim,
             subtotal,
-            payload.advance_payment,
+            provisional_advance,
             previous_debt,
             total,
             balance,
@@ -919,20 +940,80 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
 
     tx.execute(
         "UPDATE clients SET balance = ?1, updated_at = datetime('now') WHERE id = ?2 AND deleted_at IS NULL",
-        params![new_balance, payload.client_id],
+        params![new_client_debt, payload.client_id],
     )
     .map_err(|e| e.to_string())?;
 
-    record_advance_payment_in_tx(
+    let advance_result = record_advance_payment_in_tx(
         &tx,
         invoice_id,
         &invoice_number,
-        payload.advance_payment,
+        payload.client_id,
+        subtotal,
+        payload.advance_payment_detail.as_ref(),
+        provisional_advance,
         &payment_method,
     )?;
+    advance_payment = advance_result.advance_cup;
+
+    // Ajustar totales del pedido si el anticipo real difiere del provisional.
+    if (advance_payment - provisional_advance).abs() > EPS {
+        let new_total = (subtotal - advance_payment).max(0.0);
+        let new_inv_balance = new_total;
+        let new_payment_status = if new_inv_balance <= EPS {
+            "cobrado"
+        } else {
+            "pendiente"
+        };
+        let new_status = compute_invoice_status(new_inv_balance, 0.0);
+        let new_amount_cup = new_total;
+        let new_amount_usd = if payment_currency == "USD" && exchange_rate > 0.0 {
+            new_amount_cup / exchange_rate
+        } else {
+            0.0
+        };
+        tx.execute(
+            "UPDATE invoices SET advance_payment = ?1, total = ?2, balance = ?3, status = ?4,
+             payment_status = ?5, amount_cup = ?6, amount_usd = ?7 WHERE id = ?8",
+            params![
+                advance_payment,
+                new_total,
+                new_inv_balance,
+                new_status,
+                new_payment_status,
+                new_amount_cup,
+                new_amount_usd,
+                invoice_id
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+
+        let adjusted_debt = previous_debt + subtotal - advance_payment;
+        tx.execute(
+            "UPDATE clients SET balance = ?1, updated_at = datetime('now') WHERE id = ?2 AND deleted_at IS NULL",
+            params![adjusted_debt, payload.client_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    let apply_credit = payload.apply_client_credit.unwrap_or(true);
+    apply_client_credit_to_invoice_in_tx(&tx, invoice_id, apply_credit)?;
 
     if let Some(initial_payment) = payload.initial_payment {
-        apply_invoice_payment_in_tx(&tx, &initial_payment.into_register(invoice_id))?;
+        let inv_balance: f64 = tx
+            .query_row(
+                "SELECT balance FROM invoices WHERE id = ?1",
+                params![invoice_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if inv_balance <= EPS {
+            return Err("No hay saldo pendiente para cobrar en este pedido".to_string());
+        }
+        // El crédito ya se aplicó arriba; evitar doble aplicación en el cobro.
+        let mut register = initial_payment.into_register(invoice_id);
+        register.apply_client_credit = Some(false);
+        apply_invoice_payment_in_tx(&tx, &register)?;
     }
 
     tx.commit().map_err(|e| e.to_string())?;
@@ -1271,25 +1352,64 @@ pub fn cancel_invoice(invoice_id: i64, reason: String) -> Result<InvoiceHeaderDt
     }
     let mut conn = db::open_connection()?;
     let tx = conn.transaction().map_err(|e| e.to_string())?;
-    let (invoice_number, payment_status, balance, _paid, cancelled_at): (
+    let (
+        invoice_number,
+        payment_status,
+        balance,
+        _paid,
+        cancelled_at,
+        credit_applied,
+        credit_added,
+        client_id,
+    ): (
         String,
         String,
         f64,
         f64,
         Option<String>,
+        f64,
+        f64,
+        i64,
     ) = tx
         .query_row(
-            "SELECT invoice_number, payment_status, balance, paid, cancelled_at
+            "SELECT invoice_number, payment_status, balance, paid, cancelled_at,
+                    COALESCE(credit_applied, 0), COALESCE(credit_added, 0), client_id
              FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
             params![invoice_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                ))
+            },
         )
         .map_err(|_| "Factura no encontrada".to_string())?;
     if cancelled_at.is_some() {
-        return Err("La factura ya est? anulada".to_string());
+        return Err("La factura ya está anulada".to_string());
     }
     if payment_status == "cobrado" && balance <= EPS {
         return Err("No se puede anular una factura totalmente cobrada".to_string());
+    }
+
+    let credit_balance: f64 = tx
+        .query_row(
+            "SELECT COALESCE(credit_balance, 0) FROM clients WHERE id = ?1",
+            params![client_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    if credit_added > EPS && credit_added > credit_balance + EPS {
+        return Err(
+            "No se puede anular: el saldo a favor generado por este pedido ya se usó en otra operación"
+                .to_string(),
+        );
     }
 
     let payments: Vec<(i64, f64, f64, f64, String)> = {
@@ -1325,7 +1445,7 @@ pub fn cancel_invoice(invoice_id: i64, reason: String) -> Result<InvoiceHeaderDt
                 (type, concept, reference_type, reference_id, amount_cup, amount_usd, exchange_rate, payment_method, date)
              VALUES ('egreso', ?1, 'pedido', ?2, ?3, ?4, ?5, ?6, datetime('now'))",
             params![
-                format!("Reverso anulaci?n {}", invoice_number),
+                format!("Reverso anulación {}", invoice_number),
                 invoice_id,
                 amount_cup,
                 amount_usd,
@@ -1342,16 +1462,9 @@ pub fn cancel_invoice(invoice_id: i64, reason: String) -> Result<InvoiceHeaderDt
         &invoice_number,
     )?;
 
-    let client_id: i64 = tx
-        .query_row(
-            "SELECT client_id FROM invoices WHERE id = ?1",
-            params![invoice_id],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
-
     tx.execute(
         "UPDATE invoices SET status = 'anulada', payment_status = 'pendiente', paid = 0, balance = 0,
+         credit_applied = 0, credit_added = 0,
          cancelled_at = datetime('now'), cancelled_reason = ?1
          WHERE id = ?2",
         params![reason, invoice_id],
@@ -1366,9 +1479,13 @@ pub fn cancel_invoice(invoice_id: i64, reason: String) -> Result<InvoiceHeaderDt
             |row| row.get(0),
         )
         .map_err(|e| e.to_string())?;
+
+    // Quitar crédito generado por este pedido y restaurar el que se había aplicado.
+    let new_credit = (credit_balance - credit_added + credit_applied).max(0.0);
+
     tx.execute(
-        "UPDATE clients SET balance = ?1, updated_at = datetime('now') WHERE id = ?2",
-        params![new_client_balance, client_id],
+        "UPDATE clients SET balance = ?1, credit_balance = ?2, updated_at = datetime('now') WHERE id = ?3",
+        params![new_client_balance, new_credit, client_id],
     )
     .map_err(|e| e.to_string())?;
 
