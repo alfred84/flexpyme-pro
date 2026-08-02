@@ -5,21 +5,38 @@ const BALANCE_EPS = 1e-6;
 
 /**
  * Estado visual del balance del cliente (perspectiva del cliente).
- * En BD: `balance > 0` = deuda; `balance < 0` = saldo a favor.
+ * Deuda = `balance > 0` y sin crédito neto; saldo a favor = `creditBalance` supera la deuda.
  */
 export type ClientBalanceStatus = "deuda" | "saldo" | "al_dia";
 
 /**
- * Resuelve el estado del cliente según el balance almacenado.
+ * Posición neta del cliente: deuda abierta menos crédito disponible.
+ * `> 0` = debe; `< 0` = saldo a favor; `≈ 0` = al día.
  *
- * @param balance - Balance en BD (`> 0` deuda, `< 0` saldo a favor).
+ * @param balance - Deuda abierta.
+ * @param creditBalance - Crédito disponible.
+ * @returns Posición neta con signo contable (deuda positiva).
+ */
+export function clientNetPosition(balance: number, creditBalance = 0): number {
+  return balance - creditBalance;
+}
+
+/**
+ * Resuelve el estado del cliente según deuda y crédito.
+ *
+ * @param balance - Deuda abierta.
+ * @param creditBalance - Saldo a favor.
  * @returns Estado para badge y estilos.
  */
-export function resolveClientBalanceStatus(balance: number): ClientBalanceStatus {
-  if (balance > BALANCE_EPS) {
+export function resolveClientBalanceStatus(
+  balance: number,
+  creditBalance = 0,
+): ClientBalanceStatus {
+  const net = clientNetPosition(balance, creditBalance);
+  if (net > BALANCE_EPS) {
     return "deuda";
   }
-  if (balance < -BALANCE_EPS) {
+  if (net < -BALANCE_EPS) {
     return "saldo";
   }
   return "al_dia";
@@ -46,15 +63,20 @@ export function clientBalanceStatusLabel(status: ClientBalanceStatus): string {
  * Formatea el balance para la tabla: signo explícito y color semántico.
  * Deuda se muestra como negativo (−); saldo a favor como positivo (+).
  *
- * @param balance - Balance almacenado en BD.
+ * @param balance - Deuda abierta en BD.
+ * @param creditBalance - Crédito disponible.
  * @returns Texto, clases CSS y estado.
  */
-export function formatClientBalanceDisplay(balance: number): {
+export function formatClientBalanceDisplay(
+  balance: number,
+  creditBalance = 0,
+): {
   text: string;
   className: string;
   status: ClientBalanceStatus;
 } {
-  const status = resolveClientBalanceStatus(balance);
+  const status = resolveClientBalanceStatus(balance, creditBalance);
+  const net = clientNetPosition(balance, creditBalance);
   if (status === "al_dia") {
     return {
       text: formatMoney(0),
@@ -64,13 +86,13 @@ export function formatClientBalanceDisplay(balance: number): {
   }
   if (status === "deuda") {
     return {
-      text: `− ${formatMoney(Math.abs(balance))}`,
+      text: `− ${formatMoney(Math.abs(net))}`,
       className: "tabular-nums font-medium text-error",
       status,
     };
   }
   return {
-    text: `+ ${formatMoney(Math.abs(balance))}`,
+    text: `+ ${formatMoney(Math.abs(net))}`,
     className: "tabular-nums font-medium text-success",
     status,
   };

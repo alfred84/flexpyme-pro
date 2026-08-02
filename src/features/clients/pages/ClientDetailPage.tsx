@@ -92,8 +92,12 @@ export function ClientDetailPage() {
                 <dd className="font-mono">{clientQuery.data.code}</dd>
               </div>
               <div>
-                <dt className="text-xs uppercase text-base-content/60">Balance</dt>
+                <dt className="text-xs uppercase text-base-content/60">Deuda abierta</dt>
                 <dd>{formatMoney(clientQuery.data.balance)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase text-base-content/60">Saldo a favor</dt>
+                <dd className="text-success">{formatMoney(clientQuery.data.creditBalance ?? 0)}</dd>
               </div>
               <div>
                 <dt className="text-xs uppercase text-base-content/60">Total histórico</dt>

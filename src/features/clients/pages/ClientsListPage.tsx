@@ -39,10 +39,14 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
         cell: (info) => info.getValue<string | null>() ?? "—",
       },
       {
-        accessorKey: "balance",
+        id: "balance",
         header: "Balance",
-        cell: (info) => {
-          const display = formatClientBalanceDisplay(info.getValue<number>());
+        accessorFn: (row) => row.balance - (row.creditBalance ?? 0),
+        cell: ({ row }) => {
+          const display = formatClientBalanceDisplay(
+            row.original.balance,
+            row.original.creditBalance ?? 0,
+          );
           return (
             <span className={display.className} title={clientBalanceStatusLabel(display.status)}>
               {display.text}
@@ -58,9 +62,13 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
       {
         id: "estado",
         header: "Estado",
-        accessorFn: (row) => resolveClientBalanceStatus(row.balance),
+        accessorFn: (row) =>
+          resolveClientBalanceStatus(row.balance, row.creditBalance ?? 0),
         cell: ({ row }) => {
-          const status = resolveClientBalanceStatus(row.original.balance);
+          const status = resolveClientBalanceStatus(
+            row.original.balance,
+            row.original.creditBalance ?? 0,
+          );
           return (
             <span className={clientBalanceStatusBadgeClass(status)}>
               {clientBalanceStatusLabel(status)}
