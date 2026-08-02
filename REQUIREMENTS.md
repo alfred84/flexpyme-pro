@@ -121,7 +121,8 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Denominaciones USD disponibles: 100, 50, 20, 10, 5, 2, 1
 - Soporte para USD con tasa de conversión a CUP (se almacena la tasa en cada operación)
 - Balance actual de caja (CUP y USD por separado)
-- Módulo de cobro de facturas: ingresa billetes → calcula vuelto automáticamente; el vuelto con denominaciones reduce el neto en caja (recibido − vuelto)
+- Módulo de cobro de facturas: ingresa billetes → exceso como **vuelto** (desglose; neto caja = recibido − vuelto) o como **saldo a favor** del cliente (ingreso completo en caja)
+- **Anticipo de pedido**: CUP o USD, efectivo (con denominaciones) o transferencia; se registra como ingreso en caja
 - **KPIs (v2.5)**: flujo neto del día actual y flujo neto de los últimos 30 días (más serie diaria del mismo período)
 - Historial de movimientos con filtros por fecha, tipo, concepto
 - Resumen diario/mensual
@@ -189,7 +190,8 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Denominaciones de billetes USD**: 100, 50, 20, 10, 5, 2, 1
 - **Formas de pago**: Efectivo | Transferencia
 - La tasa USD/CUP se establece en Configuración y se guarda en cada transacción
-- **Vuelto (v2.5)**: si el efectivo recibido supera el importe aplicado, el vuelto se desglosa por denominaciones y el neto en caja es recibido − vuelto; no se permite confirmar el cobro con vuelto pendiente sin resolver
+- **Vuelto / saldo a favor (v2.9)**: si el recibido supera lo aplicado, el usuario elige **devolver vuelto** (desglose de billetes; neto caja = recibido − vuelto) o **dejar saldo a favor** (`clients.credit_balance`; ingreso en caja = recibido completo). El vuelto ya no es obligatorio.
+- **Saldo a favor**: se aplica automáticamente a futuros pedidos/cobros (desmarcable); reduce lo pendiente sin movimiento de caja adicional
 
 ---
 
@@ -235,7 +237,7 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 1. Un pedido siempre está asociado a un cliente
 2. Los precios se toman de la lista de precios configurada (no se hardcodean). Cada fila puede ofrecer CUP, USD o ambas; en pedidos/facturas el unitario se resuelve en **CUP** (prioridad CUP activo; si solo USD, `precio_usd × tasa` vigente)
 3. Los pagos a empleados usan las **tarifas de pago** en CUP (distintas a precios de VENTA)
-4. La deuda anterior del cliente **no** se incluye en el total del pedido; al guardar se actualiza el balance del cliente (`balance += subtotal - anticipo - pagado`)
+4. La deuda anterior del cliente **no** se incluye en el total del pedido; al guardar se actualiza `clients.balance` (deuda abierta). El saldo a favor vive en `clients.credit_balance` y se puede aplicar al pedido/cobro
 5. El flujo de caja registra TODA operación de dinero (cobros a clientes, anticipos de pedido, pagos a empleados, gastos)
 6. Los empleados dados de baja no aparecen en nuevas asignaciones pero su historial se conserva
 7. El inventario descuenta materiales **al concluir cada línea/servicio** vía lotes de trabajo (materiales fijados en el pedido desde norma o asignación manual; si no hay, coincidencia con `inventory_recipes`); si falta material se permite déficit (existencia negativa), se marca `resource_missing` en la línea y en el pedido, y no se bloquea la conclusión
@@ -361,6 +363,12 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - **Status por línea** (`production_line_status`); confirmar Listo crea lotes; Marcar listo del listado sincroniza todas las líneas.
 - Se retira **Registrar trabajo** del detalle de pedido.
 - **Pago empleados** con `DenominationGrid` (lote individual y pago del día).
+
+### v2.9 — Anticipo con denominaciones y saldo a favor (2026-07)
+- Anticipo al crear pedido: método (efectivo/transferencia), moneda CUP/USD, `DenominationGrid` si efectivo; ingreso en `cash_transactions`.
+- Exceso de pago (anticipo o cobro): **vuelto** o **saldo a favor** (`clients.credit_balance`); columnas `credit_applied` / `credit_added` en pedidos para anulación coherente.
+- Crédito aplicable a futuros cobros (checkbox «Aplicar saldo a favor», default ON).
+- Anulación: revierte caja; restaura crédito aplicado y quita crédito generado (error si el crédito generado ya se consumió).
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
