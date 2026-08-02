@@ -370,11 +370,41 @@ export const employees = sqliteTable("employees", {
   role: text("role"),
   phone: text("phone"),
   notes: text("notes"),
+  /** Si true, cobra un salario fijo diario en lugar de tarifas por producción. */
+  hasFixedDailySalary: integer("has_fixed_daily_salary", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  /** Importe CUP del salario fijo diario (cuando está habilitado). */
+  fixedDailySalaryCup: real("fixed_daily_salary_cup").notNull().default(0),
   isActive: integer("is_active").notNull().default(1),
   deletedAt: text("deleted_at"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
 });
+
+/**
+ * Registro diario de salario fijo (pendiente/pagado) por empleado y fecha.
+ */
+export const employeeDailySalaries = sqliteTable(
+  "employee_daily_salaries",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    amountCup: real("amount_cup").notNull(),
+    paid: real("paid").notNull().default(0),
+    status: text("status").notNull().default("pendiente"),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    empDateUnique: uniqueIndex("employee_daily_salaries_emp_date_uidx").on(
+      table.employeeId,
+      table.date,
+    ),
+  }),
+);
 
 /**
  * Empleados asignados a una línea de pedido (por tipo de trabajo) con tarifa opcional.

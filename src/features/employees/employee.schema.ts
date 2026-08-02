@@ -14,6 +14,8 @@ export const employeeFormSchema = z
     phone: z.string().trim().max(50, "El teléfono es demasiado largo"),
     notes: z.string().trim().max(2000, "Las notas son demasiado largas"),
     extraRoleIds: z.array(z.number().int().positive()),
+    hasFixedDailySalary: z.boolean(),
+    fixedDailySalaryCup: z.number().finite().min(0, "El salario no puede ser negativo"),
   })
   .superRefine((values, ctx) => {
     if (values.extraRoleIds.includes(values.roleId)) {
@@ -21,6 +23,13 @@ export const employeeFormSchema = z
         code: z.ZodIssueCode.custom,
         path: ["extraRoleIds"],
         message: "Un rol adicional no puede coincidir con el rol principal",
+      });
+    }
+    if (values.hasFixedDailySalary && values.fixedDailySalaryCup <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["fixedDailySalaryCup"],
+        message: "Indica un salario fijo diario mayor que cero",
       });
     }
   });

@@ -49,6 +49,8 @@ export function EmployeeEditPage() {
             phone: employeeQuery.data.phone ?? "",
             notes: employeeQuery.data.notes ?? "",
             extraRoleIds: employeeQuery.data.extraRoleIds ?? [],
+            hasFixedDailySalary: employeeQuery.data.hasFixedDailySalary,
+            fixedDailySalaryCup: employeeQuery.data.fixedDailySalaryCup,
           }}
           onCancel={() => navigate({ to: "/empleados" })}
           onSubmit={async (values) => {
@@ -59,6 +61,10 @@ export function EmployeeEditPage() {
               phone: values.phone || null,
               notes: values.notes || null,
               extraRoleIds: values.extraRoleIds,
+              hasFixedDailySalary: values.hasFixedDailySalary,
+              fixedDailySalaryCup: values.hasFixedDailySalary
+                ? values.fixedDailySalaryCup
+                : 0,
             });
           }}
         />

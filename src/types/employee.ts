@@ -8,6 +8,10 @@ export interface EmployeeDto {
   role: string | null;
   phone: string | null;
   notes: string | null;
+  /** Cobra salario fijo diario en vez de tarifas por producción. */
+  hasFixedDailySalary: boolean;
+  /** Importe CUP del salario fijo diario. */
+  fixedDailySalaryCup: number;
   isActive: boolean;
   createdAt: string;
   /** Nombres de roles adicionales (listado/detalle). */
@@ -25,6 +29,8 @@ export interface CreateEmployeePayload {
   phone: string | null;
   notes: string | null;
   extraRoleIds: number[];
+  hasFixedDailySalary: boolean;
+  fixedDailySalaryCup: number;
 }
 
 /**

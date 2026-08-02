@@ -97,7 +97,7 @@ export async function payWorkBatch(payload: {
   return invoke<void>("work_batch_pay", { payload });
 }
 
-/** Lote pendiente de pago. */
+/** Lote o salario fijo pendiente de pago. */
 export interface UnpaidBatchDto {
   id: number;
   employeeId: number;
@@ -107,6 +107,8 @@ export interface UnpaidBatchDto {
   totalCost: number;
   paid: number;
   pending: number;
+  /** `true` si es salario fijo diario (no lote de producción). */
+  isFixedSalary: boolean;
 }
 
 /**
@@ -125,6 +127,7 @@ export async function fetchUnpaidBatchesForDate(date?: string): Promise<UnpaidBa
  */
 export async function payWorkBatchesMany(payload: {
   batchIds: number[];
+  dailySalaryIds?: number[];
   paymentMethod?: string;
   currency?: string;
   denominationBreakdown?: string | null;

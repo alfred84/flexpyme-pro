@@ -33,10 +33,16 @@ export function EmployeeForm(props: EmployeeFormProps) {
       phone: defaultValues?.phone ?? "",
       notes: defaultValues?.notes ?? "",
       extraRoleIds: defaultValues?.extraRoleIds ?? [],
+      hasFixedDailySalary: defaultValues?.hasFixedDailySalary ?? false,
+      fixedDailySalaryCup: defaultValues?.fixedDailySalaryCup ?? 0,
     },
   });
 
   const roleId = useWatch({ control: form.control, name: "roleId" });
+  const hasFixedDailySalary = useWatch({
+    control: form.control,
+    name: "hasFixedDailySalary",
+  });
   const roles = rolesQuery.data ?? [];
   const extraRoleOptions = roles.filter((r) => r.id !== roleId);
 
@@ -147,6 +153,58 @@ export function EmployeeForm(props: EmployeeFormProps) {
           </span>
         )}
       </fieldset>
+
+      <div className="rounded-lg border border-base-300 bg-base-100 p-3 space-y-3">
+        <Controller
+          control={form.control}
+          name="hasFixedDailySalary"
+          render={({ field }) => (
+            <label className="label cursor-pointer justify-start gap-3 py-0">
+              <input
+                type="checkbox"
+                className="toggle toggle-primary"
+                disabled={isSubmitting}
+                checked={field.value}
+                onChange={(e) => {
+                  field.onChange(e.target.checked);
+                  if (!e.target.checked) {
+                    form.setValue("fixedDailySalaryCup", 0, { shouldValidate: true });
+                  }
+                }}
+              />
+              <span className="label-text">
+                <span className="font-medium">Salario fijo diario</span>
+                <span className="mt-0.5 block text-xs text-base-content/60">
+                  Si está activo, cobra este importe cada día en lugar de las tarifas por
+                  producción.
+                </span>
+              </span>
+            </label>
+          )}
+        />
+        {hasFixedDailySalary && (
+          <div className="form-control w-full">
+            <label className="label" htmlFor="employee-fixed-salary">
+              <span className="label-text">Importe diario (CUP)</span>
+            </label>
+            <input
+              id="employee-fixed-salary"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              className="input input-bordered w-full"
+              disabled={isSubmitting}
+              {...form.register("fixedDailySalaryCup", { valueAsNumber: true })}
+            />
+            {form.formState.errors.fixedDailySalaryCup && (
+              <span className="label-text-alt text-error">
+                {form.formState.errors.fixedDailySalaryCup.message}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="form-control w-full">
         <label className="label" htmlFor="employee-phone">

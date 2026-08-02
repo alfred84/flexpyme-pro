@@ -46,6 +46,10 @@ export function EmployeeNewPage() {
             phone: values.phone || null,
             notes: values.notes || null,
             extraRoleIds: values.extraRoleIds,
+            hasFixedDailySalary: values.hasFixedDailySalary,
+            fixedDailySalaryCup: values.hasFixedDailySalary
+              ? values.fixedDailySalaryCup
+              : 0,
           });
         }}
       />

@@ -109,6 +109,7 @@ export function EmployeesListPage() {
                 <th>Nombre</th>
                 <th>Rol</th>
                 <th>Roles adicionales</th>
+                <th>Salario</th>
                 <th>Teléfono</th>
                 <th>Estado</th>
                 <th></th>
@@ -130,6 +131,15 @@ export function EmployeesListPage() {
                       </div>
                     ) : (
                       <span className="text-base-content/40">—</span>
+                    )}
+                  </td>
+                  <td className="text-xs">
+                    {emp.hasFixedDailySalary ? (
+                      <span className="badge badge-info badge-sm">
+                        Fijo {formatMoney(emp.fixedDailySalaryCup)}/día
+                      </span>
+                    ) : (
+                      <span className="text-base-content/50">Por producción</span>
                     )}
                   </td>
                   <td>{emp.phone ?? "—"}</td>
@@ -177,7 +187,7 @@ export function EmployeesListPage() {
               ))}
               {employeesQuery.data.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-base-content/60">
+                  <td colSpan={7} className="py-6 text-center text-base-content/60">
                     No hay empleados todavía.
                   </td>
                 </tr>
@@ -246,14 +256,15 @@ export function EmployeesListPage() {
         title="Pago de empleados"
         description={
           unpaidToday.length === 0
-            ? "No hay lotes pendientes hoy."
-            : `${unpaidToday.length} lote(s) del día pendientes de pago.`
+            ? "No hay pagos pendientes hoy."
+            : `${unpaidToday.length} ítem(s) del día pendientes de pago (lotes y/o salarios fijos).`
         }
         amountCup={unpaidTotal}
         onClose={() => setPayOpen(false)}
         onConfirm={async (data) => {
           await payWorkBatchesMany({
-            batchIds: unpaidToday.map((b) => b.id),
+            batchIds: unpaidToday.filter((b) => !b.isFixedSalary).map((b) => b.id),
+            dailySalaryIds: unpaidToday.filter((b) => b.isFixedSalary).map((b) => b.id),
             paymentMethod: data.paymentMethod,
             currency: data.currency,
             denominationBreakdown: data.denominationBreakdown,

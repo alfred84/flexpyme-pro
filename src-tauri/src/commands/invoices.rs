@@ -1663,7 +1663,16 @@ pub fn invoice_item_mark_listo(payload: MarkInvoiceItemListoPayload) -> Result<I
     }
 
     for w in &payload.workers {
-        let batch_cost = w.unit_cost * w.quantity as f64;
+        // Empleados con salario fijo no acumulan tarifa por producción.
+        let unit_cost = if crate::commands::employees::employee_has_fixed_daily_salary(
+            &*tx,
+            w.employee_id,
+        )? {
+            0.0
+        } else {
+            w.unit_cost
+        };
+        let batch_cost = unit_cost * w.quantity as f64;
         tx.execute(
             "INSERT INTO production_batches (type, work_type_id, work_type_snapshot, date, employee_id, total_cost, paid, status, notes)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 'pendiente', ?7)",
@@ -1689,7 +1698,7 @@ pub fn invoice_item_mark_listo(payload: MarkInvoiceItemListoPayload) -> Result<I
                 format_id,
                 service_name.trim(),
                 w.quantity,
-                w.unit_cost,
+                unit_cost,
                 batch_cost,
                 invoice_id
             ],

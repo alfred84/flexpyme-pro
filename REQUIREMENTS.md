@@ -94,6 +94,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Registro de lotes de trabajo: fecha, tipo, cantidades por formato y cliente
 - Los lotes pueden vincularse a un **pedido** (`production_batch_items.invoice_id`) al marcar Listo en el detalle (o Marcar listo en listado)
 - Cálculo automático del salario a pagar (tarifa de Precios o personalizada en la asignación del pedido)
+- **Salario fijo diario (opcional)**: en alta/edición, switch bajo roles adicionales; si está activo, el empleado cobra ese importe CUP cada día (vía «Pago de empleados») en lugar de las tarifas por producción. Los lotes de trabajo se registran con costo 0 para no duplicar el pago
 - Historial de pagos al empleado
 - Dar de baja (soft delete, no eliminar)
 - **Multi-rol (v2.5)**: cada empleado tiene un rol principal (`employees.role_id`) y puede tener roles adicionales (`employee_extra_roles`) para cuando cubre otra Área
@@ -236,7 +237,7 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 
 1. Un pedido siempre está asociado a un cliente
 2. Los precios se toman de la lista de precios configurada (no se hardcodean). Cada fila puede ofrecer CUP, USD o ambas; en pedidos/facturas el unitario se resuelve en **CUP** (prioridad CUP activo; si solo USD, `precio_usd × tasa` vigente)
-3. Los pagos a empleados usan las **tarifas de pago** en CUP (distintas a precios de VENTA)
+3. Los pagos a empleados usan las **tarifas de pago** en CUP (distintas a precios de VENTA), salvo empleados con **salario fijo diario** habilitado
 4. La deuda anterior del cliente **no** se incluye en el total del pedido; al guardar se actualiza `clients.balance` (deuda abierta). El saldo a favor vive en `clients.credit_balance` y se puede aplicar al pedido/cobro
 5. El flujo de caja registra TODA operación de dinero (cobros a clientes, anticipos de pedido, pagos a empleados, gastos)
 6. Los empleados dados de baja no aparecen en nuevas asignaciones pero su historial se conserva
@@ -369,6 +370,11 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - Exceso de pago (anticipo o cobro): **vuelto** o **saldo a favor** (`clients.credit_balance`); columnas `credit_applied` / `credit_added` en pedidos para anulación coherente.
 - Crédito aplicable a futuros cobros (checkbox «Aplicar saldo a favor», default ON).
 - Anulación: revierte caja; restaura crédito aplicado y quita crédito generado (error si el crédito generado ya se consumió).
+
+### v2.10 — Salario fijo diario de empleados (2026-08)
+- `employees.has_fixed_daily_salary` + `fixed_daily_salary_cup`; tabla `employee_daily_salaries` (pendiente/pagado por día).
+- Formulario alta/edición: toggle bajo roles adicionales + importe CUP.
+- Pago del día y nómina diaria incluyen salarios fijos; lotes de producción de esos empleados no acumulan tarifa.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
