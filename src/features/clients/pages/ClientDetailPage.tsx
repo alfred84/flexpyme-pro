@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useState } from "react";
+import { DualMoneyText } from "@/components/common/DualMoneyText";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import { ClientWorkHistorySection } from "@/features/clients/components/ClientWorkHistorySection";
 import { fetchClientById, softDeleteClient } from "@/db/queries/clients";
-import { formatAmount, moneyHeading } from "@/lib/format-money";
+import { useAppSettings } from "@/hooks/use-app-settings";
+import { moneyHeading } from "@/lib/format-money";
 import { popFlashMessage, pushFlashMessage, type FlashMessage } from "@/lib/flash-message";
 
 /**
@@ -17,6 +19,7 @@ export function ClientDetailPage() {
   const clientId = Number(params.clientId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { usdExchangeRate } = useAppSettings();
   const [showDelete, setShowDelete] = useState(false);
   const [flash] = useState<FlashMessage | null>(() => popFlashMessage());
 
@@ -92,16 +95,43 @@ export function ClientDetailPage() {
                 <dd className="font-mono">{clientQuery.data.code}</dd>
               </div>
               <div>
-                <dt className="text-xs uppercase text-base-content/60">{moneyHeading("Deuda abierta")}</dt>
-                <dd>{formatAmount(clientQuery.data.balance)}</dd>
+                <dt className="text-xs uppercase text-base-content/60">
+                  {moneyHeading("Deuda abierta", "USD")}
+                </dt>
+                <dd>
+                  <DualMoneyText
+                    amountCup={clientQuery.data.balance}
+                    rate={usdExchangeRate}
+                    primary="USD"
+                    className="items-start"
+                  />
+                </dd>
               </div>
               <div>
-                <dt className="text-xs uppercase text-base-content/60">{moneyHeading("Saldo a favor")}</dt>
-                <dd className="text-success">{formatAmount(clientQuery.data.creditBalance ?? 0)}</dd>
+                <dt className="text-xs uppercase text-base-content/60">
+                  {moneyHeading("Saldo a favor", "USD")}
+                </dt>
+                <dd className="text-success">
+                  <DualMoneyText
+                    amountCup={clientQuery.data.creditBalance ?? 0}
+                    rate={usdExchangeRate}
+                    primary="USD"
+                    className="items-start"
+                  />
+                </dd>
               </div>
               <div>
-                <dt className="text-xs uppercase text-base-content/60">{moneyHeading("Total histórico")}</dt>
-                <dd className="font-medium tabular-nums">{formatAmount(clientQuery.data.totalHistorical)}</dd>
+                <dt className="text-xs uppercase text-base-content/60">
+                  {moneyHeading("Total histórico", "USD")}
+                </dt>
+                <dd className="font-medium">
+                  <DualMoneyText
+                    amountCup={clientQuery.data.totalHistorical}
+                    rate={usdExchangeRate}
+                    primary="USD"
+                    className="items-start"
+                  />
+                </dd>
               </div>
               <div>
                 <dt className="text-xs uppercase text-base-content/60">Teléfono</dt>

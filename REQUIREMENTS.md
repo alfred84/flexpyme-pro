@@ -408,6 +408,7 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 ### v2.15 — UI Pedidos en USD con equivalente CUP (2026-08)
 - Listado, resumen, líneas y cobro/anticipo muestran venta en USD (+ CUP según tasa); si el pago es CUP, el orden se invierte.
 - Listado de pedidos y Facturas: columnas **Total (USD)** y **Total (CUP)**; CUP solo muestra importe si `payment_currency = CUP` (si es USD queda `—`). Indicadores de Facturas en USD (+ equivalente CUP).
+- Clientes: **Balance** y **Total histórico** en USD y CUP (listado, Ver/Editar e historial de trabajos).
 - Precios de tipo de trabajo editables en USD con equivalente CUP; tarifas de empleados permanecen en CUP.
 - Cuadrícula Pendiente/Recibido/Aplica del anticipo/cobro usa la moneda seleccionada (no fija CUP).
 

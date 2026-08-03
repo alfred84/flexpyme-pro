@@ -19,6 +19,8 @@ import {
   resolveClientBalanceStatus,
 } from "@/features/clients/lib/client-balance";
 import { fetchClients, fetchDeletedClients } from "@/db/queries/clients";
+import { useAppSettings } from "@/hooks/use-app-settings";
+import { cupToUsd } from "@/lib/currency";
 import type { ClientDto } from "@/types/client";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
@@ -26,9 +28,10 @@ import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
 /**
  * Columnas de la tabla de clientes (balance con signo/color y estado).
  *
+ * @param usdExchangeRate - Tasa USD→CUP vigente.
  * @returns Definición de columnas para TanStack Table.
  */
-function useClientColumns(): ColumnDef<ClientDto>[] {
+function useClientColumns(usdExchangeRate: number): ColumnDef<ClientDto>[] {
   return useMemo(
     () => [
       { accessorKey: "code", header: "Código", cell: (info) => info.getValue<string>() },
@@ -39,8 +42,25 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
         cell: (info) => info.getValue<string | null>() ?? "—",
       },
       {
-        id: "balance",
-        header: moneyHeading("Balance"),
+        id: "balanceUsd",
+        header: moneyHeading("Balance", "USD"),
+        accessorFn: (row) => row.balance - (row.creditBalance ?? 0),
+        cell: ({ row }) => {
+          const display = formatClientBalanceDisplay(
+            row.original.balance,
+            row.original.creditBalance ?? 0,
+            (absCup) => formatAmount(cupToUsd(absCup, usdExchangeRate)),
+          );
+          return (
+            <span className={display.className} title={clientBalanceStatusLabel(display.status)}>
+              {display.text}
+            </span>
+          );
+        },
+      },
+      {
+        id: "balanceCup",
+        header: moneyHeading("Balance", "CUP"),
         accessorFn: (row) => row.balance - (row.creditBalance ?? 0),
         cell: ({ row }) => {
           const display = formatClientBalanceDisplay(
@@ -55,8 +75,19 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
         },
       },
       {
+        id: "totalHistoricalUsd",
+        header: moneyHeading("Total histórico", "USD"),
+        accessorFn: (row) => row.totalHistorical,
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {formatAmount(cupToUsd(row.original.totalHistorical, usdExchangeRate))}
+          </span>
+        ),
+      },
+      {
+        id: "totalHistoricalCup",
+        header: moneyHeading("Total histórico", "CUP"),
         accessorKey: "totalHistorical",
-        header: moneyHeading("Total histórico"),
         cell: (info) => <span className="tabular-nums">{formatAmount(info.getValue<number>())}</span>,
       },
       {
@@ -82,7 +113,11 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
         enableSorting: false,
         cell: ({ row }) => (
           <div className="flex gap-2">
-            <Link className="btn btn-xs btn-outline" to="/clientes/$clientId" params={{ clientId: String(row.original.id) }}>
+            <Link
+              className="btn btn-xs btn-outline"
+              to="/clientes/$clientId"
+              params={{ clientId: String(row.original.id) }}
+            >
               Ver
             </Link>
             <Link
@@ -96,7 +131,7 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
         ),
       },
     ],
-    [],
+    [usdExchangeRate],
   );
 }
 
@@ -106,11 +141,12 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
  * @returns Página de tabla de clientes.
  */
 export function ClientsListPage() {
+  const { usdExchangeRate } = useAppSettings();
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [flash] = useState<FlashMessage | null>(() => popFlashMessage());
   const [showRestoreModal, setShowRestoreModal] = useState(false);
-  const columns = useClientColumns();
+  const columns = useClientColumns(usdExchangeRate);
   const clientsQuery = useQuery({
     queryKey: ["clients", "list"],
     queryFn: fetchClients,
@@ -224,7 +260,9 @@ export function ClientsListPage() {
                   table.getRowModel().rows.map((row) => (
                     <tr key={row.id}>
                       {row.getVisibleCells().map((cell) => (
-                        <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                        <td key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
                       ))}
                     </tr>
                   ))

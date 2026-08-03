@@ -3,6 +3,8 @@ import { RotateCcw, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import { fetchDeletedClients, restoreClient } from "@/db/queries/clients";
+import { useAppSettings } from "@/hooks/use-app-settings";
+import { cupToUsd } from "@/lib/currency";
 import { formatDate } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 
@@ -20,6 +22,7 @@ interface RestoreClientsModalProps {
 export function RestoreClientsModal(props: RestoreClientsModalProps) {
   const { onClose } = props;
   const queryClient = useQueryClient();
+  const { usdExchangeRate } = useAppSettings();
   const [filter, setFilter] = useState("");
   const [restoringId, setRestoringId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; text: string } | null>(
@@ -147,7 +150,8 @@ export function RestoreClientsModal(props: RestoreClientsModalProps) {
                   <th>Código</th>
                   <th>Cliente</th>
                   <th>Eliminado</th>
-                  <th className="text-right">{moneyHeading("Balance")}</th>
+                  <th className="text-right">{moneyHeading("Balance", "USD")}</th>
+                  <th className="text-right">{moneyHeading("Balance", "CUP")}</th>
                   <th className="w-28 text-right">Acción</th>
                 </tr>
               </thead>
@@ -165,6 +169,9 @@ export function RestoreClientsModal(props: RestoreClientsModalProps) {
                       </td>
                       <td className="whitespace-nowrap text-xs text-base-content/70">
                         {formatDate(cliente.deletedAt)}
+                      </td>
+                      <td className="text-right tabular-nums text-sm">
+                        {formatAmount(cupToUsd(cliente.balance, usdExchangeRate))}
                       </td>
                       <td className="text-right tabular-nums text-sm">
                         {formatAmount(cliente.balance)}

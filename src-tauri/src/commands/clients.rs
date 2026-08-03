@@ -34,6 +34,8 @@ pub struct ClientWorkHistoryRow {
     pub balance: f64,
     pub production_status: String,
     pub payment_status: String,
+    pub payment_currency: Option<String>,
+    pub exchange_rate_snapshot: Option<f64>,
 }
 
 /// Work history list and aggregate total for one client.
@@ -168,7 +170,7 @@ pub fn clients_work_history(client_id: i64) -> Result<ClientWorkHistoryDto, Stri
     let mut stmt = conn
         .prepare(
             "SELECT i.id, i.invoice_number, i.date, i.total, i.paid, i.balance,
-                    i.production_status, i.payment_status
+                    i.production_status, i.payment_status, i.payment_currency, i.exchange_rate_snapshot
              FROM invoices i
              WHERE i.client_id = ?1 AND i.deleted_at IS NULL
              ORDER BY i.date DESC, i.id DESC",
@@ -186,6 +188,8 @@ pub fn clients_work_history(client_id: i64) -> Result<ClientWorkHistoryDto, Stri
                 balance: row.get(5)?,
                 production_status: row.get(6)?,
                 payment_status: row.get(7)?,
+                payment_currency: row.get(8)?,
+                exchange_rate_snapshot: row.get(9)?,
             })
         })
         .map_err(|e| e.to_string())?;

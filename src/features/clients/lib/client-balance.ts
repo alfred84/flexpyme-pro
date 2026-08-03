@@ -63,13 +63,15 @@ export function clientBalanceStatusLabel(status: ClientBalanceStatus): string {
  * Formatea el balance para la tabla: signo explícito y color semántico.
  * Deuda se muestra como negativo (−); saldo a favor como positivo (+).
  *
- * @param balance - Deuda abierta en BD.
- * @param creditBalance - Crédito disponible.
+ * @param balance - Deuda abierta en BD (CUP).
+ * @param creditBalance - Crédito disponible (CUP).
+ * @param formatAbs - Formatea el valor absoluto (p. ej. convertir a USD antes).
  * @returns Texto, clases CSS y estado.
  */
 export function formatClientBalanceDisplay(
   balance: number,
   creditBalance = 0,
+  formatAbs: (absCup: number) => string = formatAmount,
 ): {
   text: string;
   className: string;
@@ -79,20 +81,20 @@ export function formatClientBalanceDisplay(
   const net = clientNetPosition(balance, creditBalance);
   if (status === "al_dia") {
     return {
-      text: formatAmount(0),
+      text: formatAbs(0),
       className: "tabular-nums text-base-content/70",
       status,
     };
   }
   if (status === "deuda") {
     return {
-      text: `− ${formatAmount(Math.abs(net))}`,
+      text: `− ${formatAbs(Math.abs(net))}`,
       className: "tabular-nums font-medium text-error",
       status,
     };
   }
   return {
-    text: `+ ${formatAmount(Math.abs(net))}`,
+    text: `+ ${formatAbs(Math.abs(net))}`,
     className: "tabular-nums font-medium text-success",
     status,
   };

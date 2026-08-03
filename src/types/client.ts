@@ -30,6 +30,10 @@ export interface ClientWorkHistoryRow {
   balance: number;
   productionStatus: string;
   paymentStatus: string;
+  /** Moneda de cobro del pedido (`CUP` | `USD`), si se definió. */
+  paymentCurrency: string | null;
+  /** Tasa USD→CUP del pedido, si aplica. */
+  exchangeRateSnapshot: number | null;
 }
 
 /**
