@@ -185,8 +185,10 @@ export async function removeEmployeeExtraRole(id: number): Promise<void> {
 }
 
 /**
- * Loads the daily payroll for a month (`YYYY-MM`).
+ * Loads the daily payroll for a date (`YYYY-MM-DD`).
+ *
+ * @param date - Fecha ISO del día a consultar.
  */
-export async function fetchPayrollDaily(month: string): Promise<PayrollDailyRowDto[]> {
-  return invoke<PayrollDailyRowDto[]>("payroll_daily", { month });
+export async function fetchPayrollDaily(date: string): Promise<PayrollDailyRowDto[]> {
+  return invoke<PayrollDailyRowDto[]>("payroll_daily", { date });
 }

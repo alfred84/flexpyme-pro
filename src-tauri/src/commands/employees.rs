@@ -1427,29 +1427,17 @@ pub fn employee_extra_role_remove(id: i64) -> Result<(), String> {
     Ok(())
 }
 
-/// Daily payroll for a month (`YYYY-MM`): total, paid and pending per
-/// employee/day from production batches and fixed daily salaries.
+/// Daily payroll for a date (`YYYY-MM-DD`): total, paid and pending per
+/// employee from production batches and daily salaries.
 #[tauri::command]
-pub fn payroll_daily(month: String) -> Result<Vec<PayrollDailyRowDto>, String> {
-    let month = month.trim().to_string();
-    if month.len() != 7 {
-        return Err("Mes inválido (formato YYYY-MM)".to_string());
+pub fn payroll_daily(date: String) -> Result<Vec<PayrollDailyRowDto>, String> {
+    let day = date.trim().to_string();
+    if day.len() < 10 {
+        return Err("Fecha inválida (formato YYYY-MM-DD)".to_string());
     }
+    let day = day[..10].to_string();
     let conn = db::open_connection()?;
-    let today = chrono_lite_today();
-    // Asegurar filas de salario fijo para cada día del mes hasta hoy.
-    let mut day_cursor = format!("{}-01", month);
-    while day_cursor.starts_with(&month) && day_cursor.as_str() <= today.as_str() {
-        let _ = ensure_fixed_daily_salaries_for_date(&conn, &day_cursor);
-        // Avanzar un día vía SQLite.
-        day_cursor = conn
-            .query_row(
-                "SELECT date(?1, '+1 day')",
-                params![day_cursor],
-                |row| row.get::<_, String>(0),
-            )
-            .unwrap_or_else(|_| "9999-99-99".to_string());
-    }
+    ensure_fixed_daily_salaries_for_date(&conn, &day)?;
 
     let mut stmt = conn
         .prepare(
@@ -1464,21 +1452,21 @@ pub fn payroll_daily(month: String) -> Result<Vec<PayrollDailyRowDto>, String> {
                WHERE pb.employee_id IS NOT NULL
                  AND COALESCE(e.pay_mode, '') NOT IN ('fixed', 'destajo')
                  AND COALESCE(e.has_fixed_daily_salary, 0) = 0
-                 AND strftime('%Y-%m', pb.date) = ?1
+                 AND substr(pb.date, 1, 10) = ?1
                UNION ALL
                SELECT eds.employee_id, e.name, substr(eds.date, 1, 10),
                       eds.amount_cup, eds.paid
                FROM employee_daily_salaries eds
                JOIN employees e ON e.id = eds.employee_id
-               WHERE strftime('%Y-%m', eds.date) = ?1
+               WHERE substr(eds.date, 1, 10) = ?1
                  AND eds.amount_cup > 1e-9
              )
              GROUP BY employee_id, date
-             ORDER BY date DESC, employee_name COLLATE NOCASE",
+             ORDER BY employee_name COLLATE NOCASE",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map(params![month], |row| {
+        .query_map(params![day], |row| {
             let total_cost: f64 = row.get(3)?;
             let paid: f64 = row.get(4)?;
             Ok(PayrollDailyRowDto {

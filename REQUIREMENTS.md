@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.11 | Última actualización: 2026-08-02
+### Versión: 2.12 | Última actualización: 2026-08-03
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -102,7 +102,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Historial de pagos al empleado
 - Dar de baja (soft delete, no eliminar)
 - **Multi-rol (v2.5)**: cada empleado tiene un rol principal (`employees.role_id`) y puede tener roles adicionales (`employee_extra_roles`) para cuando cubre otra Área
-- **Nómina diaria (v2.5)**: vista de salario por empleado/día del mes en curso (derivada de `production_batches`), con total, pagado y pendiente
+- **Nómina diaria (v2.5 / v2.12)**: vista de salario por empleado del día seleccionado (por defecto hoy; selector de fecha), con total, pagado, pendiente y botón **Pagar** por empleado (mismo modal de denominaciones que «Pago de empleados»)
 - **Pago de empleados**: botón en listado que suma lotes del día terminados y pendientes de pago; siempre muestra cuadrícula de denominaciones (default Efectivo + CUP). Pago individual por lote desde el historial del empleado con el mismo modal reutilizable
 
 ### 3.5 Inventario
@@ -385,6 +385,10 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - `employee_daily_salaries.kind`: `fixed` | `destajo`.
 - Destajo: importe obligatorio a definir cada día en el listado; «Pago de empleados» se bloquea mientras queden destajos sin definir.
 - Misma lógica que fijo respecto a producción (costo de lote 0) y nómina/pago del día.
+
+### v2.12 — Nómina diaria por fecha y pago individual (2026-08)
+- Filtro de nómina pasa de mes a día (`YYYY-MM-DD`), por defecto el día actual.
+- Columna **Pagar** por empleado con pendiente; abre el modal de caja con denominaciones.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

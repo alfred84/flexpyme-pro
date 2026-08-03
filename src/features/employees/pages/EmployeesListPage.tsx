@@ -11,6 +11,7 @@ import {
   payWorkBatchesMany,
   reactivateEmployee,
   setDestajoDailySalary,
+  type UnpaidBatchDto,
 } from "@/db/queries/employees";
 import { EmployeePayCashierModal } from "@/features/employees/components/EmployeePayCashierModal";
 import { formatDate, todayIso } from "@/lib/format-date";
@@ -38,6 +39,24 @@ function salaryBadge(payMode: EmployeePayMode | undefined, fixedCup: number) {
   return <span className="text-base-content/50">Por producción</span>;
 }
 
+/** Objetivo del modal de pago (todos del día o un empleado). */
+type PayTarget =
+  | { kind: "all" }
+  | { kind: "employee"; employeeId: number; employeeName: string };
+
+/**
+ * Filtra ítems pendientes según el objetivo de pago.
+ *
+ * @param unpaid - Ítems pendientes del día.
+ * @param target - Todos o un empleado concreto.
+ */
+function unpaidForTarget(unpaid: UnpaidBatchDto[], target: PayTarget): UnpaidBatchDto[] {
+  if (target.kind === "all") {
+    return unpaid;
+  }
+  return unpaid.filter((b) => b.employeeId === target.employeeId);
+}
+
 /**
  * Listado de empleados con alta y baja (soft delete).
  *
@@ -45,9 +64,10 @@ function salaryBadge(payMode: EmployeePayMode | undefined, fixedCup: number) {
  */
 export function EmployeesListPage() {
   const queryClient = useQueryClient();
-  const [payOpen, setPayOpen] = useState(false);
+  const [payTarget, setPayTarget] = useState<PayTarget | null>(null);
   const [destajoDrafts, setDestajoDrafts] = useState<Record<number, string>>({});
   const today = todayIso();
+  const [payrollDate, setPayrollDate] = useState(today);
 
   const employeesQuery = useQuery({
     queryKey: ["employees", "list"],
@@ -55,8 +75,13 @@ export function EmployeesListPage() {
   });
 
   const unpaidTodayQuery = useQuery({
-    queryKey: ["employees", "unpaid-today", today],
+    queryKey: ["employees", "unpaid", today],
     queryFn: () => fetchUnpaidBatchesForDate(today),
+  });
+
+  const unpaidPayrollQuery = useQuery({
+    queryKey: ["employees", "unpaid", payrollDate],
+    queryFn: () => fetchUnpaidBatchesForDate(payrollDate),
   });
 
   const destajoPendingQuery = useQuery({
@@ -83,10 +108,9 @@ export function EmployeesListPage() {
     },
   });
 
-  const [payrollMonth, setPayrollMonth] = useState(() => today.slice(0, 7));
   const payrollQuery = useQuery({
-    queryKey: ["payroll-daily", payrollMonth],
-    queryFn: () => fetchPayrollDaily(payrollMonth),
+    queryKey: ["payroll-daily", payrollDate],
+    queryFn: () => fetchPayrollDaily(payrollDate),
   });
   const payrollRows = payrollQuery.data ?? [];
   const payrollTotals = payrollRows.reduce(
@@ -99,10 +123,20 @@ export function EmployeesListPage() {
   );
 
   const unpaidToday = unpaidTodayQuery.data ?? [];
+  const unpaidPayroll = unpaidPayrollQuery.data ?? [];
   const destajoPending = destajoPendingQuery.data ?? [];
-  const unpaidTotal = useMemo(
+  const unpaidTodayTotal = useMemo(
     () => unpaidToday.reduce((s, b) => s + b.pending, 0),
     [unpaidToday],
+  );
+
+  const payItems = payTarget ? unpaidForTarget(
+    payTarget.kind === "all" ? unpaidToday : unpaidPayroll,
+    payTarget,
+  ) : [];
+  const payAmount = useMemo(
+    () => payItems.reduce((s, b) => s + b.pending, 0),
+    [payItems],
   );
 
   const handleDeactivate = (id: number, name: string) => {
@@ -128,6 +162,15 @@ export function EmployeesListPage() {
     });
   };
 
+  /**
+   * Invalida listados relacionados tras un pago.
+   */
+  const invalidateAfterPay = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["employees"] });
+    await queryClient.invalidateQueries({ queryKey: ["cashflow"] });
+    await queryClient.invalidateQueries({ queryKey: ["payroll-daily"] });
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -144,11 +187,11 @@ export function EmployeesListPage() {
                 ? "Define primero los destajos del día"
                 : undefined
             }
-            onClick={() => setPayOpen(true)}
+            onClick={() => setPayTarget({ kind: "all" })}
           >
             <Banknote className="h-4 w-4" /> Pago de empleados
             {unpaidToday.length > 0 && (
-              <span className="badge badge-sm">{formatMoney(unpaidTotal)}</span>
+              <span className="badge badge-sm">{formatMoney(unpaidTodayTotal)}</span>
             )}
           </button>
           <Link to="/empleados/nuevo" className="btn btn-primary btn-sm gap-1">
@@ -315,45 +358,69 @@ export function EmployeesListPage() {
               <CalendarDays className="h-5 w-5" /> Nómina diaria
             </h2>
             <input
-              type="month"
+              type="date"
               className="input input-bordered input-sm"
-              value={payrollMonth}
-              onChange={(e) => setPayrollMonth(e.target.value || today.slice(0, 7))}
+              value={payrollDate}
+              onChange={(e) => setPayrollDate(e.target.value || today)}
             />
           </div>
-          {payrollRows.length === 0 ? (
+          {payrollQuery.isLoading ? (
+            <p className="py-6 text-center text-sm text-base-content/60">Cargando nómina...</p>
+          ) : payrollRows.length === 0 ? (
             <p className="py-6 text-center text-sm text-base-content/60">
-              Sin salarios registrados en el mes seleccionado.
+              Sin salarios registrados el {formatDate(payrollDate)}.
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="table table-sm">
                 <thead>
                   <tr>
-                    <th>Día</th>
                     <th>Empleado</th>
                     <th className="text-right">Total</th>
                     <th className="text-right">Pagado</th>
                     <th className="text-right">Pendiente</th>
+                    <th className="text-right">Acción</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {payrollRows.map((r) => (
-                    <tr key={`${r.employeeId}-${r.date}`}>
-                      <td className="text-xs">{formatDate(r.date)}</td>
-                      <td>{r.employeeName}</td>
-                      <td className="text-right">{formatMoney(r.totalCost)}</td>
-                      <td className="text-right text-success">{formatMoney(r.paid)}</td>
-                      <td className="text-right text-warning">{formatMoney(r.pending)}</td>
-                    </tr>
-                  ))}
+                  {payrollRows.map((r) => {
+                    const canPay = r.pending > 1e-9;
+                    return (
+                      <tr key={`${r.employeeId}-${r.date}`}>
+                        <td>{r.employeeName}</td>
+                        <td className="text-right">{formatMoney(r.totalCost)}</td>
+                        <td className="text-right text-success">{formatMoney(r.paid)}</td>
+                        <td className="text-right text-warning">{formatMoney(r.pending)}</td>
+                        <td className="text-right">
+                          {canPay ? (
+                            <button
+                              type="button"
+                              className="btn btn-xs btn-secondary gap-1"
+                              onClick={() =>
+                                setPayTarget({
+                                  kind: "employee",
+                                  employeeId: r.employeeId,
+                                  employeeName: r.employeeName,
+                                })
+                              }
+                            >
+                              <Banknote className="h-3.5 w-3.5" /> Pagar
+                            </button>
+                          ) : (
+                            <span className="text-xs text-base-content/40">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
                 <tfoot>
                   <tr className="font-semibold">
-                    <td colSpan={2}>Total mes</td>
+                    <td>Total día</td>
                     <td className="text-right">{formatMoney(payrollTotals.total)}</td>
                     <td className="text-right text-success">{formatMoney(payrollTotals.paid)}</td>
                     <td className="text-right text-warning">{formatMoney(payrollTotals.pending)}</td>
+                    <td />
                   </tr>
                 </tfoot>
               </table>
@@ -363,29 +430,43 @@ export function EmployeesListPage() {
       </div>
 
       <EmployeePayCashierModal
-        open={payOpen}
-        title="Pago de empleados"
-        description={
-          unpaidToday.length === 0
-            ? "No hay pagos pendientes hoy."
-            : `${unpaidToday.length} ítem(s) del día pendientes de pago (lotes y/o salarios diarios).`
+        open={payTarget !== null}
+        title={
+          payTarget?.kind === "employee"
+            ? `Pago a ${payTarget.employeeName}`
+            : "Pago de empleados"
         }
-        amountCup={unpaidTotal}
-        onClose={() => setPayOpen(false)}
+        description={
+          payItems.length === 0
+            ? "No hay pagos pendientes."
+            : payTarget?.kind === "employee"
+              ? `${payItems.length} ítem(s) pendientes de ${payTarget.employeeName} el ${formatDate(payrollDate)}.`
+              : `${payItems.length} ítem(s) del día pendientes de pago (lotes y/o salarios diarios).`
+        }
+        amountCup={payAmount}
+        onClose={() => setPayTarget(null)}
         onConfirm={async (data) => {
+          if (payItems.length === 0) {
+            throw new Error("No hay pagos pendientes.");
+          }
           await payWorkBatchesMany({
-            batchIds: unpaidToday.filter((b) => !b.isFixedSalary).map((b) => b.id),
-            dailySalaryIds: unpaidToday.filter((b) => b.isFixedSalary).map((b) => b.id),
+            batchIds: payItems.filter((b) => !b.isFixedSalary).map((b) => b.id),
+            dailySalaryIds: payItems.filter((b) => b.isFixedSalary).map((b) => b.id),
             paymentMethod: data.paymentMethod,
             currency: data.currency,
             denominationBreakdown: data.denominationBreakdown,
             amountCup: data.amountCup,
             amountUsd: data.amountUsd,
           });
-          await queryClient.invalidateQueries({ queryKey: ["employees"] });
-          await queryClient.invalidateQueries({ queryKey: ["cashflow"] });
-          await queryClient.invalidateQueries({ queryKey: ["payroll-daily"] });
-          pushFlashMessage({ kind: "success", text: "Pagos de empleados registrados." });
+          await invalidateAfterPay();
+          pushFlashMessage({
+            kind: "success",
+            text:
+              payTarget?.kind === "employee"
+                ? `Pago a ${payTarget.employeeName} registrado.`
+                : "Pagos de empleados registrados.",
+          });
+          setPayTarget(null);
         }}
       />
     </section>
