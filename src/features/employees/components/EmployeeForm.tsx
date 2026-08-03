@@ -202,25 +202,24 @@ export function EmployeeForm(props: EmployeeFormProps) {
                   className="radio radio-sm radio-primary"
                   disabled={isSubmitting}
                   checked={field.value === "destajo"}
-                  onChange={() => {
-                    field.onChange("destajo");
-                    form.setValue("fixedDailySalaryCup", 0, { shouldValidate: true });
-                  }}
+                  onChange={() => field.onChange("destajo")}
                 />
                 <span className="label-text">
                   <span className="font-medium">Salario por destajo diario</span>
                   <span className="mt-0.5 block text-xs text-base-content/60">
-                    El importe se debe definir obligatoriamente cada día antes de pagar.
+                    Importe diario editable; debe quedar definido cada día para poder pagar.
                   </span>
                 </span>
               </label>
             </div>
           )}
         />
-        {payMode === "fixed" && (
+        {(payMode === "fixed" || payMode === "destajo") && (
           <div className="form-control w-full">
             <label className="label" htmlFor="employee-fixed-salary">
-              <span className="label-text">Importe diario (CUP)</span>
+              <span className="label-text">
+                {payMode === "destajo" ? "Importe destajo (CUP)" : "Importe diario (CUP)"}
+              </span>
             </label>
             <input
               id="employee-fixed-salary"

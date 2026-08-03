@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { CalendarDays, Banknote, ClipboardList, UserCog, UserPlus } from "lucide-react";
+import { CalendarDays, Banknote, UserCog, UserPlus } from "lucide-react";
 import {
   deactivateEmployee,
   fetchDestajoPendingForDate,
@@ -13,48 +13,24 @@ import {
   setDestajoDailySalary,
   type UnpaidBatchDto,
 } from "@/db/queries/employees";
+import { DestajoDefineModal } from "@/features/employees/components/DestajoDefineModal";
 import { EmployeePayCashierModal } from "@/features/employees/components/EmployeePayCashierModal";
 import { formatDate, todayIso } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 import type { EmployeePayMode } from "@/types/employee";
 
-/**
- * Etiqueta corta del modo de pago en el listado.
- *
- * @param payMode - Modo de pago del empleado.
- * @param fixedCup - Importe fijo diario si aplica.
- */
-function salaryBadge(payMode: EmployeePayMode | undefined, fixedCup: number) {
-  if (payMode === "fixed") {
-    return (
-      <span className="badge badge-info badge-sm">
-        Fijo {formatMoney(fixedCup)}/día
-      </span>
-    );
-  }
-  if (payMode === "destajo") {
-    return <span className="badge badge-warning badge-sm">Destajo diario</span>;
-  }
-  return <span className="text-base-content/50">Por producción</span>;
+/** Empleado seleccionado para pagar en el modal de caja. */
+interface PayEmployeeTarget {
+  employeeId: number;
+  employeeName: string;
 }
 
-/** Objetivo del modal de pago (todos del día o un empleado). */
-type PayTarget =
-  | { kind: "all" }
-  | { kind: "employee"; employeeId: number; employeeName: string };
-
-/**
- * Filtra ítems pendientes según el objetivo de pago.
- *
- * @param unpaid - Ítems pendientes del día.
- * @param target - Todos o un empleado concreto.
- */
-function unpaidForTarget(unpaid: UnpaidBatchDto[], target: PayTarget): UnpaidBatchDto[] {
-  if (target.kind === "all") {
-    return unpaid;
-  }
-  return unpaid.filter((b) => b.employeeId === target.employeeId);
+/** Empleado seleccionado para definir destajo del día. */
+interface DestajoTarget {
+  employeeId: number;
+  employeeName: string;
+  currentAmountCup: number | null;
 }
 
 /**
@@ -64,8 +40,8 @@ function unpaidForTarget(unpaid: UnpaidBatchDto[], target: PayTarget): UnpaidBat
  */
 export function EmployeesListPage() {
   const queryClient = useQueryClient();
-  const [payTarget, setPayTarget] = useState<PayTarget | null>(null);
-  const [destajoDrafts, setDestajoDrafts] = useState<Record<number, string>>({});
+  const [payTarget, setPayTarget] = useState<PayEmployeeTarget | null>(null);
+  const [destajoTarget, setDestajoTarget] = useState<DestajoTarget | null>(null);
   const today = todayIso();
   const [payrollDate, setPayrollDate] = useState(today);
 
@@ -74,18 +50,13 @@ export function EmployeesListPage() {
     queryFn: () => fetchEmployees(false),
   });
 
-  const unpaidTodayQuery = useQuery({
-    queryKey: ["employees", "unpaid", today],
-    queryFn: () => fetchUnpaidBatchesForDate(today),
-  });
-
   const unpaidPayrollQuery = useQuery({
     queryKey: ["employees", "unpaid", payrollDate],
     queryFn: () => fetchUnpaidBatchesForDate(payrollDate),
   });
 
-  const destajoPendingQuery = useQuery({
-    queryKey: ["employees", "destajo-pending", today],
+  const destajoTodayQuery = useQuery({
+    queryKey: ["employees", "destajo-today", today],
     queryFn: () => fetchDestajoPendingForDate(today),
   });
 
@@ -122,18 +93,27 @@ export function EmployeesListPage() {
     { total: 0, paid: 0, pending: 0 },
   );
 
-  const unpaidToday = unpaidTodayQuery.data ?? [];
   const unpaidPayroll = unpaidPayrollQuery.data ?? [];
-  const destajoPending = destajoPendingQuery.data ?? [];
-  const unpaidTodayTotal = useMemo(
-    () => unpaidToday.reduce((s, b) => s + b.pending, 0),
-    [unpaidToday],
-  );
+  const destajoTodayByEmployee = useMemo(() => {
+    const map = new Map<number, { amount: number; isPaid: boolean }>();
+    for (const row of destajoTodayQuery.data ?? []) {
+      if (row.currentAmountCup != null && row.currentAmountCup > 1e-9) {
+        map.set(row.employeeId, {
+          amount: row.currentAmountCup,
+          isPaid: row.isPaid,
+        });
+      }
+    }
+    return map;
+  }, [destajoTodayQuery.data]);
 
-  const payItems = payTarget ? unpaidForTarget(
-    payTarget.kind === "all" ? unpaidToday : unpaidPayroll,
-    payTarget,
-  ) : [];
+  const payItems = useMemo(() => {
+    if (!payTarget) {
+      return [] as UnpaidBatchDto[];
+    }
+    return unpaidPayroll.filter((b) => b.employeeId === payTarget.employeeId);
+  }, [payTarget, unpaidPayroll]);
+
   const payAmount = useMemo(
     () => payItems.reduce((s, b) => s + b.pending, 0),
     [payItems],
@@ -145,23 +125,6 @@ export function EmployeesListPage() {
     }
   };
 
-  const handleSaveDestajo = (employeeId: number) => {
-    const raw = destajoDrafts[employeeId]?.trim() ?? "";
-    const amount = Number(raw.replace(",", "."));
-    if (!Number.isFinite(amount) || amount <= 0) {
-      pushFlashMessage({
-        kind: "error",
-        text: "Indica un importe de destajo mayor que cero.",
-      });
-      return;
-    }
-    setDestajoMutation.mutate({
-      employeeId,
-      date: today,
-      amountCup: amount,
-    });
-  };
-
   /**
    * Invalida listados relacionados tras un pago.
    */
@@ -171,6 +134,78 @@ export function EmployeesListPage() {
     await queryClient.invalidateQueries({ queryKey: ["payroll-daily"] });
   };
 
+  /**
+   * Celda de salario según modo y destajo del día.
+   *
+   * @param payMode - Modo de pago.
+   * @param fixedCup - Importe fijo o de referencia.
+   * @param employeeId - Id del empleado.
+   * @param employeeName - Nombre del empleado.
+   * @param isActive - Si el empleado está activo.
+   */
+  const renderSalaryCell = (
+    payMode: EmployeePayMode | undefined,
+    fixedCup: number,
+    employeeId: number,
+    employeeName: string,
+    isActive: boolean,
+  ) => {
+    if (payMode === "fixed") {
+      return (
+        <span className="badge badge-info badge-sm">
+          Fijo {formatMoney(fixedCup)}/día
+        </span>
+      );
+    }
+    if (payMode === "destajo") {
+      const todayDestajo = destajoTodayByEmployee.get(employeeId);
+      return (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="badge badge-warning badge-sm">Destajo diario</span>
+          {todayDestajo != null ? (
+            <button
+              type="button"
+              className={`badge badge-sm cursor-pointer ${
+                todayDestajo.isPaid ? "badge-success" : "badge-info"
+              }`}
+              title={
+                todayDestajo.isPaid
+                  ? "Destajo pagado (clic para ver)"
+                  : "Editar destajo del día"
+              }
+              disabled={!isActive || todayDestajo.isPaid}
+              onClick={() =>
+                setDestajoTarget({
+                  employeeId,
+                  employeeName,
+                  currentAmountCup: todayDestajo.amount,
+                })
+              }
+            >
+              {formatMoney(todayDestajo.amount)}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-outline btn-xs"
+              disabled={!isActive}
+              onClick={() =>
+                setDestajoTarget({
+                  employeeId,
+                  employeeName,
+                  currentAmountCup: fixedCup > 0 ? fixedCup : null,
+                })
+              }
+            >
+              Definir
+            </button>
+          )}
+        </div>
+      );
+    }
+    return <span className="text-base-content/50">Por producción</span>;
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -178,81 +213,11 @@ export function EmployeesListPage() {
           <UserCog className="h-6 w-6" /> Empleados
         </h1>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm gap-1"
-            disabled={unpaidToday.length === 0 || destajoPending.length > 0}
-            title={
-              destajoPending.length > 0
-                ? "Define primero los destajos del día"
-                : undefined
-            }
-            onClick={() => setPayTarget({ kind: "all" })}
-          >
-            <Banknote className="h-4 w-4" /> Pago de empleados
-            {unpaidToday.length > 0 && (
-              <span className="badge badge-sm">{formatMoney(unpaidTodayTotal)}</span>
-            )}
-          </button>
           <Link to="/empleados/nuevo" className="btn btn-primary btn-sm gap-1">
             <UserPlus className="h-4 w-4" /> Nuevo empleado
           </Link>
         </div>
       </div>
-
-      {destajoPending.length > 0 && (
-        <div className="rounded-lg border border-warning/40 bg-warning/10 p-4">
-          <div className="mb-3 flex items-start gap-2">
-            <ClipboardList className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
-            <div>
-              <h2 className="font-semibold">Destajos del día (obligatorio)</h2>
-              <p className="text-sm text-base-content/70">
-                Define el importe CUP de cada empleado a destajo antes de registrar el pago
-                del día ({formatDate(today)}).
-              </p>
-            </div>
-          </div>
-          <ul className="space-y-2">
-            {destajoPending.map((row) => (
-              <li
-                key={row.employeeId}
-                className="flex flex-wrap items-end gap-2 rounded-md bg-base-100 p-2"
-              >
-                <div className="min-w-[10rem] flex-1">
-                  <p className="font-medium">{row.employeeName}</p>
-                  <p className="text-xs text-base-content/50">Pendiente de definir</p>
-                </div>
-                <label className="form-control w-36">
-                  <span className="label-text text-xs">Importe (CUP)</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    step="0.01"
-                    className="input input-bordered input-sm"
-                    placeholder="0.00"
-                    value={destajoDrafts[row.employeeId] ?? ""}
-                    onChange={(e) =>
-                      setDestajoDrafts((prev) => ({
-                        ...prev,
-                        [row.employeeId]: e.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="btn btn-warning btn-sm"
-                  disabled={setDestajoMutation.isPending}
-                  onClick={() => handleSaveDestajo(row.employeeId)}
-                >
-                  Guardar
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       {employeesQuery.isLoading && <p>Cargando empleados...</p>}
       {employeesQuery.isError && (
@@ -294,7 +259,13 @@ export function EmployeesListPage() {
                     )}
                   </td>
                   <td className="text-xs">
-                    {salaryBadge(emp.payMode, emp.fixedDailySalaryCup)}
+                    {renderSalaryCell(
+                      emp.payMode,
+                      emp.fixedDailySalaryCup,
+                      emp.id,
+                      emp.name,
+                      emp.isActive,
+                    )}
                   </td>
                   <td>{emp.phone ?? "—"}</td>
                   <td>
@@ -398,7 +369,6 @@ export function EmployeesListPage() {
                               className="btn btn-xs btn-secondary gap-1"
                               onClick={() =>
                                 setPayTarget({
-                                  kind: "employee",
                                   employeeId: r.employeeId,
                                   employeeName: r.employeeName,
                                 })
@@ -429,24 +399,38 @@ export function EmployeesListPage() {
         </div>
       </div>
 
+      <DestajoDefineModal
+        open={destajoTarget !== null}
+        employeeName={destajoTarget?.employeeName ?? ""}
+        currentAmountCup={destajoTarget?.currentAmountCup ?? null}
+        isSubmitting={setDestajoMutation.isPending}
+        onClose={() => setDestajoTarget(null)}
+        onConfirm={async (amountCup) => {
+          if (!destajoTarget) {
+            return;
+          }
+          await setDestajoMutation.mutateAsync({
+            employeeId: destajoTarget.employeeId,
+            date: today,
+            amountCup,
+          });
+        }}
+      />
+
       <EmployeePayCashierModal
         open={payTarget !== null}
-        title={
-          payTarget?.kind === "employee"
-            ? `Pago a ${payTarget.employeeName}`
-            : "Pago de empleados"
-        }
+        title={payTarget ? `Pago a ${payTarget.employeeName}` : "Pago a empleado"}
         description={
-          payItems.length === 0
-            ? "No hay pagos pendientes."
-            : payTarget?.kind === "employee"
-              ? `${payItems.length} ítem(s) pendientes de ${payTarget.employeeName} el ${formatDate(payrollDate)}.`
-              : `${payItems.length} ítem(s) del día pendientes de pago (lotes y/o salarios diarios).`
+          payTarget
+            ? payItems.length === 0
+              ? "No hay pagos pendientes."
+              : `${payItems.length} ítem(s) pendientes de ${payTarget.employeeName} el ${formatDate(payrollDate)}.`
+            : undefined
         }
         amountCup={payAmount}
         onClose={() => setPayTarget(null)}
         onConfirm={async (data) => {
-          if (payItems.length === 0) {
+          if (!payTarget || payItems.length === 0) {
             throw new Error("No hay pagos pendientes.");
           }
           await payWorkBatchesMany({
@@ -461,10 +445,7 @@ export function EmployeesListPage() {
           await invalidateAfterPay();
           pushFlashMessage({
             kind: "success",
-            text:
-              payTarget?.kind === "employee"
-                ? `Pago a ${payTarget.employeeName} registrado.`
-                : "Pagos de empleados registrados.",
+            text: `Pago a ${payTarget.employeeName} registrado.`,
           });
           setPayTarget(null);
         }}

@@ -96,14 +96,14 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Cálculo automático del salario a pagar (tarifa de Precios o personalizada en la asignación del pedido)
 - **Forma de salario (excluyente)**: en alta/edición, el empleado elige una de:
   - **Por producción**: cobra según tarifas de trabajo
-  - **Salario fijo diario**: importe CUP predefinido; se genera cada día y se paga vía «Pago de empleados»
-  - **Salario por destajo diario**: igual que el fijo (no acumula tarifas de producción), pero el importe **debe definirse obligatoriamente cada día** en el listado de empleados antes de poder pagar
+  - **Salario fijo diario**: importe CUP predefinido; se genera cada día y se paga desde la nómina diaria (botón Pagar por empleado)
+  - **Salario por destajo diario**: importe CUP editable en alta/edición (igual que el fijo); debe quedar definido cada día (botón **Definir** en el listado o al guardar el empleado) antes de pagar
   - Los lotes de trabajo de empleados fijo/destajo se registran con costo 0 para no duplicar el pago
 - Historial de pagos al empleado
 - Dar de baja (soft delete, no eliminar)
 - **Multi-rol (v2.5)**: cada empleado tiene un rol principal (`employees.role_id`) y puede tener roles adicionales (`employee_extra_roles`) para cuando cubre otra Área
-- **Nómina diaria (v2.5 / v2.12)**: vista de salario por empleado del día seleccionado (por defecto hoy; selector de fecha), con total, pagado, pendiente y botón **Pagar** por empleado (mismo modal de denominaciones que «Pago de empleados»)
-- **Pago de empleados**: botón en listado que suma lotes del día terminados y pendientes de pago; siempre muestra cuadrícula de denominaciones (default Efectivo + CUP). Pago individual por lote desde el historial del empleado con el mismo modal reutilizable
+- **Nómina diaria (v2.5 / v2.12)**: vista de salario por empleado del día seleccionado (por defecto hoy; selector de fecha), con total, pagado, pendiente y botón **Pagar** por empleado (modal de denominaciones Efectivo/CUP)
+- Pago individual por lote desde el historial del empleado con el mismo modal reutilizable
 
 ### 3.5 Inventario
 - Gestión de materiales/insumos del taller
@@ -383,12 +383,13 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 ### v2.11 — Salario por destajo diario (2026-08)
 - `employees.pay_mode`: `production` | `fixed` | `destajo` (excluyentes); columnas legacy de fijo se mantienen sincronizadas.
 - `employee_daily_salaries.kind`: `fixed` | `destajo`.
-- Destajo: importe obligatorio a definir cada día en el listado; «Pago de empleados» se bloquea mientras queden destajos sin definir.
+- Destajo: importe editable en alta/edición; en el listado, botón **Definir** o badge con el valor del día.
 - Misma lógica que fijo respecto a producción (costo de lote 0) y nómina/pago del día.
 
 ### v2.12 — Nómina diaria por fecha y pago individual (2026-08)
 - Filtro de nómina pasa de mes a día (`YYYY-MM-DD`), por defecto el día actual.
 - Columna **Pagar** por empleado con pendiente; abre el modal de caja con denominaciones.
+- Se elimina el pago global «Pago de empleados»; el pago es solo individual por día.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

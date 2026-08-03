@@ -71,6 +71,8 @@ pub struct DestajoPendingDto {
     pub date: String,
     pub daily_salary_id: Option<i64>,
     pub current_amount_cup: Option<f64>,
+    /// `true` si el destajo del día ya está pagado.
+    pub is_paid: bool,
 }
 
 /// Payload para definir/actualizar el destajo de un día.
@@ -109,7 +111,12 @@ fn normalize_pay_mode(
             }
             Ok(("fixed".to_string(), true, cup))
         }
-        "destajo" => Ok(("destajo".to_string(), false, 0.0)),
+        "destajo" => {
+            if cup <= 1e-9 {
+                return Err("Indica un importe de destajo mayor que cero".to_string());
+            }
+            Ok(("destajo".to_string(), false, cup))
+        }
         _ => Err("Modo de pago inválido".to_string()),
     }
 }
@@ -187,6 +194,63 @@ fn ensure_fixed_daily_salaries_for_date(
         .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Upserts the destajo daily salary for an employee on a given day and syncs the employee amount.
+fn upsert_destajo_daily_amount(
+    conn: &rusqlite::Connection,
+    employee_id: i64,
+    day: &str,
+    amount_cup: f64,
+) -> Result<i64, String> {
+    if !amount_cup.is_finite() || amount_cup <= 1e-9 {
+        return Err("Indica un importe de destajo mayor que cero".to_string());
+    }
+    let day = day.trim();
+    if day.len() < 10 {
+        return Err("Fecha inválida".to_string());
+    }
+    let day = &day[..10];
+
+    conn.execute(
+        "UPDATE employees
+         SET fixed_daily_salary_cup = ?1, updated_at = datetime('now')
+         WHERE id = ?2 AND deleted_at IS NULL AND pay_mode = 'destajo'",
+        params![amount_cup, employee_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let existing: Option<(i64, String)> = conn
+        .query_row(
+            "SELECT id, status FROM employee_daily_salaries
+             WHERE employee_id = ?1 AND substr(date, 1, 10) = ?2",
+            params![employee_id, day],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .ok();
+
+    if let Some((id, status)) = existing {
+        if status == "pagado" {
+            return Err("El destajo de ese día ya está pagado".to_string());
+        }
+        conn.execute(
+            "UPDATE employee_daily_salaries
+             SET amount_cup = ?1, kind = 'destajo', paid = 0, status = 'pendiente'
+             WHERE id = ?2",
+            params![amount_cup, id],
+        )
+        .map_err(|e| e.to_string())?;
+        return Ok(id);
+    }
+
+    conn.execute(
+        "INSERT INTO employee_daily_salaries
+            (employee_id, date, amount_cup, paid, status, kind)
+         VALUES (?1, ?2, ?3, 0, 'pendiente', 'destajo')",
+        params![employee_id, day, amount_cup],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(conn.last_insert_rowid())
 }
 
 /// Extra role assigned to an employee (multi-role support).
@@ -420,7 +484,11 @@ pub fn employees_list(active_only: Option<bool>) -> Result<Vec<EmployeeDto>, Str
             notes,
             pay_mode: pay_mode.clone(),
             has_fixed_daily_salary: pay_mode == "fixed",
-            fixed_daily_salary_cup: if pay_mode == "fixed" { fixed_cup } else { 0.0 },
+            fixed_daily_salary_cup: if pay_mode == "fixed" || pay_mode == "destajo" {
+                fixed_cup
+            } else {
+                0.0
+            },
             is_active,
             created_at,
             extra_roles,
@@ -485,7 +553,11 @@ pub fn employees_get_by_id(id: i64) -> Result<EmployeeDto, String> {
         notes,
         pay_mode: pay_mode.clone(),
         has_fixed_daily_salary: pay_mode == "fixed",
-        fixed_daily_salary_cup: if pay_mode == "fixed" { fixed_cup } else { 0.0 },
+        fixed_daily_salary_cup: if pay_mode == "fixed" || pay_mode == "destajo" {
+            fixed_cup
+        } else {
+            0.0
+        },
         is_active,
         created_at,
         extra_roles,
@@ -534,6 +606,10 @@ pub fn employees_create(payload: CreateEmployeePayload) -> Result<i64, String> {
     let id = tx.last_insert_rowid();
     let extras = payload.extra_role_ids.unwrap_or_default();
     sync_extra_roles(&*tx, id, role_id, &extras)?;
+    if pay_mode == "destajo" {
+        let today = chrono_lite_today();
+        upsert_destajo_daily_amount(&*tx, id, &today, fixed_cup)?;
+    }
     tx.commit().map_err(|e| e.to_string())?;
     Ok(id)
 }
@@ -585,6 +661,10 @@ pub fn employees_update(payload: UpdateEmployeePayload) -> Result<(), String> {
     }
     let extras = payload.extra_role_ids.unwrap_or_default();
     sync_extra_roles(&*tx, payload.id, role_id, &extras)?;
+    if pay_mode == "destajo" {
+        let today = chrono_lite_today();
+        upsert_destajo_daily_amount(&*tx, payload.id, &today, fixed_cup)?;
+    }
     tx.commit().map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -1027,7 +1107,7 @@ pub fn work_batches_unpaid_for_date(date: Option<String>) -> Result<Vec<UnpaidBa
     Ok(out)
 }
 
-/// Lista empleados con destajo que aún no tienen importe definido para la fecha.
+/// Lista empleados a destajo con el importe del día (si está definido).
 #[tauri::command]
 pub fn destajo_pending_for_date(date: Option<String>) -> Result<Vec<DestajoPendingDto>, String> {
     let conn = db::open_connection()?;
@@ -1044,7 +1124,9 @@ pub fn destajo_pending_for_date(date: Option<String>) -> Result<Vec<DestajoPendi
         .prepare(
             "SELECT e.id, e.name,
                     eds.id,
-                    eds.amount_cup
+                    eds.amount_cup,
+                    COALESCE(eds.status, ''),
+                    COALESCE(eds.paid, 0)
              FROM employees e
              LEFT JOIN employee_daily_salaries eds
                ON eds.employee_id = e.id
@@ -1052,21 +1134,23 @@ pub fn destajo_pending_for_date(date: Option<String>) -> Result<Vec<DestajoPendi
              WHERE e.deleted_at IS NULL
                AND e.is_active = 1
                AND e.pay_mode = 'destajo'
-               AND (
-                 eds.id IS NULL
-                 OR COALESCE(eds.amount_cup, 0) <= 1e-9
-               )
              ORDER BY e.name COLLATE NOCASE",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map(params![day], |row| {
+            let amount: Option<f64> = row.get(3)?;
+            let status: String = row.get(4)?;
+            let paid: f64 = row.get(5)?;
+            let amount_val = amount.unwrap_or(0.0);
+            let is_paid = status == "pagado" || (amount_val > 1e-9 && paid + 1e-9 >= amount_val);
             Ok(DestajoPendingDto {
                 employee_id: row.get(0)?,
                 employee_name: row.get(1)?,
                 date: day.clone(),
                 daily_salary_id: row.get(2)?,
-                current_amount_cup: row.get(3)?,
+                current_amount_cup: amount,
+                is_paid,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -1076,9 +1160,6 @@ pub fn destajo_pending_for_date(date: Option<String>) -> Result<Vec<DestajoPendi
 /// Define o actualiza el salario por destajo de un empleado para una fecha.
 #[tauri::command]
 pub fn set_destajo_daily_salary(payload: SetDestajoDailyPayload) -> Result<i64, String> {
-    if !payload.amount_cup.is_finite() || payload.amount_cup <= 1e-9 {
-        return Err("Indica un importe de destajo mayor que cero".to_string());
-    }
     let conn = db::open_connection()?;
     let day = payload
         .date
@@ -1103,37 +1184,7 @@ pub fn set_destajo_daily_salary(payload: SetDestajoDailyPayload) -> Result<i64, 
         return Err("El empleado no tiene modo destajo diario".to_string());
     }
 
-    let existing: Option<(i64, String)> = conn
-        .query_row(
-            "SELECT id, status FROM employee_daily_salaries
-             WHERE employee_id = ?1 AND substr(date, 1, 10) = ?2",
-            params![payload.employee_id, day],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .ok();
-
-    if let Some((id, status)) = existing {
-        if status == "pagado" {
-            return Err("El destajo de ese día ya está pagado".to_string());
-        }
-        conn.execute(
-            "UPDATE employee_daily_salaries
-             SET amount_cup = ?1, kind = 'destajo', paid = 0, status = 'pendiente'
-             WHERE id = ?2",
-            params![payload.amount_cup, id],
-        )
-        .map_err(|e| e.to_string())?;
-        return Ok(id);
-    }
-
-    conn.execute(
-        "INSERT INTO employee_daily_salaries
-            (employee_id, date, amount_cup, paid, status, kind)
-         VALUES (?1, ?2, ?3, 0, 'pendiente', 'destajo')",
-        params![payload.employee_id, day, payload.amount_cup],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(conn.last_insert_rowid())
+    upsert_destajo_daily_amount(&conn, payload.employee_id, &day, payload.amount_cup)
 }
 
 fn chrono_lite_today() -> String {

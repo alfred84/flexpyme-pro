@@ -25,11 +25,17 @@ export const employeeFormSchema = z
         message: "Un rol adicional no puede coincidir con el rol principal",
       });
     }
-    if (values.payMode === "fixed" && values.fixedDailySalaryCup <= 0) {
+    if (
+      (values.payMode === "fixed" || values.payMode === "destajo") &&
+      values.fixedDailySalaryCup <= 0
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["fixedDailySalaryCup"],
-        message: "Indica un salario fijo diario mayor que cero",
+        message:
+          values.payMode === "destajo"
+            ? "Indica un importe de destajo mayor que cero"
+            : "Indica un salario fijo diario mayor que cero",
       });
     }
   });

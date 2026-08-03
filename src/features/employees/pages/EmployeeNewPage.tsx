@@ -48,7 +48,9 @@ export function EmployeeNewPage() {
             extraRoleIds: values.extraRoleIds,
             payMode: values.payMode,
             fixedDailySalaryCup:
-              values.payMode === "fixed" ? values.fixedDailySalaryCup : 0,
+              values.payMode === "fixed" || values.payMode === "destajo"
+                ? values.fixedDailySalaryCup
+                : 0,
           });
         }}
       />

@@ -19,7 +19,7 @@ export interface EmployeeDto {
   payMode: EmployeePayMode;
   /** @deprecated Usar `payMode === 'fixed'`. */
   hasFixedDailySalary: boolean;
-  /** Importe CUP del salario fijo diario (modo `fixed`). */
+  /** Importe CUP del salario diario (modo `fixed` o `destajo`). */
   fixedDailySalaryCup: number;
   isActive: boolean;
   createdAt: string;
@@ -59,6 +59,8 @@ export interface DestajoPendingDto {
   /** Id del registro diario si ya existe (importe 0 / sin definir). */
   dailySalaryId: number | null;
   currentAmountCup: number | null;
+  /** `true` si el destajo del día ya está pagado. */
+  isPaid: boolean;
 }
 
 /**
