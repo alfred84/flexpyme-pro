@@ -1334,7 +1334,7 @@ pub fn get_invoice_metrics() -> Result<InvoiceMetricsDto, String> {
             COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND paid <= ?1 AND balance > ?1 THEN 1 ELSE 0 END), 0),
             COALESCE(SUM(CASE WHEN cancelled_at IS NOT NULL THEN 1 ELSE 0 END), 0)
          FROM invoices WHERE deleted_at IS NULL",
-        params![EPS, EPS, EPS, EPS, EPS, EPS, EPS, EPS],
+        params![EPS],
         |row| {
             Ok(InvoiceMetricsDto {
                 total_amount: row.get(0)?,

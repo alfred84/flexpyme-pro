@@ -18,17 +18,22 @@ interface DualMoneyTextProps {
  * Muestra un importe con moneda principal y equivalente secundario.
  *
  * El libro del pedido permanece en CUP; esta vista solo convierte para la UI.
+ * Si la moneda principal es USD y no hay tasa usable, se muestra CUP para no
+ * ocultar importes reales como `$ 0,00`.
  *
  * @param props - Importe CUP, tasa y moneda principal.
  * @returns Bloque de importe dual.
  */
 export function DualMoneyText(props: DualMoneyTextProps) {
   const { amountCup, rate, primary = "USD", prefix = "", className = "" } = props;
-  const usd = cupToUsd(amountCup, rate);
-  const primaryAmount = primary === "USD" ? usd : amountCup;
-  const secondaryAmount = primary === "USD" ? amountCup : usd;
-  const secondaryCurrency: SaleCurrency = primary === "USD" ? "CUP" : "USD";
-  const canShowSecondary = rate > 0;
+  const canConvert = rate > 0;
+  const effectivePrimary: SaleCurrency =
+    primary === "USD" && !canConvert ? "CUP" : primary;
+  const usd = canConvert ? cupToUsd(amountCup, rate) : 0;
+  const primaryAmount = effectivePrimary === "USD" ? usd : amountCup;
+  const secondaryAmount = effectivePrimary === "USD" ? amountCup : usd;
+  const secondaryCurrency: SaleCurrency = effectivePrimary === "USD" ? "CUP" : "USD";
+  const canShowSecondary = canConvert && effectivePrimary === primary;
 
   return (
     <span className={`inline-flex flex-col items-end leading-tight ${className}`}>

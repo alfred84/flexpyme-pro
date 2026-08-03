@@ -46,57 +46,81 @@ export function FacturasPage() {
 
   const m = metricsQuery.data;
   const rate = usdExchangeRate;
+  /** Sin tasa no se puede convertir; los KPI siguen en CUP del libro. */
+  const kpiPrimary = rate > 0 ? ("USD" as const) : ("CUP" as const);
 
   return (
     <section className="space-y-4">
       <h1 className="text-2xl font-bold">Facturas</h1>
 
+      {metricsQuery.isError && (
+        <div className="alert alert-error py-2 text-sm">
+          <span>No se pudieron cargar los indicadores de facturas.</span>
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">{moneyHeading("Total", "USD")}</div>
-          <div className="stat-value text-xl">
-            <DualMoneyText
-              amountCup={m?.totalAmount ?? 0}
-              rate={rate}
-              primary="USD"
-              className="items-start"
-            />
+          <div className="stat-title text-xs">{moneyHeading("Total", kpiPrimary)}</div>
+          <div className="stat-value text-xl !whitespace-normal">
+            {metricsQuery.isLoading ? (
+              <span className="loading loading-spinner loading-sm" />
+            ) : (
+              <DualMoneyText
+                amountCup={m?.totalAmount ?? 0}
+                rate={rate}
+                primary="USD"
+                className="items-start"
+              />
+            )}
           </div>
           <div className="stat-desc">{m?.totalCount ?? 0} facturas</div>
         </div>
         <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">{moneyHeading("Cobradas", "USD")}</div>
-          <div className="stat-value text-xl text-success">
-            <DualMoneyText
-              amountCup={m?.cobradasAmount ?? 0}
-              rate={rate}
-              primary="USD"
-              className="items-start"
-            />
+          <div className="stat-title text-xs">{moneyHeading("Cobradas", kpiPrimary)}</div>
+          <div className="stat-value text-xl text-success !whitespace-normal">
+            {metricsQuery.isLoading ? (
+              <span className="loading loading-spinner loading-sm" />
+            ) : (
+              <DualMoneyText
+                amountCup={m?.cobradasAmount ?? 0}
+                rate={rate}
+                primary="USD"
+                className="items-start"
+              />
+            )}
           </div>
           <div className="stat-desc">{m?.cobradasCount ?? 0} facturas</div>
         </div>
         <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">{moneyHeading("Parciales", "USD")}</div>
-          <div className="stat-value text-xl text-info">
-            <DualMoneyText
-              amountCup={m?.parcialesAmount ?? 0}
-              rate={rate}
-              primary="USD"
-              className="items-start"
-            />
+          <div className="stat-title text-xs">{moneyHeading("Parciales", kpiPrimary)}</div>
+          <div className="stat-value text-xl text-info !whitespace-normal">
+            {metricsQuery.isLoading ? (
+              <span className="loading loading-spinner loading-sm" />
+            ) : (
+              <DualMoneyText
+                amountCup={m?.parcialesAmount ?? 0}
+                rate={rate}
+                primary="USD"
+                className="items-start"
+              />
+            )}
           </div>
           <div className="stat-desc">{m?.parcialesCount ?? 0} facturas</div>
         </div>
         <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">{moneyHeading("Pendientes", "USD")}</div>
-          <div className="stat-value text-xl text-warning">
-            <DualMoneyText
-              amountCup={m?.pendientesAmount ?? 0}
-              rate={rate}
-              primary="USD"
-              className="items-start"
-            />
+          <div className="stat-title text-xs">{moneyHeading("Pendientes", kpiPrimary)}</div>
+          <div className="stat-value text-xl text-warning !whitespace-normal">
+            {metricsQuery.isLoading ? (
+              <span className="loading loading-spinner loading-sm" />
+            ) : (
+              <DualMoneyText
+                amountCup={m?.pendientesAmount ?? 0}
+                rate={rate}
+                primary="USD"
+                className="items-start"
+              />
+            )}
           </div>
           <div className="stat-desc">{m?.pendientesCount ?? 0} facturas</div>
         </div>
