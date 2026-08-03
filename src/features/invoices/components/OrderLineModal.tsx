@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
+import { SearchSelect } from "@/components/common/SearchSelect";
 import { LineEmployeesModal } from "@/features/invoices/components/LineEmployeesModal";
 import {
   draftLineSubtotal,
@@ -594,38 +595,43 @@ export function OrderLineModal(props: OrderLineModalProps) {
       <div className="modal-box max-w-2xl">
         <h3 className="font-bold text-lg">{editing ? "Editar línea" : "Nueva línea"}</h3>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <label className="form-control sm:col-span-2">
-            <span className="label-text text-xs">Categoría</span>
-            <select
-              className="select select-bordered select-sm"
-              value={draft.categoryId}
-              onChange={(e) => changeCategory(Number(e.target.value))}
-            >
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="form-control">
-            <span className="label-text text-xs">Formato</span>
-            <select
-              className="select select-bordered select-sm"
-              value={draft.formatId ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                changeFormat(v === "" ? null : Number(v));
+          <div className="form-control sm:col-span-2">
+            <label htmlFor="line-category" className="label-text text-xs">
+              Categoría
+            </label>
+            <SearchSelect
+              id="line-category"
+              value={draft.categoryId > 0 ? String(draft.categoryId) : ""}
+              options={categories.map((c) => ({
+                value: String(c.id),
+                label: c.name,
+              }))}
+              onChange={(next) => {
+                if (next !== "") {
+                  changeCategory(Number(next));
+                }
               }}
-            >
-              <option value="">— Ninguno —</option>
-              {formatOptions.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-          </label>
+              placeholder="Buscar o seleccionar categoría…"
+              allowClear={false}
+            />
+          </div>
+          <div className="form-control">
+            <label htmlFor="line-format" className="label-text text-xs">
+              Formato
+            </label>
+            <SearchSelect
+              id="line-format"
+              value={draft.formatId != null ? String(draft.formatId) : ""}
+              options={formatOptions.map((f) => ({
+                value: String(f.id),
+                label: f.label,
+              }))}
+              onChange={(next) => changeFormat(next === "" ? null : Number(next))}
+              placeholder="Buscar formato o dejar vacío…"
+              allowClear
+              clearLabel="Quitar formato"
+            />
+          </div>
           <label className="form-control">
             <span className="label-text text-xs">Cantidad</span>
             <input
@@ -636,30 +642,33 @@ export function OrderLineModal(props: OrderLineModalProps) {
               onChange={(e) => setDraft((prev) => (prev ? { ...prev, quantity: e.target.value } : prev))}
             />
           </label>
-          <label className="form-control sm:col-span-2">
-            <span className="label-text text-xs">Acabado (opcional)</span>
+          <div className="form-control sm:col-span-2">
+            <label htmlFor="line-finish" className="label-text text-xs">
+              Acabado (opcional)
+            </label>
             {finishInfo.finishes.length > 0 ? (
-              <select
-                className="select select-bordered select-sm"
+              <SearchSelect
+                id="line-finish"
                 value={draft.finish}
-                onChange={(e) => changeFinish(e.target.value)}
-              >
-                <option value="">— Sin acabado —</option>
-                {finishInfo.finishes.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
-                  </option>
-                ))}
-              </select>
+                options={finishInfo.finishes.map((f) => ({
+                  value: f,
+                  label: f,
+                }))}
+                onChange={changeFinish}
+                placeholder="Buscar acabado o dejar vacío…"
+                allowClear
+                clearLabel="Quitar acabado"
+              />
             ) : (
               <input
+                id="line-finish"
                 className="input input-bordered input-sm"
                 value={draft.finish}
                 onChange={(e) => changeFinish(e.target.value)}
                 placeholder="ej. brillo"
               />
             )}
-          </label>
+          </div>
 
           <div className="form-control sm:col-span-2">
             <span className="label-text text-xs">Tipos de trabajo</span>

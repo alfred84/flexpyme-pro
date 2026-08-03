@@ -1,3 +1,5 @@
+import { ClientSearchSelect } from "@/features/clients/components/ClientSearchSelect";
+
 interface OrderHeaderSectionProps {
   clientId: number;
   date: string;
@@ -22,22 +24,17 @@ export function OrderHeaderSection(props: OrderHeaderSectionProps) {
       <div className="card-body gap-2 p-3">
         <h2 className="card-title text-sm">Encabezado</h2>
         <div className="grid gap-2 sm:grid-cols-2">
-          <label className="form-control">
-            <span className="label-text text-xs">Cliente</span>
-            <select
+          <div className="form-control">
+            <label htmlFor="inv-client" className="label-text text-xs">
+              Cliente
+            </label>
+            <ClientSearchSelect
               id="inv-client"
-              className="select select-bordered select-sm"
-              value={clientId ? String(clientId) : ""}
-              onChange={(e) => onClientChange(e.target.value === "" ? 0 : Number(e.target.value))}
-            >
-              <option value="">— Seleccionar —</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.code} — {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              value={clientId}
+              clients={clients}
+              onChange={onClientChange}
+            />
+          </div>
           <label className="form-control">
             <span className="label-text text-xs">Fecha</span>
             <input
