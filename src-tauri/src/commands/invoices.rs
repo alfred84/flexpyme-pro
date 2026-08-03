@@ -27,6 +27,10 @@ pub struct InvoiceListDto {
     pub status: String,
     pub production_status: String,
     pub payment_status: String,
+    /// Moneda de cobro del pedido (`CUP` | `USD`), si se definió.
+    pub payment_currency: Option<String>,
+    /// Tasa USD→CUP guardada en el pedido (si hubo cobro/anticipo en USD).
+    pub exchange_rate_snapshot: Option<f64>,
     pub can_edit: bool,
     pub can_cancel: bool,
 }
@@ -463,7 +467,7 @@ pub fn invoices_list() -> Result<Vec<InvoiceListDto>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT i.id, i.invoice_number, i.client_id, c.name, i.date, i.total, i.paid, i.balance, i.status,
-                    i.production_status, i.payment_status,
+                    i.production_status, i.payment_status, i.payment_currency, i.exchange_rate_snapshot,
                     COALESCE((SELECT SUM(completed_quantity) FROM invoice_items WHERE invoice_id = i.id), 0),
                     COALESCE((SELECT COUNT(*) FROM production_batch_items WHERE invoice_id = i.id), 0)
              FROM invoices i
@@ -477,8 +481,8 @@ pub fn invoices_list() -> Result<Vec<InvoiceListDto>, String> {
             let production_status: String = row.get(9)?;
             let payment_status: String = row.get(10)?;
             let balance: f64 = row.get(7)?;
-            let completed: i64 = row.get(11)?;
-            let batches: i64 = row.get(12)?;
+            let completed: i64 = row.get(13)?;
+            let batches: i64 = row.get(14)?;
             let can_edit = production_status != "listo" && completed == 0 && batches == 0;
             let can_cancel = !(payment_status == "cobrado" && balance <= EPS);
             Ok(InvoiceListDto {
@@ -493,6 +497,8 @@ pub fn invoices_list() -> Result<Vec<InvoiceListDto>, String> {
                 status: row.get(8)?,
                 production_status,
                 payment_status,
+                payment_currency: row.get(11)?,
+                exchange_rate_snapshot: row.get(12)?,
                 can_edit,
                 can_cancel,
             })
@@ -508,7 +514,8 @@ pub fn invoices_financial_list() -> Result<Vec<InvoiceListDto>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT i.id, i.invoice_number, i.client_id, c.name, i.date, i.total, i.paid, i.balance, i.status,
-                    i.production_status, i.payment_status, i.cancelled_at
+                    i.production_status, i.payment_status, i.payment_currency, i.exchange_rate_snapshot,
+                    i.cancelled_at
              FROM invoices i
              JOIN clients c ON c.id = i.client_id
              WHERE i.deleted_at IS NULL
@@ -519,7 +526,7 @@ pub fn invoices_financial_list() -> Result<Vec<InvoiceListDto>, String> {
         .query_map([], |row| {
             let payment_status: String = row.get(10)?;
             let balance: f64 = row.get(7)?;
-            let cancelled_at: Option<String> = row.get(11)?;
+            let cancelled_at: Option<String> = row.get(13)?;
             let can_cancel =
                 cancelled_at.is_none() && !(payment_status == "cobrado" && balance <= EPS);
             Ok(InvoiceListDto {
@@ -534,6 +541,8 @@ pub fn invoices_financial_list() -> Result<Vec<InvoiceListDto>, String> {
                 status: row.get(8)?,
                 production_status: row.get(9)?,
                 payment_status,
+                payment_currency: row.get(11)?,
+                exchange_rate_snapshot: row.get(12)?,
                 can_edit: false,
                 can_cancel,
             })

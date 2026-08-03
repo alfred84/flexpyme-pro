@@ -14,8 +14,11 @@ import {
   OrderWorkTypeSummary,
   aggregateWorkTypeSummary,
 } from "@/features/invoices/components/OrderWorkTypeSummary";
+import { DualMoneyText } from "@/components/common/DualMoneyText";
+import { useAppSettings } from "@/hooks/use-app-settings";
+import type { SaleCurrency } from "@/lib/currency";
 import { formatDate } from "@/lib/format-date";
-import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
+import { formatMoney, moneyHeading } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 import { popFlashMessage, pushFlashMessage, type FlashMessage } from "@/lib/flash-message";
 import type { InvoiceItemDto } from "@/types/invoice";
@@ -52,6 +55,7 @@ export function InvoiceDetailPage() {
   const invoiceId = Number(params.invoiceId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { usdExchangeRate } = useAppSettings();
   const [flash] = useState<FlashMessage | null>(() => popFlashMessage());
   const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -99,6 +103,16 @@ export function InvoiceDetailPage() {
   const canEdit = detailQuery.data?.canEdit ?? false;
   const canCancel = detailQuery.data?.canCancel ?? false;
   const isCancelled = Boolean(inv?.cancelledAt) || inv?.status === "anulada";
+
+  const displayPrimary: SaleCurrency =
+    inv?.paymentMethod === "transferencia" ||
+    (inv?.paymentCurrency ?? "").toUpperCase() === "CUP"
+      ? "CUP"
+      : "USD";
+  const displayRate =
+    inv?.exchangeRateSnapshot && inv.exchangeRateSnapshot > 0
+      ? inv.exchangeRateSnapshot
+      : usdExchangeRate;
 
   return (
     <section className="space-y-6">
@@ -217,29 +231,65 @@ export function InvoiceDetailPage() {
               <div className="card-body">
                 <h2 className="card-title text-base">Totales</h2>
                 <dl className="space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <dt>{moneyHeading("Subtotal líneas")}</dt>
-                    <dd>{formatAmount(inv.subtotal)}</dd>
+                  <div className="flex justify-between gap-2">
+                    <dt>{moneyHeading("Subtotal líneas", displayPrimary)}</dt>
+                    <dd>
+                      <DualMoneyText
+                        amountCup={inv.subtotal}
+                        rate={displayRate}
+                        primary={displayPrimary}
+                      />
+                    </dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt>{moneyHeading("Deuda anterior")}</dt>
-                    <dd>{formatAmount(inv.previousDebt)}</dd>
+                  <div className="flex justify-between gap-2">
+                    <dt>{moneyHeading("Deuda anterior", displayPrimary)}</dt>
+                    <dd>
+                      <DualMoneyText
+                        amountCup={inv.previousDebt}
+                        rate={displayRate}
+                        primary={displayPrimary}
+                      />
+                    </dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt>{moneyHeading("Anticipado")}</dt>
-                    <dd>{formatAmount(inv.advancePayment)}</dd>
+                  <div className="flex justify-between gap-2">
+                    <dt>{moneyHeading("Anticipado", displayPrimary)}</dt>
+                    <dd>
+                      <DualMoneyText
+                        amountCup={inv.advancePayment}
+                        rate={displayRate}
+                        primary={displayPrimary}
+                      />
+                    </dd>
                   </div>
-                  <div className="flex justify-between font-semibold">
-                    <dt>{moneyHeading("Total")}</dt>
-                    <dd>{formatAmount(inv.total)}</dd>
+                  <div className="flex justify-between gap-2 font-semibold">
+                    <dt>{moneyHeading("Total", displayPrimary)}</dt>
+                    <dd>
+                      <DualMoneyText
+                        amountCup={inv.total}
+                        rate={displayRate}
+                        primary={displayPrimary}
+                      />
+                    </dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt>{moneyHeading("Pagado")}</dt>
-                    <dd>{formatAmount(inv.paid)}</dd>
+                  <div className="flex justify-between gap-2">
+                    <dt>{moneyHeading("Pagado", displayPrimary)}</dt>
+                    <dd>
+                      <DualMoneyText
+                        amountCup={inv.paid}
+                        rate={displayRate}
+                        primary={displayPrimary}
+                      />
+                    </dd>
                   </div>
-                  <div className="flex justify-between text-primary">
-                    <dt>{moneyHeading("Pendiente (sin saldo)")}</dt>
-                    <dd>{formatAmount(inv.balance)}</dd>
+                  <div className="flex justify-between gap-2 text-primary">
+                    <dt>{moneyHeading("Pendiente (sin saldo)", displayPrimary)}</dt>
+                    <dd>
+                      <DualMoneyText
+                        amountCup={inv.balance}
+                        rate={displayRate}
+                        primary={displayPrimary}
+                      />
+                    </dd>
                   </div>
                 </dl>
                 {inv.paymentMethod && <div className="divider my-1" />}
@@ -255,15 +305,15 @@ export function InvoiceDetailPage() {
                     {inv.paymentCurrency === "USD" && inv.exchangeRateSnapshot && (
                       <>
                         <div className="flex justify-between">
-                          <dt>Monto recibido</dt>
-                          <dd>
-                            {formatMoney(inv.amountUsd, "USD")} (tasa:{" "}
-                            {formatMoney(inv.exchangeRateSnapshot)} / USD)
-                          </dd>
+                          <dt>Monto recibido (USD)</dt>
+                          <dd>{formatMoney(inv.amountUsd, "USD")}</dd>
                         </div>
-                        <div className="flex justify-between">
-                          <dt>Equivalente</dt>
-                          <dd>{formatMoney(inv.amountCup || inv.total)}</dd>
+                        <div className="flex justify-between text-base-content/70">
+                          <dt>Equivalente (CUP)</dt>
+                          <dd>
+                            {formatMoney(inv.amountCup || inv.total, "CUP")} · tasa{" "}
+                            {formatMoney(inv.exchangeRateSnapshot, "CUP")} / USD
+                          </dd>
                         </div>
                       </>
                     )}
@@ -293,8 +343,8 @@ export function InvoiceDetailPage() {
                   <th>Acabado</th>
                   <th className="text-right">Cant.</th>
                   <th className="text-right">Realizado</th>
-                  <th className="text-right">{moneyHeading("P. unit.")}</th>
-                  <th className="text-right">{moneyHeading("Subtotal")}</th>
+                  <th className="text-right">{moneyHeading("P. unit.", displayPrimary)}</th>
+                  <th className="text-right">{moneyHeading("Subtotal", displayPrimary)}</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -332,8 +382,20 @@ export function InvoiceDetailPage() {
                           <span className="text-xs text-base-content/50"> (faltan {pending})</span>
                         )}
                       </td>
-                      <td className="text-right">{formatAmount(line.unitPrice)}</td>
-                      <td className="text-right">{formatAmount(line.subtotal)}</td>
+                      <td className="text-right">
+                        <DualMoneyText
+                          amountCup={line.unitPrice}
+                          rate={displayRate}
+                          primary={displayPrimary}
+                        />
+                      </td>
+                      <td className="text-right">
+                        <DualMoneyText
+                          amountCup={line.subtotal}
+                          rate={displayRate}
+                          primary={displayPrimary}
+                        />
+                      </td>
                       <td>
                         <div className="flex flex-wrap items-center gap-1">
                           <span
@@ -361,6 +423,8 @@ export function InvoiceDetailPage() {
           </div>
 
           <OrderWorkTypeSummary
+            exchangeRate={displayRate}
+            primary={displayPrimary}
             rows={aggregateWorkTypeSummary(detailQuery.data?.items ?? [])}
           />
 
@@ -384,8 +448,10 @@ export function InvoiceDetailPage() {
                 <ul className="space-y-2 text-sm">
                   {paymentsQuery.data?.map((p) => (
                     <li key={p.id} className="rounded border border-base-300 px-3 py-2">
-                      {formatDate(p.date)} · {p.concept} · {formatMoney(p.amountCup)}
-                      {p.amountUsd > 0 ? ` (+ ${formatMoney(p.amountUsd, "USD")})` : ""}
+                      {formatDate(p.date)} · {p.concept} ·{" "}
+                      {p.amountUsd > 0
+                        ? `${formatMoney(p.amountUsd, "USD")} (${formatMoney(p.amountCup, "CUP")})`
+                        : formatMoney(p.amountCup, "CUP")}
                     </li>
                   ))}
                 </ul>

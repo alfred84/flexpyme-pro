@@ -190,7 +190,8 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 ## 4. Moneda y Pagos
 
 - **Precios de venta**: USD por defecto; CUP permanece disponible por fila
-- **Libro contable (pedidos/facturas)**: importes en CUP (si el precio es USD se convierte con la tasa vigente al crear la línea)
+- **Libro contable (pedidos/facturas)**: importes persistidos en CUP (si el precio es USD se convierte con la tasa al crear la línea)
+- **UI de Pedidos**: muestra importes de venta/cobro en **USD** como moneda principal (con equivalente CUP según tasa). Si el método de pago es CUP/transferencia, la UI invierte el orden (CUP principal + USD equivalente). Tarifas de pago a empleados siguen en CUP
 - **Cobros y anticipos en efectivo**: USD por defecto; transferencia en CUP
 - **Salarios / tarifas de pago / denominaciones de caja internas**: CUP
 - **Denominaciones de billetes CUP**: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000
@@ -403,6 +404,12 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - Resolución de unitario en pedidos: prioridad USD×tasa; si solo CUP, usa CUP. Totales del pedido siguen en CUP.
 - Cobros/anticipos en efectivo y alta de movimiento de caja: moneda por defecto USD (transferencia sigue CUP).
 - Salarios y tarifas de pago a empleados no cambian (CUP).
+
+### v2.15 — UI Pedidos en USD con equivalente CUP (2026-08)
+- Listado, resumen, líneas y cobro/anticipo muestran venta en USD (+ CUP según tasa); si el pago es CUP, el orden se invierte.
+- Listado de pedidos: columnas **Total (USD)** y **Total (CUP)**; CUP solo muestra importe si `payment_currency = CUP` (si es USD queda `—`).
+- Precios de tipo de trabajo editables en USD con equivalente CUP; tarifas de empleados permanecen en CUP.
+- Cuadrícula Pendiente/Recibido/Aplica del anticipo/cobro usa la moneda seleccionada (no fija CUP).
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

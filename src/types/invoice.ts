@@ -15,6 +15,10 @@ export interface InvoiceListDto {
   status: string;
   productionStatus: string;
   paymentStatus: string;
+  /** Moneda de cobro (`CUP` | `USD`), si se definió. */
+  paymentCurrency: string | null;
+  /** Tasa USD→CUP del pedido, si hubo cobro/anticipo en USD. */
+  exchangeRateSnapshot: number | null;
   /** True si el pedido aún se puede editar (sin trabajo iniciado). */
   canEdit: boolean;
   /** True si el pedido se puede anular (no cobrado al 100%). */

@@ -14,6 +14,8 @@ import {
   fetchInvoices,
   markInvoiceAllListo,
 } from "@/db/queries/invoices";
+import { useAppSettings } from "@/hooks/use-app-settings";
+import { cupToUsd } from "@/lib/currency";
 import { todayIso } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
@@ -54,6 +56,7 @@ function matchesFilter(row: InvoiceListDto, filter: ListFilter): boolean {
 export function InvoicesListPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { usdExchangeRate } = useAppSettings();
   const { filter: searchFilter } = useSearch({ from: "/pedidos" });
   const filter = parseFilter(searchFilter);
   const [search, setSearch] = useState("");
@@ -118,9 +121,27 @@ export function InvoicesListPage() {
       { accessorKey: "invoiceNumber", header: "Nº Pedido" },
       { accessorKey: "clientName", header: "Cliente" },
       {
-        accessorKey: "total",
-        header: moneyHeading("Total"),
-        cell: (info) => formatAmount(info.getValue<number>()),
+        id: "totalUsd",
+        header: moneyHeading("Total", "USD"),
+        accessorFn: (row) => row.total,
+        cell: ({ row }) => {
+          const inv = row.original;
+          const rate =
+            inv.exchangeRateSnapshot && inv.exchangeRateSnapshot > 0
+              ? inv.exchangeRateSnapshot
+              : usdExchangeRate;
+          return formatAmount(cupToUsd(inv.total, rate));
+        },
+      },
+      {
+        id: "totalCup",
+        header: moneyHeading("Total", "CUP"),
+        accessorFn: (row) => row.total,
+        cell: ({ row }) => {
+          const inv = row.original;
+          const paidInCup = (inv.paymentCurrency ?? "").toUpperCase() === "CUP";
+          return paidInCup ? formatAmount(inv.total) : "—";
+        },
       },
       {
         id: "production",
@@ -191,7 +212,7 @@ export function InvoicesListPage() {
         },
       },
     ],
-    [markReadyMutation.isPending],
+    [markReadyMutation.isPending, usdExchangeRate],
   );
 
   const table = useReactTable({
