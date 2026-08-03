@@ -1,14 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { useState } from "react";
+import { DualMoneyText } from "@/components/common/DualMoneyText";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import {
   cancelInvoice,
   fetchInvoiceDetail,
   fetchInvoicePaymentHistory,
 } from "@/db/queries/invoices";
+import { useAppSettings } from "@/hooks/use-app-settings";
+import type { SaleCurrency } from "@/lib/currency";
 import { formatDate } from "@/lib/format-date";
-import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
+import { formatMoney, moneyHeading } from "@/lib/format-money";
 import {
   invoiceFinancialBadgeClass,
   invoiceFinancialLabel,
@@ -24,6 +27,7 @@ export function FacturaDetailPage() {
   const params = useParams({ strict: false }) as { invoiceId?: string };
   const invoiceId = Number(params.invoiceId);
   const queryClient = useQueryClient();
+  const { usdExchangeRate } = useAppSettings();
   const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
 
@@ -52,6 +56,16 @@ export function FacturaDetailPage() {
   const fin = inv
     ? invoiceFinancialStatus(inv.balance, inv.paid, inv.status === "anulada" || Boolean(inv.cancelledAt))
     : "pendiente";
+
+  const displayPrimary: SaleCurrency =
+    inv?.paymentMethod === "transferencia" ||
+    (inv?.paymentCurrency ?? "").toUpperCase() === "CUP"
+      ? "CUP"
+      : "USD";
+  const displayRate =
+    inv?.exchangeRateSnapshot && inv.exchangeRateSnapshot > 0
+      ? inv.exchangeRateSnapshot
+      : usdExchangeRate;
 
   if (!Number.isFinite(invoiceId) || invoiceId <= 0) {
     return <div className="alert alert-warning">Identificador de factura no válido.</div>;
@@ -106,20 +120,56 @@ export function FacturaDetailPage() {
               )}
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
-                  <p className="text-xs text-base-content/60">{moneyHeading("Subtotal")}</p>
-                  <p className="font-medium">{formatAmount(inv.subtotal)}</p>
+                  <p className="text-xs text-base-content/60">
+                    {moneyHeading("Subtotal", displayPrimary)}
+                  </p>
+                  <p className="font-medium">
+                    <DualMoneyText
+                      amountCup={inv.subtotal}
+                      rate={displayRate}
+                      primary={displayPrimary}
+                      className="items-start"
+                    />
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs text-base-content/60">{moneyHeading("Total")}</p>
-                  <p className="font-medium">{formatAmount(inv.total)}</p>
+                  <p className="text-xs text-base-content/60">
+                    {moneyHeading("Total", displayPrimary)}
+                  </p>
+                  <p className="font-medium">
+                    <DualMoneyText
+                      amountCup={inv.total}
+                      rate={displayRate}
+                      primary={displayPrimary}
+                      className="items-start"
+                    />
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs text-base-content/60">{moneyHeading("Pagado")}</p>
-                  <p className="font-medium">{formatAmount(inv.paid)}</p>
+                  <p className="text-xs text-base-content/60">
+                    {moneyHeading("Pagado", displayPrimary)}
+                  </p>
+                  <p className="font-medium">
+                    <DualMoneyText
+                      amountCup={inv.paid}
+                      rate={displayRate}
+                      primary={displayPrimary}
+                      className="items-start"
+                    />
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs text-base-content/60">{moneyHeading("Saldo")}</p>
-                  <p className="font-semibold">{formatAmount(inv.balance)}</p>
+                  <p className="text-xs text-base-content/60">
+                    {moneyHeading("Saldo", displayPrimary)}
+                  </p>
+                  <p className="font-semibold">
+                    <DualMoneyText
+                      amountCup={inv.balance}
+                      rate={displayRate}
+                      primary={displayPrimary}
+                      className="items-start"
+                    />
+                  </p>
                 </div>
               </div>
             </div>
@@ -134,8 +184,8 @@ export function FacturaDetailPage() {
                     <tr>
                       <th>Descripción</th>
                       <th>Cant.</th>
-                      <th>{moneyHeading("Precio")}</th>
-                      <th>{moneyHeading("Subtotal")}</th>
+                      <th className="text-right">{moneyHeading("Precio", displayPrimary)}</th>
+                      <th className="text-right">{moneyHeading("Subtotal", displayPrimary)}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -147,8 +197,20 @@ export function FacturaDetailPage() {
                           {line.service ? ` · ${line.service}` : ""}
                         </td>
                         <td>{line.quantity}</td>
-                        <td>{formatAmount(line.unitPrice)}</td>
-                        <td>{formatAmount(line.subtotal)}</td>
+                        <td className="text-right">
+                          <DualMoneyText
+                            amountCup={line.unitPrice}
+                            rate={displayRate}
+                            primary={displayPrimary}
+                          />
+                        </td>
+                        <td className="text-right">
+                          <DualMoneyText
+                            amountCup={line.subtotal}
+                            rate={displayRate}
+                            primary={displayPrimary}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -166,8 +228,10 @@ export function FacturaDetailPage() {
                 <ul className="space-y-2 text-sm">
                   {paymentsQuery.data?.map((p) => (
                     <li key={p.id} className="rounded border border-base-300 px-3 py-2">
-                      {formatDate(p.date)} · {p.concept} · {formatMoney(p.amountCup)}
-                      {p.amountUsd > 0 ? ` (+ ${p.amountUsd} USD)` : ""}
+                      {formatDate(p.date)} · {p.concept} ·{" "}
+                      {p.amountUsd > 0
+                        ? `${formatMoney(p.amountUsd, "USD")} (${formatMoney(p.amountCup, "CUP")})`
+                        : formatMoney(p.amountCup, "CUP")}
                     </li>
                   ))}
                 </ul>

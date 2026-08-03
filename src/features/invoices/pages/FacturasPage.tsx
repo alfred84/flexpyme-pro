@@ -2,7 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Eye, Printer } from "lucide-react";
+import { DualMoneyText } from "@/components/common/DualMoneyText";
 import { fetchInvoiceMetrics, fetchInvoicesFinancial } from "@/db/queries/invoices";
+import { useAppSettings } from "@/hooks/use-app-settings";
+import { cupToUsd } from "@/lib/currency";
 import { formatDate } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import {
@@ -20,6 +23,7 @@ type FacturaFilter = "todas" | InvoiceFinancialStatus;
  * @returns Página del módulo Facturas.
  */
 export function FacturasPage() {
+  const { usdExchangeRate } = useAppSettings();
   const [filter, setFilter] = useState<FacturaFilter>("todas");
   const [search, setSearch] = useState("");
 
@@ -41,6 +45,7 @@ export function FacturasPage() {
   }, [listQuery.data, filter, search]);
 
   const m = metricsQuery.data;
+  const rate = usdExchangeRate;
 
   return (
     <section className="space-y-4">
@@ -48,23 +53,51 @@ export function FacturasPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">{moneyHeading("Total")}</div>
-          <div className="stat-value text-xl">{formatAmount(m?.totalAmount ?? 0)}</div>
+          <div className="stat-title text-xs">{moneyHeading("Total", "USD")}</div>
+          <div className="stat-value text-xl">
+            <DualMoneyText
+              amountCup={m?.totalAmount ?? 0}
+              rate={rate}
+              primary="USD"
+              className="items-start"
+            />
+          </div>
           <div className="stat-desc">{m?.totalCount ?? 0} facturas</div>
         </div>
         <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">{moneyHeading("Cobradas")}</div>
-          <div className="stat-value text-xl text-success">{formatAmount(m?.cobradasAmount ?? 0)}</div>
+          <div className="stat-title text-xs">{moneyHeading("Cobradas", "USD")}</div>
+          <div className="stat-value text-xl text-success">
+            <DualMoneyText
+              amountCup={m?.cobradasAmount ?? 0}
+              rate={rate}
+              primary="USD"
+              className="items-start"
+            />
+          </div>
           <div className="stat-desc">{m?.cobradasCount ?? 0} facturas</div>
         </div>
         <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">{moneyHeading("Parciales")}</div>
-          <div className="stat-value text-xl text-info">{formatAmount(m?.parcialesAmount ?? 0)}</div>
+          <div className="stat-title text-xs">{moneyHeading("Parciales", "USD")}</div>
+          <div className="stat-value text-xl text-info">
+            <DualMoneyText
+              amountCup={m?.parcialesAmount ?? 0}
+              rate={rate}
+              primary="USD"
+              className="items-start"
+            />
+          </div>
           <div className="stat-desc">{m?.parcialesCount ?? 0} facturas</div>
         </div>
         <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">{moneyHeading("Pendientes")}</div>
-          <div className="stat-value text-xl text-warning">{formatAmount(m?.pendientesAmount ?? 0)}</div>
+          <div className="stat-title text-xs">{moneyHeading("Pendientes", "USD")}</div>
+          <div className="stat-value text-xl text-warning">
+            <DualMoneyText
+              amountCup={m?.pendientesAmount ?? 0}
+              rate={rate}
+              primary="USD"
+              className="items-start"
+            />
+          </div>
           <div className="stat-desc">{m?.pendientesCount ?? 0} facturas</div>
         </div>
       </div>
@@ -96,7 +129,8 @@ export function FacturasPage() {
               <th>Nº factura</th>
               <th>Cliente</th>
               <th>Fecha</th>
-              <th>{moneyHeading("Total")}</th>
+              <th className="text-right">{moneyHeading("Total", "USD")}</th>
+              <th className="text-right">{moneyHeading("Total", "CUP")}</th>
               <th>Estado</th>
               <th>Acciones</th>
             </tr>
@@ -104,24 +138,32 @@ export function FacturasPage() {
           <tbody>
             {listQuery.isLoading && (
               <tr>
-                <td colSpan={6}>Cargando...</td>
+                <td colSpan={7}>Cargando...</td>
               </tr>
             )}
             {!listQuery.isLoading && rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="text-center text-base-content/60">
+                <td colSpan={7} className="text-center text-base-content/60">
                   No hay facturas con este filtro.
                 </td>
               </tr>
             )}
             {rows.map((row) => {
               const fin = invoiceFinancialStatus(row.balance, row.paid, row.status === "anulada");
+              const rowRate =
+                row.exchangeRateSnapshot && row.exchangeRateSnapshot > 0
+                  ? row.exchangeRateSnapshot
+                  : rate;
+              const paidInCup = (row.paymentCurrency ?? "").toUpperCase() === "CUP";
               return (
                 <tr key={row.id}>
                   <td className="font-mono text-xs">{row.invoiceNumber}</td>
                   <td>{row.clientName}</td>
                   <td>{formatDate(row.date)}</td>
-                  <td className="tabular-nums">{formatAmount(row.total)}</td>
+                  <td className="text-right tabular-nums">{formatAmount(cupToUsd(row.total, rowRate))}</td>
+                  <td className="text-right tabular-nums">
+                    {paidInCup ? formatAmount(row.total) : "—"}
+                  </td>
                   <td>
                     <span className={`badge badge-sm ${invoiceFinancialBadgeClass(fin)}`}>
                       {invoiceFinancialLabel(fin)}
@@ -129,7 +171,11 @@ export function FacturasPage() {
                   </td>
                   <td>
                     <div className="flex gap-1">
-                      <Link className="btn btn-xs btn-ghost gap-1" to="/facturas/$invoiceId" params={{ invoiceId: String(row.id) }}>
+                      <Link
+                        className="btn btn-xs btn-ghost gap-1"
+                        to="/facturas/$invoiceId"
+                        params={{ invoiceId: String(row.id) }}
+                      >
                         <Eye className="h-3 w-3" /> Ver
                       </Link>
                       <Link
