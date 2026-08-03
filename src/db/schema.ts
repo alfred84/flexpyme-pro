@@ -262,6 +262,8 @@ export const productionBatches = sqliteTable("production_batches", {
   paid: real("paid").notNull().default(0),
   status: text("status").notNull().default("pendiente"),
   notes: text("notes"),
+  /** Egreso de caja del pago (para reverso mismo día). */
+  cashTransactionId: integer("cash_transaction_id"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 });
 
@@ -405,6 +407,8 @@ export const employeeDailySalaries = sqliteTable(
     status: text("status").notNull().default("pendiente"),
     /** `fixed` | `destajo` */
     kind: text("kind").notNull().default("fixed"),
+    /** Egreso de caja del pago (para reverso mismo día). */
+    cashTransactionId: integer("cash_transaction_id"),
     createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
   },
   (table) => ({

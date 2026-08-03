@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { CalendarDays, Banknote, UserCog, UserPlus } from "lucide-react";
+import { CalendarDays, Banknote, Undo2, UserCog, UserPlus } from "lucide-react";
 import {
   deactivateEmployee,
   fetchDestajoPendingForDate,
@@ -10,6 +10,7 @@ import {
   fetchUnpaidBatchesForDate,
   payWorkBatchesMany,
   reactivateEmployee,
+  reverseEmployeePayment,
   setDestajoDailySalary,
   type UnpaidBatchDto,
 } from "@/db/queries/employees";
@@ -78,6 +79,17 @@ export function EmployeesListPage() {
       pushFlashMessage({ kind: "success", text: "Destajo del día registrado." });
     },
   });
+
+  const reversePayMutation = useMutation({
+    mutationFn: reverseEmployeePayment,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["employees"] });
+      await queryClient.invalidateQueries({ queryKey: ["cashflow"] });
+      await queryClient.invalidateQueries({ queryKey: ["payroll-daily"] });
+    },
+  });
+
+  const isPayrollToday = payrollDate === today;
 
   const payrollQuery = useQuery({
     queryKey: ["payroll-daily", payrollDate],
@@ -356,6 +368,7 @@ export function EmployeesListPage() {
                 <tbody>
                   {payrollRows.map((r) => {
                     const canPay = r.pending > 1e-9;
+                    const canReverse = isPayrollToday && r.paid > 1e-9;
                     return (
                       <tr key={`${r.employeeId}-${r.date}`}>
                         <td>{r.employeeName}</td>
@@ -363,22 +376,64 @@ export function EmployeesListPage() {
                         <td className="text-right text-success">{formatMoney(r.paid)}</td>
                         <td className="text-right text-warning">{formatMoney(r.pending)}</td>
                         <td className="text-right">
-                          {canPay ? (
-                            <button
-                              type="button"
-                              className="btn btn-xs btn-secondary gap-1"
-                              onClick={() =>
-                                setPayTarget({
-                                  employeeId: r.employeeId,
-                                  employeeName: r.employeeName,
-                                })
-                              }
-                            >
-                              <Banknote className="h-3.5 w-3.5" /> Pagar
-                            </button>
-                          ) : (
-                            <span className="text-xs text-base-content/40">—</span>
-                          )}
+                          <div className="flex flex-wrap justify-end gap-1">
+                            {canPay && (
+                              <button
+                                type="button"
+                                className="btn btn-xs btn-secondary gap-1"
+                                onClick={() =>
+                                  setPayTarget({
+                                    employeeId: r.employeeId,
+                                    employeeName: r.employeeName,
+                                  })
+                                }
+                              >
+                                <Banknote className="h-3.5 w-3.5" /> Pagar
+                              </button>
+                            )}
+                            {canReverse && (
+                              <button
+                                type="button"
+                                className="btn btn-xs btn-outline btn-error gap-1"
+                                disabled={reversePayMutation.isPending}
+                                title="Revertir el pago de hoy (solo mismo día)"
+                                onClick={() => {
+                                  if (
+                                    !window.confirm(
+                                      `¿Revertir el pago de ${r.employeeName} del ${formatDate(payrollDate)}?\n\nSe registrará un ingreso compensatorio en caja y el salario quedará pendiente de nuevo.`,
+                                    )
+                                  ) {
+                                    return;
+                                  }
+                                  void reversePayMutation
+                                    .mutateAsync({
+                                      employeeId: r.employeeId,
+                                      date: payrollDate,
+                                    })
+                                    .then(() => {
+                                      pushFlashMessage({
+                                        kind: "success",
+                                        text: `Pago a ${r.employeeName} revertido.`,
+                                      });
+                                    })
+                                    .catch((e: unknown) => {
+                                      pushFlashMessage({
+                                        kind: "error",
+                                        text:
+                                          e instanceof Error
+                                            ? e.message
+                                            : "No se pudo revertir el pago.",
+                                      });
+                                    });
+                                }}
+                              >
+                                <Undo2 className="h-3.5 w-3.5" /> Deshacer
+                              </button>
+                            )}
+                            {!canPay && !canReverse && (
+                              <span className="text-xs text-base-content/40">—</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

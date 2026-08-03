@@ -854,6 +854,12 @@ pub fn work_batch_create(payload: CreateWorkBatchPayload) -> Result<i64, String>
             ],
         )
         .map_err(|e| e.to_string())?;
+        let cash_id = tx.last_insert_rowid();
+        tx.execute(
+            "UPDATE production_batches SET cash_transaction_id = ?1 WHERE id = ?2",
+            params![cash_id, batch_id],
+        )
+        .map_err(|e| e.to_string())?;
     }
 
     tx.commit().map_err(|e| e.to_string())?;
@@ -1252,12 +1258,6 @@ pub fn work_batch_pay(payload: WorkBatchPayPayload) -> Result<(), String> {
     }
 
     tx.execute(
-        "UPDATE production_batches SET paid = total_cost, status = 'pagado' WHERE id = ?1",
-        params![batch_id],
-    )
-    .map_err(|e| e.to_string())?;
-
-    tx.execute(
         "INSERT INTO cash_transactions
             (type, concept, reference_type, reference_id, amount_cup, amount_usd, payment_method, denomination_breakdown, date)
          VALUES ('egreso', ?1, 'salario', ?2, ?3, ?4, ?5, ?6, datetime('now'))",
@@ -1269,6 +1269,14 @@ pub fn work_batch_pay(payload: WorkBatchPayPayload) -> Result<(), String> {
             method,
             breakdown
         ],
+    )
+    .map_err(|e| e.to_string())?;
+    let cash_id = tx.last_insert_rowid();
+    tx.execute(
+        "UPDATE production_batches
+         SET paid = total_cost, status = 'pagado', cash_transaction_id = ?1
+         WHERE id = ?2",
+        params![cash_id, batch_id],
     )
     .map_err(|e| e.to_string())?;
 
@@ -1403,6 +1411,213 @@ pub fn work_batches_pay_many(payload: WorkBatchesPayManyPayload) -> Result<(), S
             (type, concept, reference_type, reference_id, amount_cup, amount_usd, payment_method, denomination_breakdown, date)
          VALUES ('egreso', ?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))",
         params![concept, ref_type, ref_id, amount_cup, amount_usd, method, breakdown],
+    )
+    .map_err(|e| e.to_string())?;
+    let cash_id = tx.last_insert_rowid();
+    for &batch_id in &payload.batch_ids {
+        tx.execute(
+            "UPDATE production_batches SET cash_transaction_id = ?1 WHERE id = ?2",
+            params![cash_id, batch_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    for &salary_id in &daily_salary_ids {
+        tx.execute(
+            "UPDATE employee_daily_salaries SET cash_transaction_id = ?1 WHERE id = ?2",
+            params![cash_id, salary_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Payload para revertir el pago de un empleado en una fecha (solo el día actual).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmployeePaymentReversePayload {
+    pub employee_id: i64,
+    #[serde(default)]
+    pub date: Option<String>,
+}
+
+/// Revierte los pagos de salario/lotes de un empleado en el día actual.
+///
+/// Inserta un ingreso compensatorio por cada egreso vinculado (auditoría de caja)
+/// y deja los ítems otra vez en `pendiente`. Solo se permite el mismo día.
+#[tauri::command]
+pub fn employee_payment_reverse(payload: EmployeePaymentReversePayload) -> Result<(), String> {
+    let today = chrono_lite_today();
+    let day = payload
+        .date
+        .as_deref()
+        .map(|d| d.trim().to_string())
+        .filter(|d| !d.is_empty())
+        .unwrap_or_else(|| today.clone());
+    let day = day[..day.len().min(10)].to_string();
+    if day.len() < 10 {
+        return Err("Fecha inválida".to_string());
+    }
+    if day != today {
+        return Err("Solo se puede revertir un pago el mismo día en que se registró".to_string());
+    }
+
+    let mut conn = db::open_connection()?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let emp_name: String = tx
+        .query_row(
+            "SELECT name FROM employees WHERE id = ?1 AND deleted_at IS NULL",
+            params![payload.employee_id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "Empleado no encontrado".to_string())?;
+
+    let mut cash_ids: Vec<i64> = Vec::new();
+    {
+        let mut stmt = tx
+            .prepare(
+                "SELECT DISTINCT cash_transaction_id FROM (
+                   SELECT cash_transaction_id FROM production_batches
+                   WHERE employee_id = ?1
+                     AND status = 'pagado'
+                     AND substr(date, 1, 10) = ?2
+                     AND cash_transaction_id IS NOT NULL
+                   UNION ALL
+                   SELECT cash_transaction_id FROM employee_daily_salaries
+                   WHERE employee_id = ?1
+                     AND status = 'pagado'
+                     AND substr(date, 1, 10) = ?2
+                     AND cash_transaction_id IS NOT NULL
+                 )",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![payload.employee_id, day], |row| row.get::<_, i64>(0))
+            .map_err(|e| e.to_string())?;
+        for r in rows {
+            cash_ids.push(r.map_err(|e| e.to_string())?);
+        }
+    }
+
+    let paid_batches: i64 = tx
+        .query_row(
+            "SELECT COUNT(1) FROM production_batches
+             WHERE employee_id = ?1 AND status = 'pagado' AND substr(date, 1, 10) = ?2",
+            params![payload.employee_id, day],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    let paid_salaries: i64 = tx
+        .query_row(
+            "SELECT COUNT(1) FROM employee_daily_salaries
+             WHERE employee_id = ?1 AND status = 'pagado' AND substr(date, 1, 10) = ?2",
+            params![payload.employee_id, day],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    if paid_batches == 0 && paid_salaries == 0 {
+        return Err("No hay pagos del día para revertir".to_string());
+    }
+
+    if cash_ids.is_empty() {
+        // Pagos legacy sin vínculo: reverso por importe total del día.
+        let total_paid: f64 = {
+            let batches: f64 = tx
+                .query_row(
+                    "SELECT COALESCE(SUM(paid), 0) FROM production_batches
+                     WHERE employee_id = ?1 AND status = 'pagado' AND substr(date, 1, 10) = ?2",
+                    params![payload.employee_id, day],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0.0);
+            let salaries: f64 = tx
+                .query_row(
+                    "SELECT COALESCE(SUM(paid), 0) FROM employee_daily_salaries
+                     WHERE employee_id = ?1 AND status = 'pagado' AND substr(date, 1, 10) = ?2",
+                    params![payload.employee_id, day],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0.0);
+            batches + salaries
+        };
+        if total_paid > 1e-9 {
+            tx.execute(
+                "INSERT INTO cash_transactions
+                    (type, concept, reference_type, reference_id, amount_cup, amount_usd, payment_method, date)
+                 VALUES ('ingreso', ?1, 'salario_reverso', ?2, ?3, 0, 'efectivo', datetime('now'))",
+                params![
+                    format!("Reverso pago empleados: {} ({})", emp_name, day),
+                    payload.employee_id,
+                    total_paid
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    } else {
+        for cash_id in &cash_ids {
+            let already: i64 = tx
+                .query_row(
+                    "SELECT COUNT(1) FROM cash_transactions
+                     WHERE type = 'ingreso'
+                       AND reference_type = 'salario_reverso'
+                       AND reference_id = ?1",
+                    params![cash_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            if already > 0 {
+                continue;
+            }
+            let (amount_cup, amount_usd, method, breakdown): (
+                f64,
+                f64,
+                String,
+                Option<String>,
+            ) = tx
+                .query_row(
+                    "SELECT amount_cup, COALESCE(amount_usd, 0), COALESCE(payment_method, 'efectivo'),
+                            denomination_breakdown
+                     FROM cash_transactions
+                     WHERE id = ?1 AND type = 'egreso'",
+                    params![cash_id],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                )
+                .map_err(|_| format!("Movimiento de caja {} no encontrado", cash_id))?;
+            if amount_cup <= 1e-9 && amount_usd <= 1e-9 {
+                continue;
+            }
+            tx.execute(
+                "INSERT INTO cash_transactions
+                    (type, concept, reference_type, reference_id, amount_cup, amount_usd,
+                     payment_method, denomination_breakdown, date)
+                 VALUES ('ingreso', ?1, 'salario_reverso', ?2, ?3, ?4, ?5, ?6, datetime('now'))",
+                params![
+                    format!("Reverso pago empleados: {} ({})", emp_name, day),
+                    cash_id,
+                    amount_cup,
+                    amount_usd,
+                    method,
+                    breakdown
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+
+    tx.execute(
+        "UPDATE production_batches
+         SET paid = 0, status = 'pendiente', cash_transaction_id = NULL
+         WHERE employee_id = ?1 AND status = 'pagado' AND substr(date, 1, 10) = ?2",
+        params![payload.employee_id, day],
+    )
+    .map_err(|e| e.to_string())?;
+    tx.execute(
+        "UPDATE employee_daily_salaries
+         SET paid = 0, status = 'pendiente', cash_transaction_id = NULL
+         WHERE employee_id = ?1 AND status = 'pagado' AND substr(date, 1, 10) = ?2",
+        params![payload.employee_id, day],
     )
     .map_err(|e| e.to_string())?;
 

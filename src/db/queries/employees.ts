@@ -162,6 +162,18 @@ export async function payWorkBatchesMany(payload: {
 }
 
 /**
+ * Revierte los pagos de un empleado en el día actual (solo mismo día).
+ *
+ * @param payload - Empleado y fecha opcional (debe ser hoy).
+ */
+export async function reverseEmployeePayment(payload: {
+  employeeId: number;
+  date?: string;
+}): Promise<void> {
+  return invoke<void>("employee_payment_reverse", { payload });
+}
+
+/**
  * Lists the extra roles assigned to an employee (multi-role).
  */
 export async function fetchEmployeeExtraRoles(

@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.12 | Última actualización: 2026-08-03
+### Versión: 2.13 | Última actualización: 2026-08-03
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -102,7 +102,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Historial de pagos al empleado
 - Dar de baja (soft delete, no eliminar)
 - **Multi-rol (v2.5)**: cada empleado tiene un rol principal (`employees.role_id`) y puede tener roles adicionales (`employee_extra_roles`) para cuando cubre otra Área
-- **Nómina diaria (v2.5 / v2.12)**: vista de salario por empleado del día seleccionado (por defecto hoy; selector de fecha), con total, pagado, pendiente y botón **Pagar** por empleado (modal de denominaciones Efectivo/CUP)
+- **Nómina diaria (v2.5 / v2.12)**: vista de salario por empleado del día seleccionado (por defecto hoy; selector de fecha), con total, pagado, pendiente y botón **Pagar** por empleado (modal de denominaciones Efectivo/CUP). **Deshacer** (solo el día actual) revierte el pago con ingreso compensatorio en caja
 - Pago individual por lote desde el historial del empleado con el mismo modal reutilizable
 
 ### 3.5 Inventario
@@ -390,6 +390,10 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - Filtro de nómina pasa de mes a día (`YYYY-MM-DD`), por defecto el día actual.
 - Columna **Pagar** por empleado con pendiente; abre el modal de caja con denominaciones.
 - Se elimina el pago global «Pago de empleados»; el pago es solo individual por día.
+
+### v2.13 — Reverso de pago a empleados (mismo día) (2026-08)
+- `cash_transaction_id` en lotes y salarios diarios vincula el egreso de caja.
+- Botón **Deshacer** en nómina (solo fecha = hoy): revierte ítems a `pendiente` e inserta `ingreso` compensatorio (`salario_reverso`), sin borrar el egreso original.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
