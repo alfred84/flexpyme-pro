@@ -6,7 +6,7 @@ import {
   emptyDenominationCounts,
   sumDenominationCounts,
 } from "@/lib/cash-counts";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import type { DenominationCurrency } from "@/types/cashier";
 
 export type EmployeePayMethod = "efectivo" | "transferencia";
@@ -115,8 +115,8 @@ export function EmployeePayCashierModal(props: EmployeePayCashierModalProps) {
             <p className="mt-1 text-sm text-base-content/70">{description}</p>
           )}
           <div className="mt-3 flex justify-between text-sm font-semibold">
-            <span>Monto a pagar</span>
-            <span>{formatMoney(amountCup)}</span>
+            <span>{moneyHeading("Monto a pagar")}</span>
+            <span>{formatAmount(amountCup)}</span>
           </div>
 
           <div className="mt-3 grid gap-2 sm:grid-cols-2">

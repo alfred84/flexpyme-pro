@@ -4,7 +4,7 @@ import { ModalPortal } from "@/components/common/ModalPortal";
 import { fetchCostListForWorkType } from "@/db/queries/employees";
 import { markInvoiceItemListo } from "@/db/queries/invoices";
 import { todayIso } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 import type { InvoiceItemDto } from "@/types/invoice";
 
 interface WorkTypeOption {
@@ -213,8 +213,8 @@ export function ConfirmCompleteWorkModal(props: ConfirmCompleteWorkModalProps) {
           </div>
 
           <div className="mt-2 flex justify-between text-sm">
-            <span>Total a pagar (lotes)</span>
-            <span className="font-semibold">{formatMoney(totalPay)}</span>
+            <span>{moneyHeading("Total a pagar (lotes)")}</span>
+            <span className="font-semibold">{formatAmount(totalPay)}</span>
           </div>
           {error && <p className="mt-2 text-error text-sm">{error}</p>}
 

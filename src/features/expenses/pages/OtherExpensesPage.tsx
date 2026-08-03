@@ -9,7 +9,7 @@ import {
 } from "@/db/queries/other-expenses";
 import { ExpenseTypesConfigModal } from "@/features/expenses/components/ExpenseTypesConfigModal";
 import { formatDate, todayIso } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
 import type { OtherExpenseDto } from "@/types/other-expense";
 
@@ -140,24 +140,24 @@ export function OtherExpensesPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <div className="card bg-base-200">
           <div className="card-body p-4">
-            <p className="text-xs uppercase text-base-content/60">Gasto de hoy</p>
+            <p className="text-xs uppercase text-base-content/60">{moneyHeading("Gasto de hoy")}</p>
             <p className="text-2xl font-semibold text-error">
-              {formatMoney(summary?.todayCup ?? 0)}
+              {formatAmount(summary?.todayCup ?? 0)}
             </p>
           </div>
         </div>
         <div className="card bg-base-200">
           <div className="card-body p-4">
-            <p className="text-xs uppercase text-base-content/60">Gasto del mes</p>
+            <p className="text-xs uppercase text-base-content/60">{moneyHeading("Gasto del mes")}</p>
             <p className="text-2xl font-semibold text-error">
-              {formatMoney(summary?.monthCup ?? 0)}
+              {formatAmount(summary?.monthCup ?? 0)}
             </p>
           </div>
         </div>
         <div className="card bg-base-200">
           <div className="card-body p-4">
-            <p className="text-xs uppercase text-base-content/60">{periodTotalLabel(period)}</p>
-            <p className="text-2xl font-semibold">{formatMoney(periodTotal)}</p>
+            <p className="text-xs uppercase text-base-content/60">{moneyHeading(periodTotalLabel(period))}</p>
+            <p className="text-2xl font-semibold">{formatAmount(periodTotal)}</p>
           </div>
         </div>
       </div>
@@ -202,7 +202,7 @@ export function OtherExpensesPage() {
               <th>Tipo</th>
               <th>Empleado</th>
               <th>Método</th>
-              <th className="text-right">Importe</th>
+              <th className="text-right">{moneyHeading("Importe")}</th>
               <th className="text-right">Acciones</th>
             </tr>
           </thead>
@@ -222,7 +222,7 @@ export function OtherExpensesPage() {
                 <td>{exp.expenseType}</td>
                 <td>{exp.employeeName ?? "—"}</td>
                 <td className="capitalize">{exp.paymentMethod}</td>
-                <td className="text-right font-mono">{formatMoney(exp.amountCup)}</td>
+                <td className="text-right font-mono">{formatAmount(exp.amountCup)}</td>
                 <td className="text-right">
                   <div className="flex justify-end gap-1">
                     <Link

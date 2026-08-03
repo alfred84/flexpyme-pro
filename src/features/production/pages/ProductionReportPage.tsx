@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3, CheckCircle2, Clock } from "lucide-react";
 import { fetchProductionReportMonthly } from "@/db/queries/production";
 import { formatDate, todayIso } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 
 /**
  * Devuelve el mes en curso en formato `YYYY-MM`.
@@ -106,8 +106,8 @@ export function ProductionReportPage() {
         </div>
         <div className="card bg-base-200">
           <div className="card-body p-4">
-            <p className="text-xs uppercase text-base-content/60">Importe pedido</p>
-            <p className="text-2xl font-semibold">{formatMoney(totals.amount)}</p>
+            <p className="text-xs uppercase text-base-content/60">{moneyHeading("Importe pedido")}</p>
+            <p className="text-2xl font-semibold">{formatAmount(totals.amount)}</p>
           </div>
         </div>
       </div>
@@ -117,21 +117,21 @@ export function ProductionReportPage() {
           <h2 className="card-title text-base">Factura vs. salario (mes)</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
-              <p className="text-xs uppercase text-base-content/60">Facturado (venta)</p>
-              <p className="text-xl font-semibold">{formatMoney(totals.amount)}</p>
+              <p className="text-xs uppercase text-base-content/60">{moneyHeading("Facturado (venta)")}</p>
+              <p className="text-xl font-semibold">{formatAmount(totals.amount)}</p>
             </div>
             <div>
-              <p className="text-xs uppercase text-base-content/60">Salario (costo)</p>
-              <p className="text-xl font-semibold">{formatMoney(totals.salario)}</p>
+              <p className="text-xs uppercase text-base-content/60">{moneyHeading("Salario (costo)")}</p>
+              <p className="text-xl font-semibold">{formatAmount(totals.salario)}</p>
             </div>
             <div>
-              <p className="text-xs uppercase text-base-content/60">Diferencia (margen)</p>
+              <p className="text-xs uppercase text-base-content/60">{moneyHeading("Diferencia (margen)")}</p>
               <p
                 className={`text-xl font-semibold ${
                   totals.diferencia >= 0 ? "text-success" : "text-error"
                 }`}
               >
-                {formatMoney(totals.diferencia)}
+                {formatAmount(totals.diferencia)}
               </p>
             </div>
           </div>
@@ -170,7 +170,7 @@ export function ProductionReportPage() {
                         <th className="text-right">Pedido</th>
                         <th className="text-right">Realizado</th>
                         <th className="text-right">Pendiente</th>
-                        <th className="text-right">Importe</th>
+                        <th className="text-right">{moneyHeading("Importe")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -180,7 +180,7 @@ export function ProductionReportPage() {
                           <td className="text-right">{row.pedidoQty}</td>
                           <td className="text-right text-success">{row.realizadoQty}</td>
                           <td className="text-right text-warning">{row.pendienteQty}</td>
-                          <td className="text-right font-mono text-xs">{formatMoney(row.pedidoAmount)}</td>
+                          <td className="text-right font-mono text-xs">{formatAmount(row.pedidoAmount)}</td>
                         </tr>
                       ))}
                     </tbody>

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { fetchProductionBatchDetail } from "@/db/queries/production";
 import { buildCsvLine, downloadTextFile } from "@/lib/csv";
 import { formatDate } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
 
 const productionBatchRouteApi = getRouteApi("/produccion/$batchId");
@@ -162,16 +162,16 @@ export function ProductionBatchDetailPage() {
                 <h2 className="card-title text-base">Importes</h2>
                 <dl className="space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <dt>Costo total</dt>
-                    <dd>{formatMoney(b.totalCost)}</dd>
+                    <dt>{moneyHeading("Costo total")}</dt>
+                    <dd>{formatAmount(b.totalCost)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt>Pagado</dt>
-                    <dd>{formatMoney(b.paid)}</dd>
+                    <dt>{moneyHeading("Pagado")}</dt>
+                    <dd>{formatAmount(b.paid)}</dd>
                   </div>
                   <div className="flex justify-between font-semibold">
-                    <dt>Pendiente</dt>
-                    <dd>{formatMoney(b.pending)}</dd>
+                    <dt>{moneyHeading("Pendiente")}</dt>
+                    <dd>{formatAmount(b.pending)}</dd>
                   </div>
                 </dl>
               </div>
@@ -186,8 +186,8 @@ export function ProductionBatchDetailPage() {
                   <th>Formato</th>
                   <th>Categoría</th>
                   <th className="text-right">Cant.</th>
-                  <th className="text-right">C. unit.</th>
-                  <th className="text-right">Subtotal</th>
+                  <th className="text-right">{moneyHeading("C. unit.")}</th>
+                  <th className="text-right">{moneyHeading("Subtotal")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -206,8 +206,8 @@ export function ProductionBatchDetailPage() {
                       <td>{row.formatLabel ?? "—"}</td>
                       <td>{row.category}</td>
                       <td className="text-right">{row.quantity}</td>
-                      <td className="text-right">{formatMoney(row.unitCost)}</td>
-                      <td className="text-right">{formatMoney(row.subtotal)}</td>
+                      <td className="text-right">{formatAmount(row.unitCost)}</td>
+                      <td className="text-right">{formatAmount(row.subtotal)}</td>
                     </tr>
                   ))
                 )}

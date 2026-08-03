@@ -15,7 +15,7 @@ import {
   markInvoiceAllListo,
 } from "@/db/queries/invoices";
 import { todayIso } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 import type { InvoiceListDto } from "@/types/invoice";
 
@@ -119,8 +119,8 @@ export function InvoicesListPage() {
       { accessorKey: "clientName", header: "Cliente" },
       {
         accessorKey: "total",
-        header: "Total",
-        cell: (info) => formatMoney(info.getValue<number>()),
+        header: moneyHeading("Total"),
+        cell: (info) => formatAmount(info.getValue<number>()),
       },
       {
         id: "production",

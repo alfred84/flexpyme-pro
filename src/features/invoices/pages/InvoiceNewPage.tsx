@@ -45,7 +45,7 @@ import {
 } from "@/features/invoices/lib/order-draft";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { todayIso } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 import { DEFAULT_PAYMENT_CURRENCY } from "@/lib/currency";
 import type { AdvancePaymentPayload, CreateInvoiceItemPayload } from "@/types/invoice";
@@ -526,39 +526,39 @@ export function InvoiceNewPage() {
           <div className="card-body gap-2 p-3 text-sm">
             <h2 className="card-title text-sm">Resumen del pedido</h2>
             <div className="flex justify-between">
-              <span>Subtotal líneas</span>
-              <span>{formatMoney(linesSubtotal)}</span>
+              <span>{moneyHeading("Subtotal líneas")}</span>
+              <span>{formatAmount(linesSubtotal)}</span>
             </div>
             {registerAdvance && (
               <div className="flex justify-between text-info">
-                <span>Anticipado</span>
-                <span>{formatMoney(advanceNum)}</span>
+                <span>{moneyHeading("Anticipado")}</span>
+                <span>{formatAmount(advanceNum)}</span>
               </div>
             )}
             {creditAppliedPreview > 1e-6 && (
               <div className="flex justify-between text-success">
-                <span>Saldo a favor aplicado</span>
-                <span>−{formatMoney(creditAppliedPreview)}</span>
+                <span>{moneyHeading("Saldo a favor aplicado")}</span>
+                <span>−{formatAmount(creditAppliedPreview)}</span>
               </div>
             )}
             <div className="divider my-0" />
             <div className="flex justify-between font-semibold">
-              <span>Total pedido</span>
-              <span>{formatMoney(orderTotal)}</span>
+              <span>{moneyHeading("Total pedido")}</span>
+              <span>{formatAmount(orderTotal)}</span>
             </div>
             <div className="flex justify-between text-xs text-base-content/70">
-              <span>Por cobrar ahora</span>
-              <span>{formatMoney(effectiveDue)}</span>
+              <span>{moneyHeading("Por cobrar ahora")}</span>
+              <span>{formatAmount(effectiveDue)}</span>
             </div>
             {canCheckout && received > 0 && (
               <>
                 <div className="flex justify-between text-success">
-                  <span>Cobro en esta operación</span>
-                  <span>{formatMoney(Math.min(received, effectiveDue))}</span>
+                  <span>{moneyHeading("Cobro en esta operación")}</span>
+                  <span>{formatAmount(Math.min(received, effectiveDue))}</span>
                 </div>
                 <div className="flex justify-between text-primary">
-                  <span>Pendiente</span>
-                  <span>{formatMoney(pendingAfterPay)}</span>
+                  <span>{moneyHeading("Pendiente")}</span>
+                  <span>{formatAmount(pendingAfterPay)}</span>
                 </div>
               </>
             )}

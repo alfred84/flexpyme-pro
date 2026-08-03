@@ -15,7 +15,7 @@ import {
   aggregateWorkTypeSummary,
 } from "@/features/invoices/components/OrderWorkTypeSummary";
 import { formatDate } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 import { popFlashMessage, pushFlashMessage, type FlashMessage } from "@/lib/flash-message";
 import type { InvoiceItemDto } from "@/types/invoice";
@@ -218,28 +218,28 @@ export function InvoiceDetailPage() {
                 <h2 className="card-title text-base">Totales</h2>
                 <dl className="space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <dt>Subtotal líneas</dt>
-                    <dd>{formatMoney(inv.subtotal)}</dd>
+                    <dt>{moneyHeading("Subtotal líneas")}</dt>
+                    <dd>{formatAmount(inv.subtotal)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt>Deuda anterior</dt>
-                    <dd>{formatMoney(inv.previousDebt)}</dd>
+                    <dt>{moneyHeading("Deuda anterior")}</dt>
+                    <dd>{formatAmount(inv.previousDebt)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt>Anticipado</dt>
-                    <dd>{formatMoney(inv.advancePayment)}</dd>
+                    <dt>{moneyHeading("Anticipado")}</dt>
+                    <dd>{formatAmount(inv.advancePayment)}</dd>
                   </div>
                   <div className="flex justify-between font-semibold">
-                    <dt>Total</dt>
-                    <dd>{formatMoney(inv.total)}</dd>
+                    <dt>{moneyHeading("Total")}</dt>
+                    <dd>{formatAmount(inv.total)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt>Pagado</dt>
-                    <dd>{formatMoney(inv.paid)}</dd>
+                    <dt>{moneyHeading("Pagado")}</dt>
+                    <dd>{formatAmount(inv.paid)}</dd>
                   </div>
                   <div className="flex justify-between text-primary">
-                    <dt>Pendiente (sin saldo)</dt>
-                    <dd>{formatMoney(inv.balance)}</dd>
+                    <dt>{moneyHeading("Pendiente (sin saldo)")}</dt>
+                    <dd>{formatAmount(inv.balance)}</dd>
                   </div>
                 </dl>
                 {inv.paymentMethod && <div className="divider my-1" />}
@@ -293,8 +293,8 @@ export function InvoiceDetailPage() {
                   <th>Acabado</th>
                   <th className="text-right">Cant.</th>
                   <th className="text-right">Realizado</th>
-                  <th className="text-right">P. unit.</th>
-                  <th className="text-right">Subtotal</th>
+                  <th className="text-right">{moneyHeading("P. unit.")}</th>
+                  <th className="text-right">{moneyHeading("Subtotal")}</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -332,8 +332,8 @@ export function InvoiceDetailPage() {
                           <span className="text-xs text-base-content/50"> (faltan {pending})</span>
                         )}
                       </td>
-                      <td className="text-right">{formatMoney(line.unitPrice)}</td>
-                      <td className="text-right">{formatMoney(line.subtotal)}</td>
+                      <td className="text-right">{formatAmount(line.unitPrice)}</td>
+                      <td className="text-right">{formatAmount(line.subtotal)}</td>
                       <td>
                         <div className="flex flex-wrap items-center gap-1">
                           <span

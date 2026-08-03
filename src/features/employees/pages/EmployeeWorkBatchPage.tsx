@@ -10,7 +10,7 @@ import {
 } from "@/db/queries/employees";
 import { pushFlashMessage } from "@/lib/flash-message";
 import { todayIso } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 interface WorkTypeOption {
   id: number;
@@ -197,9 +197,9 @@ export function EmployeeWorkBatchPage() {
                 <thead>
                   <tr>
                     <th>Formato</th>
-                    <th className="text-right">Tarifa de pago</th>
+                    <th className="text-right">{moneyHeading("Tarifa de pago")}</th>
                     <th className="w-32">Cantidad</th>
-                    <th className="text-right">Subtotal</th>
+                    <th className="text-right">{moneyHeading("Subtotal")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -208,7 +208,7 @@ export function EmployeeWorkBatchPage() {
                     return (
                       <tr key={cost.formatId}>
                         <td>{cost.formatLabel}</td>
-                        <td className="text-right">{formatMoney(cost.unitCost)}</td>
+                        <td className="text-right">{formatAmount(cost.unitCost)}</td>
                         <td>
                           <input
                             type="number"
@@ -220,7 +220,7 @@ export function EmployeeWorkBatchPage() {
                             }
                           />
                         </td>
-                        <td className="text-right">{formatMoney(qty * cost.unitCost)}</td>
+                        <td className="text-right">{formatAmount(qty * cost.unitCost)}</td>
                       </tr>
                     );
                   })}
@@ -243,8 +243,8 @@ export function EmployeeWorkBatchPage() {
         </label>
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <p className="text-xs uppercase text-base-content/60">Total a pagar</p>
-            <p className="text-xl font-semibold">{formatMoney(total)}</p>
+            <p className="text-xs uppercase text-base-content/60">{moneyHeading("Total a pagar")}</p>
+            <p className="text-xl font-semibold">{formatAmount(total)}</p>
           </div>
           <button type="button" className="btn btn-primary" disabled={mutation.isPending} onClick={handleSave}>
             {mutation.isPending ? <span className="loading loading-spinner loading-sm" /> : "Guardar lote"}

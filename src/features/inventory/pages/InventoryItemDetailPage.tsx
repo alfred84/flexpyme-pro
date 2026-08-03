@@ -7,7 +7,7 @@ import {
   registerInventoryMovement,
 } from "@/db/queries/inventory";
 import { formatDate } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 /**
  * Ficha de ítem de inventario con historial de movimientos y registro de
@@ -131,9 +131,9 @@ export function InventoryItemDetailPage() {
               </div>
             </div>
             <div className="stat">
-              <div className="stat-title">Costo unitario</div>
+              <div className="stat-title">{moneyHeading("Costo unitario")}</div>
               <div className="stat-value text-2xl text-base">
-                {item.costPerUnit > 0 ? formatMoney(item.costPerUnit) : "Sin establecer"}
+                {item.costPerUnit > 0 ? formatAmount(item.costPerUnit) : "Sin establecer"}
               </div>
             </div>
           </div>

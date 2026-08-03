@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { fetchProductionBatches } from "@/db/queries/production";
 import { formatDate } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 export function ProductionListPage() {
   const batchesQuery = useQuery({
@@ -34,9 +34,9 @@ export function ProductionListPage() {
                 <th>Fecha</th>
                 <th>Tipo</th>
                 <th>Operario</th>
-                <th className="text-right">Costo total</th>
-                <th className="text-right">Pagado</th>
-                <th className="text-right">Pendiente</th>
+                <th className="text-right">{moneyHeading("Costo total")}</th>
+                <th className="text-right">{moneyHeading("Pagado")}</th>
+                <th className="text-right">{moneyHeading("Pendiente")}</th>
                 <th />
               </tr>
             </thead>
@@ -53,9 +53,9 @@ export function ProductionListPage() {
                     <td>{formatDate(row.date)}</td>
                     <td>{row.type}</td>
                     <td>{row.workerName ?? "—"}</td>
-                    <td className="text-right">{formatMoney(row.totalCost)}</td>
-                    <td className="text-right">{formatMoney(row.paid)}</td>
-                    <td className="text-right">{formatMoney(row.pending)}</td>
+                    <td className="text-right">{formatAmount(row.totalCost)}</td>
+                    <td className="text-right">{formatAmount(row.paid)}</td>
+                    <td className="text-right">{formatAmount(row.pending)}</td>
                     <td>
                       <Link
                         className="btn btn-xs btn-outline"

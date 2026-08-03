@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, Plus } from "lucide-react";
 import { fetchInventoryItems, fetchMaterialCategories } from "@/db/queries/inventory";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 /**
  * Formatea stock mínimo: 0 = sin umbral de alerta.
@@ -22,7 +22,7 @@ function formatMinStock(minStock: number): string {
  * @returns Texto para UI.
  */
 function formatCost(cost: number): string {
-  return cost > 0 ? formatMoney(cost) : "Sin establecer";
+  return cost > 0 ? formatAmount(cost) : "Sin establecer";
 }
 
 /**
@@ -107,7 +107,7 @@ export function InventoryCategoryPage() {
                 <th className="text-right">Stock</th>
                 <th>Unidad</th>
                 <th className="text-right">Stock mín.</th>
-                <th className="text-right">Costo unit.</th>
+                <th className="text-right">{moneyHeading("Costo unit.")}</th>
                 <th>Estado</th>
                 <th />
               </tr>

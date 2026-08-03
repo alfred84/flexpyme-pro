@@ -23,7 +23,7 @@ import { fetchIncomeByCategory, fetchReportsSummary } from "@/db/queries/reports
 import { fetchInvoices } from "@/db/queries/invoices";
 import { fetchBackupOverview } from "@/db/queries/settings";
 import { formatDate, formatDateTime, todayIso } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 import { useAppSettings } from "@/hooks/use-app-settings";
 
@@ -121,8 +121,8 @@ export function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label="Facturación del mes"
-          value={formatMoney(summary?.totalBilled ?? 0)}
+          label={moneyHeading("Facturación del mes")}
+          value={formatAmount(summary?.totalBilled ?? 0)}
           icon={Receipt}
           accent="bg-primary/15 text-primary"
         />
@@ -133,8 +133,8 @@ export function DashboardPage() {
           accent="bg-warning/15 text-warning"
         />
         <KpiCard
-          label="Cobros pendientes"
-          value={formatMoney(summary?.totalPending ?? 0)}
+          label={moneyHeading("Cobros pendientes")}
+          value={formatAmount(summary?.totalPending ?? 0)}
           icon={CircleDollarSign}
           accent="bg-error/15 text-error"
         />
@@ -185,7 +185,7 @@ export function DashboardPage() {
                     <th>Nº</th>
                     <th>Cliente</th>
                     <th>Fecha</th>
-                    <th className="text-right">Total</th>
+                    <th className="text-right">{moneyHeading("Total")}</th>
                     <th>Estado</th>
                   </tr>
                 </thead>
@@ -195,7 +195,7 @@ export function DashboardPage() {
                       <td className="font-mono text-xs">{inv.invoiceNumber}</td>
                       <td className="max-w-[12rem] truncate">{inv.clientName}</td>
                       <td className="text-xs">{formatDate(inv.date)}</td>
-                      <td className="text-right">{formatMoney(inv.total)}</td>
+                      <td className="text-right">{formatAmount(inv.total)}</td>
                       <td>
                         <span
                           className={`badge badge-sm ${inv.paymentStatus === "cobrado" ? "badge-success" : "badge-warning"}`}

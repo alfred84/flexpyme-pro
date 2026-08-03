@@ -1,4 +1,4 @@
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 /**
  * Fila de resumen de producción por tipo de trabajo.
@@ -67,7 +67,7 @@ export function OrderWorkTypeSummary(props: OrderWorkTypeSummaryProps) {
             <tr>
               <th>Tipo de trabajo</th>
               <th className="text-right">Cantidad</th>
-              <th className="text-right">Importe</th>
+              <th className="text-right">{moneyHeading("Importe")}</th>
             </tr>
           </thead>
           <tbody>
@@ -75,7 +75,7 @@ export function OrderWorkTypeSummary(props: OrderWorkTypeSummaryProps) {
               <tr key={row.workType}>
                 <td>{row.workType}</td>
                 <td className="text-right">{row.quantity}</td>
-                <td className="text-right font-medium">{formatMoney(row.amount)}</td>
+                <td className="text-right font-medium">{formatAmount(row.amount)}</td>
               </tr>
             ))}
           </tbody>

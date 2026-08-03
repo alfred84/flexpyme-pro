@@ -7,7 +7,7 @@ import { BusinessLogo } from "@/components/common/BusinessLogo";
 import { Building2 } from "lucide-react";
 import { pushFlashMessage } from "@/lib/flash-message";
 import { formatDate } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 function statusLabel(status: string): string {
   if (status === "paid") return "Pagado";
@@ -154,28 +154,28 @@ export function InvoicePrintPage() {
               </h2>
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between gap-4">
-                  <dt>Subtotal líneas</dt>
-                  <dd>{formatMoney(inv.subtotal)}</dd>
+                  <dt>{moneyHeading("Subtotal líneas")}</dt>
+                  <dd>{formatAmount(inv.subtotal)}</dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt>Deuda anterior</dt>
-                  <dd>{formatMoney(inv.previousDebt)}</dd>
+                  <dt>{moneyHeading("Deuda anterior")}</dt>
+                  <dd>{formatAmount(inv.previousDebt)}</dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt>Anticipado</dt>
-                  <dd>{formatMoney(inv.advancePayment)}</dd>
+                  <dt>{moneyHeading("Anticipado")}</dt>
+                  <dd>{formatAmount(inv.advancePayment)}</dd>
                 </div>
                 <div className="flex justify-between gap-4 font-semibold">
-                  <dt>Total</dt>
-                  <dd>{formatMoney(inv.total)}</dd>
+                  <dt>{moneyHeading("Total")}</dt>
+                  <dd>{formatAmount(inv.total)}</dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt>Pagado</dt>
-                  <dd>{formatMoney(inv.paid)}</dd>
+                  <dt>{moneyHeading("Pagado")}</dt>
+                  <dd>{formatAmount(inv.paid)}</dd>
                 </div>
                 <div className="flex justify-between gap-4 border-t border-base-300 pt-2 print:border-gray-300">
-                  <dt className="font-semibold">Pendiente</dt>
-                  <dd className="font-semibold">{formatMoney(inv.balance)}</dd>
+                  <dt className="font-semibold">{moneyHeading("Pendiente")}</dt>
+                  <dd className="font-semibold">{formatAmount(inv.balance)}</dd>
                 </div>
               </dl>
             </div>
@@ -190,8 +190,8 @@ export function InvoicePrintPage() {
                   <th className="text-left">Tipo de trabajo</th>
                   <th className="text-left">Acabado</th>
                   <th className="text-right">Cant.</th>
-                  <th className="text-right">P. unit.</th>
-                  <th className="text-right">Subtotal</th>
+                  <th className="text-right">{moneyHeading("P. unit.")}</th>
+                  <th className="text-right">{moneyHeading("Subtotal")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -202,8 +202,8 @@ export function InvoicePrintPage() {
                     <td>{line.service ?? "—"}</td>
                     <td>{line.finish ?? "—"}</td>
                     <td className="text-right">{line.quantity}</td>
-                    <td className="text-right">{formatMoney(line.unitPrice)}</td>
-                    <td className="text-right">{formatMoney(line.subtotal)}</td>
+                    <td className="text-right">{formatAmount(line.unitPrice)}</td>
+                    <td className="text-right">{formatAmount(line.subtotal)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { PaymentStatusBadge } from "@/components/invoices/InvoiceStatusBadges";
 import { fetchStockItems, fetchStockMetrics } from "@/db/queries/stock";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 type StockFilter = "todos" | "sin_cobrar" | "cobrados";
 
@@ -98,7 +98,7 @@ export function StockPage() {
               <th>Productos</th>
               <th>Listo desde</th>
               <th>Cobro</th>
-              <th>Total</th>
+              <th>{moneyHeading("Total")}</th>
               <th />
             </tr>
           </thead>
@@ -126,7 +126,7 @@ export function StockPage() {
                 <td>
                   <PaymentStatusBadge status={row.paymentStatus} />
                 </td>
-                <td className="tabular-nums">{formatMoney(row.total)}</td>
+                <td className="tabular-nums">{formatAmount(row.total)}</td>
                 <td>
                   <div className="flex gap-1">
                     <Link className="btn btn-xs btn-ghost" to="/stock/$invoiceId" params={{ invoiceId: String(row.id) }}>

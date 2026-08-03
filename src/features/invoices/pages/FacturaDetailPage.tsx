@@ -8,7 +8,7 @@ import {
   fetchInvoicePaymentHistory,
 } from "@/db/queries/invoices";
 import { formatDate } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import {
   invoiceFinancialBadgeClass,
   invoiceFinancialLabel,
@@ -106,20 +106,20 @@ export function FacturaDetailPage() {
               )}
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
-                  <p className="text-xs text-base-content/60">Subtotal</p>
-                  <p className="font-medium">{formatMoney(inv.subtotal)}</p>
+                  <p className="text-xs text-base-content/60">{moneyHeading("Subtotal")}</p>
+                  <p className="font-medium">{formatAmount(inv.subtotal)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-base-content/60">Total</p>
-                  <p className="font-medium">{formatMoney(inv.total)}</p>
+                  <p className="text-xs text-base-content/60">{moneyHeading("Total")}</p>
+                  <p className="font-medium">{formatAmount(inv.total)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-base-content/60">Pagado</p>
-                  <p className="font-medium">{formatMoney(inv.paid)}</p>
+                  <p className="text-xs text-base-content/60">{moneyHeading("Pagado")}</p>
+                  <p className="font-medium">{formatAmount(inv.paid)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-base-content/60">Saldo</p>
-                  <p className="font-semibold">{formatMoney(inv.balance)}</p>
+                  <p className="text-xs text-base-content/60">{moneyHeading("Saldo")}</p>
+                  <p className="font-semibold">{formatAmount(inv.balance)}</p>
                 </div>
               </div>
             </div>
@@ -134,8 +134,8 @@ export function FacturaDetailPage() {
                     <tr>
                       <th>Descripción</th>
                       <th>Cant.</th>
-                      <th>Precio</th>
-                      <th>Subtotal</th>
+                      <th>{moneyHeading("Precio")}</th>
+                      <th>{moneyHeading("Subtotal")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -147,8 +147,8 @@ export function FacturaDetailPage() {
                           {line.service ? ` · ${line.service}` : ""}
                         </td>
                         <td>{line.quantity}</td>
-                        <td>{formatMoney(line.unitPrice)}</td>
-                        <td>{formatMoney(line.subtotal)}</td>
+                        <td>{formatAmount(line.unitPrice)}</td>
+                        <td>{formatAmount(line.subtotal)}</td>
                       </tr>
                     ))}
                   </tbody>

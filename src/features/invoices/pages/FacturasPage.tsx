@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Eye, Printer } from "lucide-react";
 import { fetchInvoiceMetrics, fetchInvoicesFinancial } from "@/db/queries/invoices";
 import { formatDate } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 import {
   invoiceFinancialBadgeClass,
   invoiceFinancialLabel,
@@ -48,23 +48,23 @@ export function FacturasPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">Total</div>
-          <div className="stat-value text-xl">{formatMoney(m?.totalAmount ?? 0)}</div>
+          <div className="stat-title text-xs">{moneyHeading("Total")}</div>
+          <div className="stat-value text-xl">{formatAmount(m?.totalAmount ?? 0)}</div>
           <div className="stat-desc">{m?.totalCount ?? 0} facturas</div>
         </div>
         <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">Cobradas</div>
-          <div className="stat-value text-xl text-success">{formatMoney(m?.cobradasAmount ?? 0)}</div>
+          <div className="stat-title text-xs">{moneyHeading("Cobradas")}</div>
+          <div className="stat-value text-xl text-success">{formatAmount(m?.cobradasAmount ?? 0)}</div>
           <div className="stat-desc">{m?.cobradasCount ?? 0} facturas</div>
         </div>
         <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">Parciales</div>
-          <div className="stat-value text-xl text-info">{formatMoney(m?.parcialesAmount ?? 0)}</div>
+          <div className="stat-title text-xs">{moneyHeading("Parciales")}</div>
+          <div className="stat-value text-xl text-info">{formatAmount(m?.parcialesAmount ?? 0)}</div>
           <div className="stat-desc">{m?.parcialesCount ?? 0} facturas</div>
         </div>
         <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">Pendientes</div>
-          <div className="stat-value text-xl text-warning">{formatMoney(m?.pendientesAmount ?? 0)}</div>
+          <div className="stat-title text-xs">{moneyHeading("Pendientes")}</div>
+          <div className="stat-value text-xl text-warning">{formatAmount(m?.pendientesAmount ?? 0)}</div>
           <div className="stat-desc">{m?.pendientesCount ?? 0} facturas</div>
         </div>
       </div>
@@ -96,7 +96,7 @@ export function FacturasPage() {
               <th>Nº factura</th>
               <th>Cliente</th>
               <th>Fecha</th>
-              <th>Total</th>
+              <th>{moneyHeading("Total")}</th>
               <th>Estado</th>
               <th>Acciones</th>
             </tr>
@@ -121,7 +121,7 @@ export function FacturasPage() {
                   <td className="font-mono text-xs">{row.invoiceNumber}</td>
                   <td>{row.clientName}</td>
                   <td>{formatDate(row.date)}</td>
-                  <td className="tabular-nums">{formatMoney(row.total)}</td>
+                  <td className="tabular-nums">{formatAmount(row.total)}</td>
                   <td>
                     <span className={`badge badge-sm ${invoiceFinancialBadgeClass(fin)}`}>
                       {invoiceFinancialLabel(fin)}

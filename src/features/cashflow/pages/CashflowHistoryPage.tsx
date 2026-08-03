@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { fetchCashTransactions } from "@/db/queries/cashflow";
 import { CashTransactionReference } from "@/components/cashflow/CashTransactionReference";
 import { formatDateTime } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 /**
  * Historial completo de caja con filtros por fecha y tipo, más totales del
@@ -77,16 +77,16 @@ export function CashflowHistoryPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="stat rounded-lg bg-base-200">
-          <div className="stat-title">Ingresos</div>
-          <div className="stat-value text-lg text-success">{formatMoney(totals.income)}</div>
+          <div className="stat-title">{moneyHeading("Ingresos")}</div>
+          <div className="stat-value text-lg text-success">{formatAmount(totals.income)}</div>
         </div>
         <div className="stat rounded-lg bg-base-200">
-          <div className="stat-title">Egresos</div>
-          <div className="stat-value text-lg text-error">{formatMoney(totals.expense)}</div>
+          <div className="stat-title">{moneyHeading("Egresos")}</div>
+          <div className="stat-value text-lg text-error">{formatAmount(totals.expense)}</div>
         </div>
         <div className="stat rounded-lg bg-base-200">
-          <div className="stat-title">Neto</div>
-          <div className="stat-value text-lg">{formatMoney(totals.net)}</div>
+          <div className="stat-title">{moneyHeading("Neto")}</div>
+          <div className="stat-value text-lg">{formatAmount(totals.net)}</div>
         </div>
       </div>
 
@@ -98,7 +98,7 @@ export function CashflowHistoryPage() {
               <th>Concepto</th>
               <th>Referencia</th>
               <th>Método</th>
-              <th className="text-right">Importe CUP</th>
+              <th className="text-right">{moneyHeading("Importe")}</th>
             </tr>
           </thead>
           <tbody>
@@ -117,7 +117,7 @@ export function CashflowHistoryPage() {
                   className={`text-right font-medium ${tx.transactionType === "ingreso" ? "text-success" : "text-error"}`}
                 >
                   {tx.transactionType === "ingreso" ? "+" : "−"}
-                  {formatMoney(tx.amountCup)}
+                  {formatAmount(tx.amountCup)}
                 </td>
               </tr>
             ))}

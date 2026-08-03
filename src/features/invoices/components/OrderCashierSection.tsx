@@ -3,7 +3,7 @@ import { AlertTriangle, Wallet } from "lucide-react";
 import type { OrderPaymentState } from "@/features/invoices/components/OrderPaymentSection";
 import { DenominationGrid } from "@/components/cashflow/DenominationGrid";
 import { buildCountsPayload, emptyDenominationCounts, sumDenominationCounts } from "@/lib/cash-counts";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import type { OverpaymentDisposition } from "@/types/invoice";
 
 const EPS = 0.5;
@@ -257,16 +257,16 @@ export function OrderCashierSection(props: OrderCashierSectionProps) {
 
         <dl className="grid grid-cols-3 gap-2 text-xs">
           <div>
-            <dt className="text-base-content/60">Pendiente</dt>
-            <dd className="font-semibold">{formatMoney(effectiveDue)}</dd>
+            <dt className="text-base-content/60">{moneyHeading("Pendiente")}</dt>
+            <dd className="font-semibold">{formatAmount(effectiveDue)}</dd>
           </div>
           <div>
-            <dt className="text-base-content/60">Recibido</dt>
-            <dd className="font-semibold">{formatMoney(received)}</dd>
+            <dt className="text-base-content/60">{moneyHeading("Recibido")}</dt>
+            <dd className="font-semibold">{formatAmount(received)}</dd>
           </div>
           <div>
-            <dt className="text-base-content/60">Aplica</dt>
-            <dd>{formatMoney(applied)}</dd>
+            <dt className="text-base-content/60">{moneyHeading("Aplica")}</dt>
+            <dd>{formatAmount(applied)}</dd>
           </div>
         </dl>
 

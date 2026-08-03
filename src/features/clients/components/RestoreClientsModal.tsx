@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import { fetchDeletedClients, restoreClient } from "@/db/queries/clients";
 import { formatDate } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 interface RestoreClientsModalProps {
   /** Cierra el modal. */
@@ -147,7 +147,7 @@ export function RestoreClientsModal(props: RestoreClientsModalProps) {
                   <th>Código</th>
                   <th>Cliente</th>
                   <th>Eliminado</th>
-                  <th className="text-right">Balance</th>
+                  <th className="text-right">{moneyHeading("Balance")}</th>
                   <th className="w-28 text-right">Acción</th>
                 </tr>
               </thead>
@@ -167,7 +167,7 @@ export function RestoreClientsModal(props: RestoreClientsModalProps) {
                         {formatDate(cliente.deletedAt)}
                       </td>
                       <td className="text-right tabular-nums text-sm">
-                        {formatMoney(cliente.balance)}
+                        {formatAmount(cliente.balance)}
                       </td>
                       <td className="text-right">
                         <button

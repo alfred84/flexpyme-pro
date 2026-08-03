@@ -14,7 +14,7 @@ import {
   type DraftServiceAssignment,
 } from "@/features/invoices/lib/order-draft";
 import { useAppSettings } from "@/hooks/use-app-settings";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 import type {
   CategoryFinishDto,
   CategoryFormatDto,
@@ -849,8 +849,8 @@ export function OrderLineModal(props: OrderLineModalProps) {
           </div>
         </div>
         <div className="mt-3 flex items-center justify-between text-sm">
-          <span className="text-base-content/60">Subtotal de la línea</span>
-          <span className="font-semibold">{formatMoney(draftLineSubtotal(draft))}</span>
+          <span className="text-base-content/60">{moneyHeading("Subtotal de la línea")}</span>
+          <span className="font-semibold">{formatAmount(draftLineSubtotal(draft))}</span>
         </div>
         {error && <p className="mt-2 text-sm text-error">{error}</p>}
         <div className="modal-action">

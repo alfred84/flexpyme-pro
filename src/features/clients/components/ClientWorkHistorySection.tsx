@@ -4,7 +4,7 @@ import { History } from "lucide-react";
 import { ProductionStatusBadge, PaymentStatusBadge } from "@/components/invoices/InvoiceStatusBadges";
 import { fetchClientWorkHistory } from "@/db/queries/clients";
 import { formatDate } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 interface ClientWorkHistorySectionProps {
   /** Id del cliente cuyo historial se muestra. */
@@ -40,8 +40,8 @@ export function ClientWorkHistorySection(props: ClientWorkHistorySectionProps) {
             <h2 className="card-title text-base">Historial de trabajos</h2>
           </div>
           <div className="rounded-lg border border-base-300 bg-base-200 px-4 py-2 text-sm">
-            <span className="text-base-content/60">Total histórico: </span>
-            <span className="font-semibold tabular-nums">{formatMoney(totalHistorical)}</span>
+            <span className="text-base-content/60">{moneyHeading("Total histórico")}: </span>
+            <span className="font-semibold tabular-nums">{formatAmount(totalHistorical)}</span>
           </div>
         </div>
 
@@ -59,7 +59,7 @@ export function ClientWorkHistorySection(props: ClientWorkHistorySectionProps) {
                 <tr>
                   <th>Nº pedido</th>
                   <th>Fecha</th>
-                  <th>Total</th>
+                  <th>{moneyHeading("Total")}</th>
                   <th>Producción</th>
                   <th>Cobro</th>
                   <th className="w-0" />
@@ -77,7 +77,7 @@ export function ClientWorkHistorySection(props: ClientWorkHistorySectionProps) {
                     <tr key={row.id}>
                       <td className="font-mono text-xs">{row.invoiceNumber}</td>
                       <td>{formatDate(row.date)}</td>
-                      <td className="tabular-nums">{formatMoney(row.total)}</td>
+                      <td className="tabular-nums">{formatAmount(row.total)}</td>
                       <td>
                         <ProductionStatusBadge status={row.productionStatus} />
                       </td>

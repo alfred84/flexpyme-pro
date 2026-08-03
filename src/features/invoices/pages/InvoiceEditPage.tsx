@@ -26,7 +26,7 @@ import {
   isDraftLineValid,
   type DraftLine,
 } from "@/features/invoices/lib/order-draft";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 
 /**
@@ -287,20 +287,20 @@ export function InvoiceEditPage() {
 
       <div className="rounded-lg border border-base-300 bg-base-100 p-4 text-sm">
         <div className="flex justify-between">
-          <span>Subtotal líneas</span>
-          <span>{formatMoney(linesSubtotal)}</span>
+          <span>{moneyHeading("Subtotal líneas")}</span>
+          <span>{formatAmount(linesSubtotal)}</span>
         </div>
         <div className="flex justify-between">
-          <span>Anticipo</span>
-          <span>{formatMoney(advanceNum)}</span>
+          <span>{moneyHeading("Anticipo")}</span>
+          <span>{formatAmount(advanceNum)}</span>
         </div>
         <div className="flex justify-between">
-          <span>Ya pagado</span>
-          <span>{formatMoney(paidNum)}</span>
+          <span>{moneyHeading("Ya pagado")}</span>
+          <span>{formatAmount(paidNum)}</span>
         </div>
         <div className="mt-1 flex justify-between font-semibold">
-          <span>Saldo estimado</span>
-          <span>{formatMoney(pendingBalance)}</span>
+          <span>{moneyHeading("Saldo estimado")}</span>
+          <span>{formatAmount(pendingBalance)}</span>
         </div>
       </div>
 

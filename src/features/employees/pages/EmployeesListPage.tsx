@@ -17,7 +17,7 @@ import {
 import { DestajoDefineModal } from "@/features/employees/components/DestajoDefineModal";
 import { EmployeePayCashierModal } from "@/features/employees/components/EmployeePayCashierModal";
 import { formatDate, todayIso } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 import type { EmployeePayMode } from "@/types/employee";
 
@@ -359,9 +359,9 @@ export function EmployeesListPage() {
                 <thead>
                   <tr>
                     <th>Empleado</th>
-                    <th className="text-right">Total</th>
-                    <th className="text-right">Pagado</th>
-                    <th className="text-right">Pendiente</th>
+                    <th className="text-right">{moneyHeading("Total")}</th>
+                    <th className="text-right">{moneyHeading("Pagado")}</th>
+                    <th className="text-right">{moneyHeading("Pendiente")}</th>
                     <th className="text-right">Acción</th>
                   </tr>
                 </thead>
@@ -372,9 +372,9 @@ export function EmployeesListPage() {
                     return (
                       <tr key={`${r.employeeId}-${r.date}`}>
                         <td>{r.employeeName}</td>
-                        <td className="text-right">{formatMoney(r.totalCost)}</td>
-                        <td className="text-right text-success">{formatMoney(r.paid)}</td>
-                        <td className="text-right text-warning">{formatMoney(r.pending)}</td>
+                        <td className="text-right">{formatAmount(r.totalCost)}</td>
+                        <td className="text-right text-success">{formatAmount(r.paid)}</td>
+                        <td className="text-right text-warning">{formatAmount(r.pending)}</td>
                         <td className="text-right">
                           <div className="flex flex-wrap justify-end gap-1">
                             {canPay && (
@@ -442,9 +442,9 @@ export function EmployeesListPage() {
                 <tfoot>
                   <tr className="font-semibold">
                     <td>Total día</td>
-                    <td className="text-right">{formatMoney(payrollTotals.total)}</td>
-                    <td className="text-right text-success">{formatMoney(payrollTotals.paid)}</td>
-                    <td className="text-right text-warning">{formatMoney(payrollTotals.pending)}</td>
+                    <td className="text-right">{formatAmount(payrollTotals.total)}</td>
+                    <td className="text-right text-success">{formatAmount(payrollTotals.paid)}</td>
+                    <td className="text-right text-warning">{formatAmount(payrollTotals.pending)}</td>
                     <td />
                   </tr>
                 </tfoot>

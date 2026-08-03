@@ -20,7 +20,7 @@ import {
 } from "@/features/clients/lib/client-balance";
 import { fetchClients, fetchDeletedClients } from "@/db/queries/clients";
 import type { ClientDto } from "@/types/client";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
 
 /**
@@ -40,7 +40,7 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
       },
       {
         id: "balance",
-        header: "Balance",
+        header: moneyHeading("Balance"),
         accessorFn: (row) => row.balance - (row.creditBalance ?? 0),
         cell: ({ row }) => {
           const display = formatClientBalanceDisplay(
@@ -56,8 +56,8 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
       },
       {
         accessorKey: "totalHistorical",
-        header: "Total histórico",
-        cell: (info) => <span className="tabular-nums">{formatMoney(info.getValue<number>())}</span>,
+        header: moneyHeading("Total histórico"),
+        cell: (info) => <span className="tabular-nums">{formatAmount(info.getValue<number>())}</span>,
       },
       {
         id: "estado",

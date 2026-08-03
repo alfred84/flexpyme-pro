@@ -16,7 +16,7 @@ import {
 import type { OrderPaymentState } from "@/features/invoices/components/OrderPaymentSection";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { formatDate } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 import type { PaymentCurrency, PaymentMethod } from "@/types/invoice";
 
@@ -204,22 +204,22 @@ export function InvoiceCashierPage() {
                     <dd>{inv.clientName}</dd>
                   </div>
                   <div className="flex justify-between font-semibold">
-                    <dt>Pendiente a cobrar</dt>
-                    <dd className="text-primary">{formatMoney(balance)}</dd>
+                    <dt>{moneyHeading("Pendiente a cobrar")}</dt>
+                    <dd className="text-primary">{formatAmount(balance)}</dd>
                   </div>
                   {clientCredit > 1e-6 && (
                     <div className="flex justify-between text-success">
-                      <dt>Saldo a favor</dt>
-                      <dd>{formatMoney(clientCredit)}</dd>
+                      <dt>{moneyHeading("Saldo a favor")}</dt>
+                      <dd>{formatAmount(clientCredit)}</dd>
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <dt>Por cobrar ahora</dt>
-                    <dd>{formatMoney(effectiveDue)}</dd>
+                    <dt>{moneyHeading("Por cobrar ahora")}</dt>
+                    <dd>{formatAmount(effectiveDue)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt>Recibido</dt>
-                    <dd>{formatMoney(received)}</dd>
+                    <dt>{moneyHeading("Recibido")}</dt>
+                    <dd>{formatAmount(received)}</dd>
                   </div>
                 </dl>
                 {balance <= 1e-6 && (
@@ -270,18 +270,18 @@ export function InvoiceCashierPage() {
                     <thead>
                       <tr>
                         <th>Fecha</th>
-                        <th className="text-right">Pendiente</th>
-                        <th className="text-right">Recibido</th>
-                        <th className="text-right">Vuelto</th>
+                        <th className="text-right">{moneyHeading("Pendiente")}</th>
+                        <th className="text-right">{moneyHeading("Recibido")}</th>
+                        <th className="text-right">{moneyHeading("Vuelto")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sessionsQuery.data.map((row) => (
                         <tr key={row.id}>
                           <td className="whitespace-nowrap text-xs">{formatDate(row.date)}</td>
-                          <td className="text-right">{formatMoney(row.totalAmount)}</td>
-                          <td className="text-right">{formatMoney(row.amountReceived)}</td>
-                          <td className="text-right">{formatMoney(row.changeGiven)}</td>
+                          <td className="text-right">{formatAmount(row.totalAmount)}</td>
+                          <td className="text-right">{formatAmount(row.amountReceived)}</td>
+                          <td className="text-right">{formatAmount(row.changeGiven)}</td>
                         </tr>
                       ))}
                     </tbody>

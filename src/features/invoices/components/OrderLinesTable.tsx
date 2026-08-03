@@ -1,6 +1,6 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { draftLineSubtotal, type DraftLine } from "@/features/invoices/lib/order-draft";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 interface OrderLinesTableProps {
   lines: DraftLine[];
@@ -37,8 +37,8 @@ export function OrderLinesTable(props: OrderLinesTableProps) {
             <th>Tipos de trabajo</th>
             <th>Acabado</th>
             <th className="text-right">Cant.</th>
-            <th className="text-right">P.U. total</th>
-            <th className="text-right">Subtotal</th>
+            <th className="text-right">{moneyHeading("P.U. total")}</th>
+            <th className="text-right">{moneyHeading("Subtotal")}</th>
             <th />
           </tr>
         </thead>
@@ -67,11 +67,11 @@ export function OrderLinesTable(props: OrderLinesTableProps) {
               <td className="max-w-[6rem] truncate">{line.finish || "—"}</td>
               <td className="text-right">{line.quantity}</td>
               <td className="text-right font-mono text-xs">
-                {formatMoney(
+                {formatAmount(
                   line.services.reduce((sum, s) => sum + (Number(s.unitPrice.replace(",", ".")) || 0), 0),
                 )}
               </td>
-              <td className="text-right font-mono text-xs">{formatMoney(draftLineSubtotal(line))}</td>
+              <td className="text-right font-mono text-xs">{formatAmount(draftLineSubtotal(line))}</td>
               <td>
                 <div className="flex justify-end gap-0.5">
                   <button

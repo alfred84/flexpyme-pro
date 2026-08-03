@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, formatMoney } from "@/lib/format-money";
 import type { PaymentCurrency, PaymentMethod } from "@/types/invoice";
 
 export interface OrderPaymentState {
@@ -95,11 +95,11 @@ export function OrderPaymentSection(props: OrderPaymentSectionProps) {
             </label>
             <div className="flex justify-between">
               <span>Total USD</span>
-              <span>{formatMoney(amountUsd, "USD")}</span>
+              <span>{formatAmount(amountUsd)}</span>
             </div>
             <div className="flex justify-between">
               <span>Total CUP</span>
-              <span>{formatMoney(totalCup)}</span>
+              <span>{formatAmount(totalCup)}</span>
             </div>
           </div>
         )}

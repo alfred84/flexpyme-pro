@@ -11,7 +11,7 @@ import {
 import { serviceMatchesWorkType } from "@/features/invoices/lib/work-type-match";
 import { pushFlashMessage } from "@/lib/flash-message";
 import { formatDate, todayIso } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 import type { InvoiceItemDto } from "@/types/invoice";
 
 interface WorkTypeOption {
@@ -183,7 +183,7 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
                 <th>Fecha</th>
                 <th>Empleado</th>
                 <th>Tipo</th>
-                <th className="text-right">Total</th>
+                <th className="text-right">{moneyHeading("Total")}</th>
                 <th>Estado</th>
               </tr>
             </thead>
@@ -193,7 +193,7 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
                   <td>{formatDate(batch.date)}</td>
                   <td>{batch.employeeName}</td>
                   <td>{batch.workType}</td>
-                  <td className="text-right">{formatMoney(batch.totalCost)}</td>
+                  <td className="text-right">{formatAmount(batch.totalCost)}</td>
                   <td>
                     <span
                       className={`badge badge-sm ${batch.status === "pagado" ? "badge-success" : "badge-warning"}`}
@@ -274,9 +274,9 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
                 <th>Línea</th>
                 <th>Tipo de trabajo</th>
                 <th className="text-right">Pedido</th>
-                <th className="text-right">Tarifa</th>
+                <th className="text-right">{moneyHeading("Tarifa")}</th>
                 <th className="w-28">Cant. trabajo</th>
-                <th className="text-right">Subtotal</th>
+                <th className="text-right">{moneyHeading("Subtotal")}</th>
               </tr>
             </thead>
             <tbody>
@@ -295,7 +295,7 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
                     <td>{line.service ?? "—"}</td>
                     <td className="text-right">{line.quantity}</td>
                     <td className="text-right">
-                      {unitCost != null ? formatMoney(unitCost) : "—"}
+                      {unitCost != null ? formatAmount(unitCost) : "—"}
                     </td>
                     <td>
                       <input
@@ -310,7 +310,7 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
                       />
                     </td>
                     <td className="text-right">
-                      {unitCost != null ? formatMoney(qty * unitCost) : "—"}
+                      {unitCost != null ? formatAmount(qty * unitCost) : "—"}
                     </td>
                   </tr>
                 );
@@ -332,8 +332,8 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
         </label>
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <p className="text-xs uppercase text-base-content/60">Total a pagar</p>
-            <p className="text-xl font-semibold">{formatMoney(total)}</p>
+            <p className="text-xs uppercase text-base-content/60">{moneyHeading("Total a pagar")}</p>
+            <p className="text-xl font-semibold">{formatAmount(total)}</p>
           </div>
           <button
             type="button"

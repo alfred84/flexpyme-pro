@@ -1,27 +1,47 @@
 import type { SaleCurrency } from "@/lib/currency";
 
 /**
- * Formato de importes con separadores en español, prefijo `$` y etiqueta de moneda.
+ * Formato de importes con separadores en español y prefijo `$`.
  */
 const amountFormatter = new Intl.NumberFormat("es", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
-/** Moneda mostrada junto al importe (libro contable o precio de venta). */
+/** Moneda del importe (libro contable o precio de venta). */
 export type MoneyCurrency = SaleCurrency;
 
 /**
- * Formatea un importe monetario indicando siempre la moneda.
+ * Formatea solo el importe (`$ 1.234,56`), sin código de moneda.
+ * Usar cuando la moneda ya está en la etiqueta, columna o encabezado.
  *
- * Por defecto usa CUP (totales de pedido, caja neta, salarios y tarifas).
- * Pasa `"USD"` cuando el valor está expresado en dólares.
+ * @param value - Importe numérico.
+ * @returns Texto listo para UI, p. ej. `$ 1.234,56`.
+ */
+export function formatAmount(value: number): string {
+  const amount = Number.isFinite(value) ? value : 0;
+  return `$ ${amountFormatter.format(amount)}`;
+}
+
+/**
+ * Añade la moneda al texto de una etiqueta o encabezado.
+ *
+ * @param label - Texto base, p. ej. `Facturación del mes`.
+ * @param currency - Moneda (`CUP` | `USD`).
+ * @returns Etiqueta con moneda, p. ej. `Facturación del mes (CUP)`.
+ */
+export function moneyHeading(label: string, currency: MoneyCurrency = "CUP"): string {
+  return `${label} (${currency})`;
+}
+
+/**
+ * Formatea un importe con código de moneda para contextos sin encabezado
+ * (mensajes, badges, tooltips, líneas mixtas CUP/USD).
  *
  * @param value - Importe numérico.
  * @param currency - Moneda del importe (`CUP` | `USD`).
- * @returns Texto listo para UI, p. ej. `$ 1.234,56 CUP`.
+ * @returns Texto con moneda, p. ej. `$ 1.234,56 CUP`.
  */
 export function formatMoney(value: number, currency: MoneyCurrency = "CUP"): string {
-  const amount = Number.isFinite(value) ? value : 0;
-  return `$ ${amountFormatter.format(amount)} ${currency}`;
+  return `${formatAmount(value)} ${currency}`;
 }

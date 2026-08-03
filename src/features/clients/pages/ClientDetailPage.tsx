@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import { ClientWorkHistorySection } from "@/features/clients/components/ClientWorkHistorySection";
 import { fetchClientById, softDeleteClient } from "@/db/queries/clients";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { popFlashMessage, pushFlashMessage, type FlashMessage } from "@/lib/flash-message";
 
 /**
@@ -92,16 +92,16 @@ export function ClientDetailPage() {
                 <dd className="font-mono">{clientQuery.data.code}</dd>
               </div>
               <div>
-                <dt className="text-xs uppercase text-base-content/60">Deuda abierta</dt>
-                <dd>{formatMoney(clientQuery.data.balance)}</dd>
+                <dt className="text-xs uppercase text-base-content/60">{moneyHeading("Deuda abierta")}</dt>
+                <dd>{formatAmount(clientQuery.data.balance)}</dd>
               </div>
               <div>
-                <dt className="text-xs uppercase text-base-content/60">Saldo a favor</dt>
-                <dd className="text-success">{formatMoney(clientQuery.data.creditBalance ?? 0)}</dd>
+                <dt className="text-xs uppercase text-base-content/60">{moneyHeading("Saldo a favor")}</dt>
+                <dd className="text-success">{formatAmount(clientQuery.data.creditBalance ?? 0)}</dd>
               </div>
               <div>
-                <dt className="text-xs uppercase text-base-content/60">Total histórico</dt>
-                <dd className="font-medium tabular-nums">{formatMoney(clientQuery.data.totalHistorical)}</dd>
+                <dt className="text-xs uppercase text-base-content/60">{moneyHeading("Total histórico")}</dt>
+                <dd className="font-medium tabular-nums">{formatAmount(clientQuery.data.totalHistorical)}</dd>
               </div>
               <div>
                 <dt className="text-xs uppercase text-base-content/60">Teléfono</dt>

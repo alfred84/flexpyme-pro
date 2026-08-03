@@ -1,4 +1,4 @@
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount } from "@/lib/format-money";
 
 /** Umbral para tratar importes casi cero como «Al Día». */
 const BALANCE_EPS = 1e-6;
@@ -79,20 +79,20 @@ export function formatClientBalanceDisplay(
   const net = clientNetPosition(balance, creditBalance);
   if (status === "al_dia") {
     return {
-      text: formatMoney(0),
+      text: formatAmount(0),
       className: "tabular-nums text-base-content/70",
       status,
     };
   }
   if (status === "deuda") {
     return {
-      text: `− ${formatMoney(Math.abs(net))}`,
+      text: `− ${formatAmount(Math.abs(net))}`,
       className: "tabular-nums font-medium text-error",
       status,
     };
   }
   return {
-    text: `+ ${formatMoney(Math.abs(net))}`,
+    text: `+ ${formatAmount(Math.abs(net))}`,
     className: "tabular-nums font-medium text-success",
     status,
   };

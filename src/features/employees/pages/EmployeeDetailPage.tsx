@@ -8,7 +8,7 @@ import {
 } from "@/db/queries/employees";
 import { EmployeePayCashierModal } from "@/features/employees/components/EmployeePayCashierModal";
 import { formatDate } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 import { WORK_TYPE_LABELS, type WorkType } from "@/types/employee";
 
@@ -126,8 +126,8 @@ export function EmployeeDetailPage() {
                 <tr>
                   <th>Fecha</th>
                   <th>Tipo</th>
-                  <th className="text-right">Total</th>
-                  <th className="text-right">Pagado</th>
+                  <th className="text-right">{moneyHeading("Total")}</th>
+                  <th className="text-right">{moneyHeading("Pagado")}</th>
                   <th>Estado</th>
                   <th></th>
                 </tr>
@@ -137,8 +137,8 @@ export function EmployeeDetailPage() {
                   <tr key={b.id}>
                     <td className="text-xs">{formatDate(b.date)}</td>
                     <td>{workTypeLabel(b.workType)}</td>
-                    <td className="text-right">{formatMoney(b.totalCost)}</td>
-                    <td className="text-right">{formatMoney(b.paid)}</td>
+                    <td className="text-right">{formatAmount(b.totalCost)}</td>
+                    <td className="text-right">{formatAmount(b.paid)}</td>
                     <td>
                       <span
                         className={`badge badge-sm ${b.status === "pagado" ? "badge-success" : "badge-warning"}`}

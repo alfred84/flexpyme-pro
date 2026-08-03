@@ -4,7 +4,7 @@ import { useState } from "react";
 import { fetchClients } from "@/db/queries/clients";
 import { fetchFormats } from "@/db/queries/prices";
 import { createProductionBatch } from "@/db/queries/production";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { todayIso } from "@/lib/format-date";
 import { pushFlashMessage } from "@/lib/flash-message";
 import type { CreateProductionItemPayload } from "@/types/production";
@@ -267,8 +267,8 @@ export function ProductionNewPage() {
           <div className="card-body space-y-2 text-sm">
             <h2 className="card-title text-base">Resumen</h2>
             <div className="flex justify-between font-semibold">
-              <span>Costo total</span>
-              <span>{formatMoney(totalCost)}</span>
+              <span>{moneyHeading("Costo total")}</span>
+              <span>{formatAmount(totalCost)}</span>
             </div>
             <button type="button" className="btn btn-primary mt-2" disabled={mutation.isPending} onClick={save}>
               {mutation.isPending ? <span className="loading loading-spinner loading-sm" /> : "Guardar lote"}

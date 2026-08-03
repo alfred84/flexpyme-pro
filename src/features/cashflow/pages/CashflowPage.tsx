@@ -18,7 +18,7 @@ import {
 } from "@/db/queries/cashflow";
 import { CashTransactionReference } from "@/components/cashflow/CashTransactionReference";
 import { formatDateTime } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 
 /**
  * Dashboard de flujo de caja: balance CUP/USD, serie de 30 días y últimas
@@ -56,12 +56,12 @@ export function CashflowPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="card border border-primary/20 bg-base-100 shadow-sm">
           <div className="card-body p-4">
-            <p className="text-xs uppercase text-base-content/60">Flujo neto (hoy)</p>
+            <p className="text-xs uppercase text-base-content/60">{moneyHeading("Flujo neto (hoy)")}</p>
             <p
               className={`text-2xl font-semibold ${(net?.netTodayCup ?? 0) >= 0 ? "text-success" : "text-error"}`}
             >
               {(net?.netTodayCup ?? 0) >= 0 ? "+" : "−"}
-              {formatMoney(Math.abs(net?.netTodayCup ?? 0))}
+              {formatAmount(Math.abs(net?.netTodayCup ?? 0))}
             </p>
             {Math.abs(net?.netTodayUsd ?? 0) > 0.001 && (
               <p className="text-xs text-base-content/60">
@@ -73,12 +73,12 @@ export function CashflowPage() {
         </div>
         <div className="card border border-secondary/20 bg-base-100 shadow-sm">
           <div className="card-body p-4">
-            <p className="text-xs uppercase text-base-content/60">Flujo neto (últimos 30 días)</p>
+            <p className="text-xs uppercase text-base-content/60">{moneyHeading("Flujo neto (últimos 30 días)")}</p>
             <p
               className={`text-2xl font-semibold ${(net?.net30DaysCup ?? 0) >= 0 ? "text-success" : "text-error"}`}
             >
               {(net?.net30DaysCup ?? 0) >= 0 ? "+" : "−"}
-              {formatMoney(Math.abs(net?.net30DaysCup ?? 0))}
+              {formatAmount(Math.abs(net?.net30DaysCup ?? 0))}
             </p>
             {Math.abs(net?.net30DaysUsd ?? 0) > 0.001 && (
               <p className="text-xs text-base-content/60">
@@ -93,22 +93,22 @@ export function CashflowPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="card bg-base-200">
           <div className="card-body p-4">
-            <p className="text-xs uppercase text-base-content/60">Balance CUP</p>
-            <p className="text-2xl font-semibold">{formatMoney(balance?.balanceCup ?? 0)}</p>
+            <p className="text-xs uppercase text-base-content/60">{moneyHeading("Balance")}</p>
+            <p className="text-2xl font-semibold">{formatAmount(balance?.balanceCup ?? 0)}</p>
           </div>
         </div>
         <div className="card bg-base-200">
           <div className="card-body p-4">
-            <p className="text-xs uppercase text-base-content/60">Balance USD</p>
-            <p className="text-2xl font-semibold">{formatMoney(balance?.balanceUsd ?? 0, "USD")}</p>
+            <p className="text-xs uppercase text-base-content/60">{moneyHeading("Balance", "USD")}</p>
+            <p className="text-2xl font-semibold">{formatAmount(balance?.balanceUsd ?? 0)}</p>
           </div>
         </div>
         <div className="card bg-base-200">
           <div className="card-body flex-row items-center gap-3 p-4">
             <ArrowUpCircle className="h-8 w-8 text-success" />
             <div>
-              <p className="text-xs uppercase text-base-content/60">Ingresos</p>
-              <p className="text-lg font-semibold">{formatMoney(balance?.totalIncomeCup ?? 0)}</p>
+              <p className="text-xs uppercase text-base-content/60">{moneyHeading("Ingresos")}</p>
+              <p className="text-lg font-semibold">{formatAmount(balance?.totalIncomeCup ?? 0)}</p>
             </div>
           </div>
         </div>
@@ -116,8 +116,8 @@ export function CashflowPage() {
           <div className="card-body flex-row items-center gap-3 p-4">
             <ArrowDownCircle className="h-8 w-8 text-error" />
             <div>
-              <p className="text-xs uppercase text-base-content/60">Egresos</p>
-              <p className="text-lg font-semibold">{formatMoney(balance?.totalExpenseCup ?? 0)}</p>
+              <p className="text-xs uppercase text-base-content/60">{moneyHeading("Egresos")}</p>
+              <p className="text-lg font-semibold">{formatAmount(balance?.totalExpenseCup ?? 0)}</p>
             </div>
           </div>
         </div>
@@ -125,7 +125,7 @@ export function CashflowPage() {
 
       <div className="card bg-base-200">
         <div className="card-body">
-          <h2 className="card-title text-base">Flujo neto (últimos 30 días)</h2>
+          <h2 className="card-title text-base">{moneyHeading("Flujo neto (últimos 30 días)")}</h2>
           {seriesQuery.isLoading ? (
             <div className="h-64 animate-pulse rounded-lg bg-base-300" />
           ) : series.length === 0 ? (
@@ -157,7 +157,7 @@ export function CashflowPage() {
                   <th>Concepto</th>
                   <th>Referencia</th>
                   <th>Método</th>
-                  <th className="text-right">Importe CUP</th>
+                  <th className="text-right">{moneyHeading("Importe")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -176,7 +176,7 @@ export function CashflowPage() {
                       className={`text-right font-medium ${tx.transactionType === "ingreso" ? "text-success" : "text-error"}`}
                     >
                       {tx.transactionType === "ingreso" ? "+" : "−"}
-                      {formatMoney(tx.amountCup)}
+                      {formatAmount(tx.amountCup)}
                     </td>
                   </tr>
                 ))}

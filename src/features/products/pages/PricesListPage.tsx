@@ -25,7 +25,7 @@ import {
 } from "@/features/products/lib/price-table-rows";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { categoryMosaicTone, resolveCategoryIcon } from "@/lib/category-icons";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { isSinFormatoLabel, SIN_FORMATO_LABEL } from "@/lib/formats";
 import type { CategoryWorkTypeDto, ProductCategoryDto } from "@/types/category";
 
@@ -39,7 +39,7 @@ function formatCell(value: number | null | undefined): string {
   if (value === null || value === undefined) {
     return "—";
   }
-  return formatMoney(value, "CUP");
+  return formatAmount(value);
 }
 
 /**
@@ -55,11 +55,11 @@ function PriceCurrencyCell(props: {
   active: boolean;
   suffix: "CUP" | "USD";
 }) {
-  const { value, active, suffix } = props;
+  const { value, active } = props;
   const hasValue = value !== null && value !== undefined && Number.isFinite(value) && value > 0;
   return (
     <span className={active ? undefined : "text-base-content/45"}>
-      {hasValue ? formatMoney(value, suffix) : "—"}
+      {hasValue ? formatAmount(value) : "—"}
       {!active && hasValue ? (
         <span className="ml-1 badge badge-ghost badge-xs">off</span>
       ) : null}
@@ -298,7 +298,7 @@ export function PricesListPage() {
       },
       {
         accessorKey: "cost",
-        header: "Tarifa de Pago",
+        header: moneyHeading("Tarifa de pago"),
         cell: (info) => formatCell(info.getValue<number | null>() ?? 0),
       },
       {
@@ -662,7 +662,7 @@ export function PricesListPage() {
             <p className="mb-2 text-xs text-base-content/60">
               Tasa vigente:{" "}
               {usdExchangeRate > 0
-                ? `1 USD = ${formatMoney(usdExchangeRate)}`
+                ? `1 USD = ${formatAmount(usdExchangeRate)} CUP`
                 : "no configurada"}
             </p>
 

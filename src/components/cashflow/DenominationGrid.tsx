@@ -1,5 +1,5 @@
 import { sumDenominationCounts } from "@/lib/cash-counts";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import { denominationsFor, type DenominationCurrency } from "@/types/cashier";
 
 interface DenominationGridProps {
@@ -53,7 +53,7 @@ export function DenominationGrid(props: DenominationGridProps) {
           return (
             <label key={d} className="form-control">
               <span className="label-text text-[10px] font-mono">
-                {formatMoney(d, currency)}
+                {formatAmount(d)}
               </span>
               <input
                 type="text"
@@ -71,8 +71,8 @@ export function DenominationGrid(props: DenominationGridProps) {
       </div>
       {!hideTotal && (
         <p className="text-right text-xs">
-          Total:{" "}
-          <span className="font-semibold">{formatMoney(total, currency)}</span>
+          {moneyHeading("Total", currency)}:{" "}
+          <span className="font-semibold">{formatAmount(total)}</span>
         </p>
       )}
     </div>

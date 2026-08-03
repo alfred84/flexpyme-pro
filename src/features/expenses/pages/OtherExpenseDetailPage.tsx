@@ -6,7 +6,7 @@ import { ModalPortal } from "@/components/common/ModalPortal";
 import { deleteOtherExpense, fetchOtherExpenseById } from "@/db/queries/other-expenses";
 import { parseDenominationBreakdown, sumDenominationCounts } from "@/lib/cash-counts";
 import { formatDate, formatDateTime } from "@/lib/format-date";
-import { formatMoney } from "@/lib/format-money";
+import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import { popFlashMessage, pushFlashMessage, type FlashMessage } from "@/lib/flash-message";
 
 /**
@@ -122,15 +122,15 @@ export function OtherExpenseDetailPage() {
                 <dd className="capitalize">{expense.paymentMethod}</dd>
               </div>
               <div>
-                <dt className="text-xs uppercase text-base-content/60">Importe CUP</dt>
+                <dt className="text-xs uppercase text-base-content/60">{moneyHeading("Importe")}</dt>
                 <dd className="font-mono font-semibold text-error">
-                  {formatMoney(expense.amountCup)}
+                  {formatAmount(expense.amountCup)}
                 </dd>
               </div>
               {expense.amountUsd > 0.001 && (
                 <div>
-                  <dt className="text-xs uppercase text-base-content/60">Importe USD</dt>
-                  <dd className="font-mono">{formatMoney(expense.amountUsd, "USD")}</dd>
+                  <dt className="text-xs uppercase text-base-content/60">{moneyHeading("Importe", "USD")}</dt>
+                  <dd className="font-mono">{formatAmount(expense.amountUsd)}</dd>
                 </div>
               )}
               <div>
