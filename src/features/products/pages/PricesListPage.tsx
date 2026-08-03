@@ -39,15 +39,15 @@ function formatCell(value: number | null | undefined): string {
   if (value === null || value === undefined) {
     return "—";
   }
-  return formatMoney(value);
+  return formatMoney(value, "CUP");
 }
 
 /**
- * Celda de precio por moneda: valor + indicador si la moneda no está activa.
+ * Celda de precio por moneda: valor con etiqueta CUP/USD e indicador si está off.
  *
  * @param value - Importe o nulo.
  * @param active - Si la moneda está ofertada.
- * @param suffix - Etiqueta de moneda (CUP/USD).
+ * @param suffix - Moneda del importe.
  * @returns Nodo de celda.
  */
 function PriceCurrencyCell(props: {
@@ -59,14 +59,7 @@ function PriceCurrencyCell(props: {
   const hasValue = value !== null && value !== undefined && Number.isFinite(value) && value > 0;
   return (
     <span className={active ? undefined : "text-base-content/45"}>
-      {hasValue ? (
-        <>
-          {formatMoney(value)}{" "}
-          <span className="text-xs opacity-70">{suffix}</span>
-        </>
-      ) : (
-        "—"
-      )}
+      {hasValue ? formatMoney(value, suffix) : "—"}
       {!active && hasValue ? (
         <span className="ml-1 badge badge-ghost badge-xs">off</span>
       ) : null}
@@ -669,7 +662,7 @@ export function PricesListPage() {
             <p className="mb-2 text-xs text-base-content/60">
               Tasa vigente:{" "}
               {usdExchangeRate > 0
-                ? `1 USD = ${formatMoney(usdExchangeRate)} CUP`
+                ? `1 USD = ${formatMoney(usdExchangeRate)}`
                 : "no configurada"}
             </p>
 

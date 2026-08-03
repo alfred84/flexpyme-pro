@@ -130,7 +130,7 @@ export function OtherExpenseDetailPage() {
               {expense.amountUsd > 0.001 && (
                 <div>
                   <dt className="text-xs uppercase text-base-content/60">Importe USD</dt>
-                  <dd className="font-mono">${expense.amountUsd.toFixed(2)}</dd>
+                  <dd className="font-mono">{formatMoney(expense.amountUsd, "USD")}</dd>
                 </div>
               )}
               <div>
@@ -162,17 +162,17 @@ export function OtherExpenseDetailPage() {
                     .filter(([, n]) => n > 0)
                     .map(([denom, n]) => (
                       <span key={denom} className="badge badge-outline badge-sm font-mono">
-                        {breakdown.currency === "USD" ? `$${denom}` : formatMoney(Number(denom))} ×{" "}
-                        {n}
+                        {formatMoney(Number(denom), breakdown.currency)} × {n}
                       </span>
                     ))}
                 </div>
                 <p className="mt-2 text-right text-sm">
                   Total desglose:{" "}
                   <span className="font-semibold">
-                    {breakdown.currency === "USD"
-                      ? `$ ${sumDenominationCounts(breakdown.counts, "USD").toFixed(2)}`
-                      : formatMoney(sumDenominationCounts(breakdown.counts, "CUP"))}
+                    {formatMoney(
+                      sumDenominationCounts(breakdown.counts, breakdown.currency),
+                      breakdown.currency,
+                    )}
                   </span>
                 </p>
               </div>

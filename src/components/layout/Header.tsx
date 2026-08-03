@@ -5,6 +5,7 @@ import { PRIMARY_NAV, SECONDARY_NAV } from "@/config/navigation";
 import { ExchangeRateModal } from "@/components/common/ExchangeRateModal";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { formatDate } from "@/lib/format-date";
+import { formatMoney } from "@/lib/format-money";
 import type { ThemeName } from "@/lib/theme";
 
 interface HeaderProps {
@@ -61,7 +62,10 @@ export function Header(props: HeaderProps) {
             title="Clic para actualizar la tasa de cambio"
           >
             <DollarSign size={12} className="text-success transition-transform group-hover:scale-110" />
-            <span>1 USD = {settings.usdExchangeRate > 0 ? settings.usdExchangeRate : "—"} CUP</span>
+            <span>
+              1 USD ={" "}
+              {settings.usdExchangeRate > 0 ? formatMoney(settings.usdExchangeRate) : "—"}
+            </span>
           </button>
           <button
             type="button"

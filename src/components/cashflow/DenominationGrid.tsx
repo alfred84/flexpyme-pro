@@ -53,7 +53,7 @@ export function DenominationGrid(props: DenominationGridProps) {
           return (
             <label key={d} className="form-control">
               <span className="label-text text-[10px] font-mono">
-                {currency === "USD" ? `$${d}` : formatMoney(d)}
+                {formatMoney(d, currency)}
               </span>
               <input
                 type="text"
@@ -63,7 +63,7 @@ export function DenominationGrid(props: DenominationGridProps) {
                 value={count === 0 ? "" : String(count)}
                 placeholder="0"
                 onChange={(e) => setDenom(key, e.target.value)}
-                aria-label={`Cantidad de ${currency === "USD" ? `$${d}` : formatMoney(d)}`}
+                aria-label={`Cantidad de ${formatMoney(d, currency)}`}
               />
             </label>
           );
@@ -71,10 +71,8 @@ export function DenominationGrid(props: DenominationGridProps) {
       </div>
       {!hideTotal && (
         <p className="text-right text-xs">
-          Total {currency}:{" "}
-          <span className="font-semibold">
-            {currency === "USD" ? `$ ${total.toFixed(2)}` : formatMoney(total)}
-          </span>
+          Total:{" "}
+          <span className="font-semibold">{formatMoney(total, currency)}</span>
         </p>
       )}
     </div>

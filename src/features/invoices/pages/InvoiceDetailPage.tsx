@@ -257,8 +257,8 @@ export function InvoiceDetailPage() {
                         <div className="flex justify-between">
                           <dt>Monto recibido</dt>
                           <dd>
-                            $ {inv.amountUsd.toFixed(2)} USD (tasa: {inv.exchangeRateSnapshot}{" "}
-                            CUP/USD)
+                            {formatMoney(inv.amountUsd, "USD")} (tasa:{" "}
+                            {formatMoney(inv.exchangeRateSnapshot)} / USD)
                           </dd>
                         </div>
                         <div className="flex justify-between">
@@ -385,7 +385,7 @@ export function InvoiceDetailPage() {
                   {paymentsQuery.data?.map((p) => (
                     <li key={p.id} className="rounded border border-base-300 px-3 py-2">
                       {formatDate(p.date)} · {p.concept} · {formatMoney(p.amountCup)}
-                      {p.amountUsd > 0 ? ` (+ ${p.amountUsd} USD)` : ""}
+                      {p.amountUsd > 0 ? ` (+ ${formatMoney(p.amountUsd, "USD")})` : ""}
                     </li>
                   ))}
                 </ul>

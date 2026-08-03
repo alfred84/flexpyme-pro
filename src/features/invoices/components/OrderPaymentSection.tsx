@@ -95,7 +95,7 @@ export function OrderPaymentSection(props: OrderPaymentSectionProps) {
             </label>
             <div className="flex justify-between">
               <span>Total USD</span>
-              <span>{formatMoney(amountUsd).replace("$", "$ ")} USD</span>
+              <span>{formatMoney(amountUsd, "USD")}</span>
             </div>
             <div className="flex justify-between">
               <span>Total CUP</span>

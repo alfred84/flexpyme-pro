@@ -208,6 +208,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Modo**: Dark mode por defecto (con opción de light mode en Configuración)
 - **Sidebar**: Inicio, Pedidos, Reportes producción, Facturas, Clientes, Empleados, Inventario, Caja, Precios, Otros gastos, Reportes, Configuración
 - **Fechas en UI (v2.5)**: siempre `dd/mm/aaaa` vía `formatDate` / `formatDateTime` (`src/lib/format-date.ts`)
+- **Importes en UI (v2.14)**: siempre con moneda vía `formatMoney(valor, 'CUP'|'USD')` (`src/lib/format-money.ts`); por defecto CUP
 - **Iconos**: Lucide React en todos los menús, botones y acciones
 - **Tipografía**: moderna y legible
 - **Colores**: paleta profesional con azul/índigo como color primario, acentos de color para estados

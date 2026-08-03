@@ -64,7 +64,10 @@ export function CashflowPage() {
               {formatMoney(Math.abs(net?.netTodayCup ?? 0))}
             </p>
             {Math.abs(net?.netTodayUsd ?? 0) > 0.001 && (
-              <p className="text-xs text-base-content/60">USD neto: {(net?.netTodayUsd ?? 0).toFixed(2)}</p>
+              <p className="text-xs text-base-content/60">
+                Neto: {formatMoney(Math.abs(net?.netTodayUsd ?? 0), "USD")}
+                {(net?.netTodayUsd ?? 0) < 0 ? " (−)" : ""}
+              </p>
             )}
           </div>
         </div>
@@ -78,7 +81,10 @@ export function CashflowPage() {
               {formatMoney(Math.abs(net?.net30DaysCup ?? 0))}
             </p>
             {Math.abs(net?.net30DaysUsd ?? 0) > 0.001 && (
-              <p className="text-xs text-base-content/60">USD neto: {(net?.net30DaysUsd ?? 0).toFixed(2)}</p>
+              <p className="text-xs text-base-content/60">
+                Neto: {formatMoney(Math.abs(net?.net30DaysUsd ?? 0), "USD")}
+                {(net?.net30DaysUsd ?? 0) < 0 ? " (−)" : ""}
+              </p>
             )}
           </div>
         </div>
@@ -94,7 +100,7 @@ export function CashflowPage() {
         <div className="card bg-base-200">
           <div className="card-body p-4">
             <p className="text-xs uppercase text-base-content/60">Balance USD</p>
-            <p className="text-2xl font-semibold">${(balance?.balanceUsd ?? 0).toFixed(2)}</p>
+            <p className="text-2xl font-semibold">{formatMoney(balance?.balanceUsd ?? 0, "USD")}</p>
           </div>
         </div>
         <div className="card bg-base-200">
