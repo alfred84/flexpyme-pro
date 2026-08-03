@@ -161,7 +161,7 @@ export function LineEmployeesModal(props: LineEmployeesModalProps) {
                     </span>
                   </label>
                   <label className="form-control w-28">
-                    <span className="label-text text-[10px]">Tarifa (opc.)</span>
+                    <span className="label-text text-[10px]">Tarifa CUP (opc.)</span>
                     <input
                       type="text"
                       inputMode="decimal"

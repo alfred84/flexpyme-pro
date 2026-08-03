@@ -13,6 +13,8 @@ interface OrderPaymentSectionProps {
   totalCup: number;
   value: OrderPaymentState;
   onChange: (next: OrderPaymentState) => void;
+  /** Título del bloque (anticipo / saldo / cobro). */
+  title?: string;
 }
 
 /**
@@ -22,7 +24,7 @@ interface OrderPaymentSectionProps {
  * @returns Bloque de UI para capturar forma de pago.
  */
 export function OrderPaymentSection(props: OrderPaymentSectionProps) {
-  const { totalCup, value, onChange } = props;
+  const { totalCup, value, onChange, title = "Método de pago" } = props;
 
   const rate = Number(value.exchangeRate.replace(",", ".")) || 0;
   const isTransfer = value.paymentMethod === "transferencia";
@@ -41,7 +43,7 @@ export function OrderPaymentSection(props: OrderPaymentSectionProps) {
     <div className="card bg-base-100 shadow-sm">
       <div className="card-body gap-2 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="card-title text-sm">Método de pago</h2>
+          <h2 className="card-title text-sm">{title}</h2>
           <div className="join">
             <button
               type="button"

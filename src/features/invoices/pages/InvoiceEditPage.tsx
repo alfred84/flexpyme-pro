@@ -26,7 +26,9 @@ import {
   isDraftLineValid,
   type DraftLine,
 } from "@/features/invoices/lib/order-draft";
-import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
+import { DualMoneyText } from "@/components/common/DualMoneyText";
+import { useAppSettings } from "@/hooks/use-app-settings";
+import { formatMoney, moneyHeading } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 
 /**
@@ -40,6 +42,7 @@ export function InvoiceEditPage() {
   const invoiceId = Number(params.invoiceId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { usdExchangeRate } = useAppSettings();
 
   const detailQuery = useQuery({
     queryKey: ["invoices", "detail", invoiceId],
@@ -125,6 +128,10 @@ export function InvoiceEditPage() {
   );
 
   const inv = detailQuery.data?.invoice;
+  const displayRate =
+    inv?.exchangeRateSnapshot && inv.exchangeRateSnapshot > 0
+      ? inv.exchangeRateSnapshot
+      : usdExchangeRate;
   const advanceNum = inv?.advancePayment ?? 0;
   const paidNum = inv?.paid ?? 0;
   const orderTotal = Math.max(linesSubtotal - advanceNum, 0);
@@ -265,6 +272,7 @@ export function InvoiceEditPage() {
           lines={lines}
           categoryNames={categoryNames}
           formatLabels={formatLabels}
+          exchangeRate={displayRate}
           onEdit={(key) => {
             setEditingLineKey(key);
             setLineModalOpen(true);
@@ -272,6 +280,7 @@ export function InvoiceEditPage() {
           onRemove={(key) => setLines((prev) => prev.filter((l) => l.key !== key))}
         />
         <OrderWorkTypeSummary
+          exchangeRate={displayRate}
           rows={aggregateWorkTypeSummary(
             lines.flatMap((line) => {
               const qty = Number.parseInt(line.quantity, 10) || 0;
@@ -286,21 +295,21 @@ export function InvoiceEditPage() {
       </div>
 
       <div className="rounded-lg border border-base-300 bg-base-100 p-4 text-sm">
-        <div className="flex justify-between">
-          <span>{moneyHeading("Subtotal líneas")}</span>
-          <span>{formatAmount(linesSubtotal)}</span>
+        <div className="flex justify-between gap-2">
+          <span>{moneyHeading("Subtotal líneas", "USD")}</span>
+          <DualMoneyText amountCup={linesSubtotal} rate={displayRate} primary="USD" />
         </div>
-        <div className="flex justify-between">
-          <span>{moneyHeading("Anticipo")}</span>
-          <span>{formatAmount(advanceNum)}</span>
+        <div className="flex justify-between gap-2">
+          <span>{moneyHeading("Anticipo", "USD")}</span>
+          <DualMoneyText amountCup={advanceNum} rate={displayRate} primary="USD" />
         </div>
-        <div className="flex justify-between">
-          <span>{moneyHeading("Ya pagado")}</span>
-          <span>{formatAmount(paidNum)}</span>
+        <div className="flex justify-between gap-2">
+          <span>{moneyHeading("Ya pagado", "USD")}</span>
+          <DualMoneyText amountCup={paidNum} rate={displayRate} primary="USD" />
         </div>
-        <div className="mt-1 flex justify-between font-semibold">
-          <span>{moneyHeading("Saldo estimado")}</span>
-          <span>{formatAmount(pendingBalance)}</span>
+        <div className="mt-1 flex justify-between gap-2 font-semibold">
+          <span>{moneyHeading("Saldo estimado", "USD")}</span>
+          <DualMoneyText amountCup={pendingBalance} rate={displayRate} primary="USD" />
         </div>
       </div>
 

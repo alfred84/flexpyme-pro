@@ -1,9 +1,11 @@
 import { useMemo } from "react";
 import { AlertTriangle, Wallet } from "lucide-react";
+import { DualMoneyText } from "@/components/common/DualMoneyText";
 import type { OrderPaymentState } from "@/features/invoices/components/OrderPaymentSection";
 import { DenominationGrid } from "@/components/cashflow/DenominationGrid";
 import { buildCountsPayload, emptyDenominationCounts, sumDenominationCounts } from "@/lib/cash-counts";
-import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
+import { cupToUsd, type SaleCurrency } from "@/lib/currency";
+import { formatMoney, moneyHeading } from "@/lib/format-money";
 import type { OverpaymentDisposition } from "@/types/invoice";
 
 const EPS = 0.5;
@@ -144,6 +146,7 @@ export function OrderCashierSection(props: OrderCashierSectionProps) {
   } = props;
   const isTransfer = payment.paymentMethod === "transferencia";
   const isUsd = !isTransfer && payment.paymentCurrency === "USD";
+  const primary: SaleCurrency = isUsd ? "USD" : "CUP";
 
   const creditApplied = value.applyClientCredit
     ? Math.min(clientCreditBalance, Math.max(0, balanceDue))
@@ -165,6 +168,11 @@ export function OrderCashierSection(props: OrderCashierSectionProps) {
     changeDue > EPS &&
     Math.abs(changeCovered - changeDue) > EPS;
 
+  const pendingHint =
+    isUsd && exchangeRate > 0
+      ? formatMoney(cupToUsd(balanceDue, exchangeRate), "USD")
+      : formatMoney(balanceDue, "CUP");
+
   return (
     <div className="card bg-base-100 shadow-sm border border-primary/20">
       <div className="card-body gap-3 p-3">
@@ -174,7 +182,7 @@ export function OrderCashierSection(props: OrderCashierSectionProps) {
         </h2>
         <p className="text-xs text-base-content/60">
           {hint ??
-            `Registra el cobro como parte de esta operación. Pendiente del pedido: ${formatMoney(balanceDue)}.`}
+            `Registra el cobro como parte de esta operación. Pendiente del pedido: ${pendingHint}.`}
         </p>
 
         {clientCreditBalance > EPS && (
@@ -186,8 +194,8 @@ export function OrderCashierSection(props: OrderCashierSectionProps) {
               onChange={(e) => onChange({ ...value, applyClientCredit: e.target.checked })}
             />
             <span className="label-text text-xs">
-              Aplicar saldo a favor ({formatMoney(clientCreditBalance)})
-              {creditApplied > EPS ? ` → −${formatMoney(creditApplied)}` : ""}
+              Aplicar saldo a favor ({formatMoney(clientCreditBalance, "CUP")})
+              {creditApplied > EPS ? ` → −${formatMoney(creditApplied, "CUP")}` : ""}
             </span>
           </label>
         )}
@@ -257,23 +265,33 @@ export function OrderCashierSection(props: OrderCashierSectionProps) {
 
         <dl className="grid grid-cols-3 gap-2 text-xs">
           <div>
-            <dt className="text-base-content/60">{moneyHeading("Pendiente")}</dt>
-            <dd className="font-semibold">{formatAmount(effectiveDue)}</dd>
+            <dt className="text-base-content/60">{moneyHeading("Pendiente", primary)}</dt>
+            <dd className="font-semibold">
+              <DualMoneyText amountCup={effectiveDue} rate={exchangeRate} primary={primary} />
+            </dd>
           </div>
           <div>
-            <dt className="text-base-content/60">{moneyHeading("Recibido")}</dt>
-            <dd className="font-semibold">{formatAmount(received)}</dd>
+            <dt className="text-base-content/60">{moneyHeading("Recibido", primary)}</dt>
+            <dd className="font-semibold">
+              <DualMoneyText amountCup={received} rate={exchangeRate} primary={primary} />
+            </dd>
           </div>
           <div>
-            <dt className="text-base-content/60">{moneyHeading("Aplica")}</dt>
-            <dd>{formatAmount(applied)}</dd>
+            <dt className="text-base-content/60">{moneyHeading("Aplica", primary)}</dt>
+            <dd>
+              <DualMoneyText amountCup={applied} rate={exchangeRate} primary={primary} />
+            </dd>
           </div>
         </dl>
 
         {received - effectiveDue > EPS && (
           <div className="space-y-2 rounded-lg bg-base-200 p-2">
             <p className="text-xs font-medium">
-              Exceso: {formatMoney(received - effectiveDue)}. ¿Qué hacer?
+              Exceso:{" "}
+              {isUsd && exchangeRate > 0
+                ? formatMoney(cupToUsd(received - effectiveDue, exchangeRate), "USD")
+                : formatMoney(received - effectiveDue, "CUP")}
+              . ¿Qué hacer?
             </p>
             <div className="flex flex-wrap gap-3 text-xs">
               <label className="label cursor-pointer gap-2 py-0">
@@ -300,8 +318,8 @@ export function OrderCashierSection(props: OrderCashierSectionProps) {
 
             {value.overpaymentDisposition === "credit" && (
               <p className="text-xs text-success">
-                Se acreditarán {formatMoney(creditToAdd)} al saldo a favor del cliente. El dinero
-                permanece en caja.
+                Se acreditarán {formatMoney(creditToAdd, "CUP")} al saldo a favor del cliente. El
+                dinero permanece en caja.
               </p>
             )}
 
@@ -316,8 +334,8 @@ export function OrderCashierSection(props: OrderCashierSectionProps) {
                 {changePending ? (
                   <p className="flex items-center gap-1 text-xs text-warning">
                     <AlertTriangle className="h-3 w-3" />
-                    Falta cubrir el vuelto: entrega {formatMoney(changeDue)} en billetes (llevas{" "}
-                    {formatMoney(changeCovered)}).
+                    Falta cubrir el vuelto: entrega {formatMoney(changeDue, "CUP")} en billetes
+                    (llevas {formatMoney(changeCovered, "CUP")}).
                   </p>
                 ) : (
                   <p className="text-xs text-success">Vuelto cuadrado.</p>

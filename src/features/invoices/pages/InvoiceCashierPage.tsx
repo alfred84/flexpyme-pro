@@ -14,7 +14,9 @@ import {
   type OrderCashierState,
 } from "@/features/invoices/components/OrderCashierSection";
 import type { OrderPaymentState } from "@/features/invoices/components/OrderPaymentSection";
+import { DualMoneyText } from "@/components/common/DualMoneyText";
 import { useAppSettings } from "@/hooks/use-app-settings";
+import type { SaleCurrency } from "@/lib/currency";
 import { formatDate } from "@/lib/format-date";
 import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
@@ -83,6 +85,7 @@ export function InvoiceCashierPage() {
   const paymentCurrency = (inv?.paymentCurrency ?? "CUP") as PaymentCurrency;
   const isTransfer = paymentMethod === "transferencia";
   const isUsd = !isTransfer && paymentCurrency === "USD";
+  const summaryPrimary: SaleCurrency = isUsd ? "USD" : "CUP";
 
   const rate =
     inv?.exchangeRateSnapshot ||
@@ -203,23 +206,33 @@ export function InvoiceCashierPage() {
                     <dt className="text-base-content/60">Cliente</dt>
                     <dd>{inv.clientName}</dd>
                   </div>
-                  <div className="flex justify-between font-semibold">
-                    <dt>{moneyHeading("Pendiente a cobrar")}</dt>
-                    <dd className="text-primary">{formatAmount(balance)}</dd>
+                  <div className="flex justify-between gap-2 font-semibold">
+                    <dt>{moneyHeading("Pendiente a cobrar", summaryPrimary)}</dt>
+                    <dd className="text-primary">
+                      <DualMoneyText amountCup={balance} rate={rate} primary={summaryPrimary} />
+                    </dd>
                   </div>
                   {clientCredit > 1e-6 && (
-                    <div className="flex justify-between text-success">
-                      <dt>{moneyHeading("Saldo a favor")}</dt>
-                      <dd>{formatAmount(clientCredit)}</dd>
+                    <div className="flex justify-between gap-2 text-success">
+                      <dt>{moneyHeading("Saldo a favor", "CUP")}</dt>
+                      <dd>{formatMoney(clientCredit, "CUP")}</dd>
                     </div>
                   )}
-                  <div className="flex justify-between">
-                    <dt>{moneyHeading("Por cobrar ahora")}</dt>
-                    <dd>{formatAmount(effectiveDue)}</dd>
+                  <div className="flex justify-between gap-2">
+                    <dt>{moneyHeading("Por cobrar ahora", summaryPrimary)}</dt>
+                    <dd>
+                      <DualMoneyText
+                        amountCup={effectiveDue}
+                        rate={rate}
+                        primary={summaryPrimary}
+                      />
+                    </dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt>{moneyHeading("Recibido")}</dt>
-                    <dd>{formatAmount(received)}</dd>
+                  <div className="flex justify-between gap-2">
+                    <dt>{moneyHeading("Recibido", summaryPrimary)}</dt>
+                    <dd>
+                      <DualMoneyText amountCup={received} rate={rate} primary={summaryPrimary} />
+                    </dd>
                   </div>
                 </dl>
                 {balance <= 1e-6 && (

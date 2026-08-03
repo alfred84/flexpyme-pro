@@ -14,8 +14,10 @@ import {
   type DraftMaterialMode,
   type DraftServiceAssignment,
 } from "@/features/invoices/lib/order-draft";
+import { DualMoneyText } from "@/components/common/DualMoneyText";
+import { SalePriceInput } from "@/features/invoices/components/SalePriceInput";
 import { useAppSettings } from "@/hooks/use-app-settings";
-import { formatAmount, moneyHeading } from "@/lib/format-money";
+import { moneyHeading } from "@/lib/format-money";
 import type {
   CategoryFinishDto,
   CategoryFormatDto,
@@ -689,20 +691,19 @@ export function OrderLineModal(props: OrderLineModalProps) {
                         />
                         {opt.name}
                       </label>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        className="input input-bordered input-xs w-24"
-                        placeholder="Precio"
-                        value={selected?.unitPrice ?? ""}
+                      <SalePriceInput
+                        valueCup={selected?.unitPrice ?? ""}
+                        rate={usdExchangeRate}
                         disabled={!checked}
-                        onChange={(e) => setWorkTypePrice(opt.name, e.target.value)}
+                        placeholder="Precio"
+                        onChangeCup={(cup) => setWorkTypePrice(opt.name, cup)}
                       />
                       <button
                         type="button"
                         className="btn btn-ghost btn-xs"
                         disabled={!checked}
                         onClick={() => setEmployeesForService(opt.name)}
+                        title="Tarifas de empleados en CUP"
                       >
                         Empleados{assignedCount > 0 ? ` (${assignedCount})` : ""}
                       </button>
@@ -716,13 +717,12 @@ export function OrderLineModal(props: OrderLineModalProps) {
                   Esta categoría no tiene tipos de trabajo asociados. Configúralos en Categorías o
                   indica un precio unitario.
                 </p>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  className="input input-bordered input-sm w-full"
-                  placeholder="Precio unitario (CUP)"
-                  value={manualPrice}
-                  onChange={(e) => setManualPrice(e.target.value)}
+                <SalePriceInput
+                  valueCup={manualPrice}
+                  rate={usdExchangeRate}
+                  placeholder="Precio unitario"
+                  className="input input-bordered input-sm w-36"
+                  onChangeCup={setManualPrice}
                 />
               </div>
             )}
@@ -857,9 +857,15 @@ export function OrderLineModal(props: OrderLineModalProps) {
             )}
           </div>
         </div>
-        <div className="mt-3 flex items-center justify-between text-sm">
-          <span className="text-base-content/60">{moneyHeading("Subtotal de la línea")}</span>
-          <span className="font-semibold">{formatAmount(draftLineSubtotal(draft))}</span>
+        <div className="mt-3 flex items-center justify-between gap-2 text-sm">
+          <span className="text-base-content/60">{moneyHeading("Subtotal de la línea", "USD")}</span>
+          <span className="font-semibold">
+            <DualMoneyText
+              amountCup={draftLineSubtotal(draft)}
+              rate={usdExchangeRate}
+              primary="USD"
+            />
+          </span>
         </div>
         {error && <p className="mt-2 text-sm text-error">{error}</p>}
         <div className="modal-action">

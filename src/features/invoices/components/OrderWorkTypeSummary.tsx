@@ -1,4 +1,6 @@
-import { formatAmount, moneyHeading } from "@/lib/format-money";
+import { DualMoneyText } from "@/components/common/DualMoneyText";
+import type { SaleCurrency } from "@/lib/currency";
+import { moneyHeading } from "@/lib/format-money";
 
 /**
  * Fila de resumen de producción por tipo de trabajo.
@@ -11,6 +13,10 @@ export interface WorkTypeSummaryRow {
 
 interface OrderWorkTypeSummaryProps {
   rows: WorkTypeSummaryRow[];
+  /** Tasa USD→CUP para el equivalente. */
+  exchangeRate?: number;
+  /** Moneda principal de visualización. */
+  primary?: SaleCurrency;
   /** Título opcional de la sección. */
   title?: string;
 }
@@ -54,7 +60,12 @@ export function aggregateWorkTypeSummary(
  * @param props - Filas agregadas.
  */
 export function OrderWorkTypeSummary(props: OrderWorkTypeSummaryProps) {
-  const { rows, title = "Producción por tipo de trabajo" } = props;
+  const {
+    rows,
+    exchangeRate = 0,
+    primary = "USD",
+    title = "Producción por tipo de trabajo",
+  } = props;
   if (rows.length === 0) {
     return null;
   }
@@ -67,7 +78,7 @@ export function OrderWorkTypeSummary(props: OrderWorkTypeSummaryProps) {
             <tr>
               <th>Tipo de trabajo</th>
               <th className="text-right">Cantidad</th>
-              <th className="text-right">{moneyHeading("Importe")}</th>
+              <th className="text-right">{moneyHeading("Importe", primary)}</th>
             </tr>
           </thead>
           <tbody>
@@ -75,7 +86,9 @@ export function OrderWorkTypeSummary(props: OrderWorkTypeSummaryProps) {
               <tr key={row.workType}>
                 <td>{row.workType}</td>
                 <td className="text-right">{row.quantity}</td>
-                <td className="text-right font-medium">{formatAmount(row.amount)}</td>
+                <td className="text-right font-medium">
+                  <DualMoneyText amountCup={row.amount} rate={exchangeRate} primary={primary} />
+                </td>
               </tr>
             ))}
           </tbody>
