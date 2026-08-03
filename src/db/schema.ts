@@ -127,9 +127,9 @@ export const priceList = sqliteTable("price_list", {
   /** Precio de venta en USD (opcional). */
   priceUsd: real("price_usd"),
   /** Si el producto se ofrece en CUP. */
-  isCupActive: integer("is_cup_active", { mode: "boolean" }).notNull().default(true),
-  /** Si el producto se ofrece en USD. */
-  isUsdActive: integer("is_usd_active", { mode: "boolean" }).notNull().default(false),
+  isCupActive: integer("is_cup_active", { mode: "boolean" }).notNull().default(false),
+  /** Si el producto se ofrece en USD (moneda de venta por defecto). */
+  isUsdActive: integer("is_usd_active", { mode: "boolean" }).notNull().default(true),
   cost: real("cost"),
   validFrom: text("valid_from").notNull().default(sql`(date('now'))`),
   isActive: integer("is_active").notNull().default(1),

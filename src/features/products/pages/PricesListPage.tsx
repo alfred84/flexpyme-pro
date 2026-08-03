@@ -85,8 +85,9 @@ function parseDecimal(raw: string): number {
 }
 
 /**
- * Precios: mosaico por categoría → tipos de trabajo → tabla con precios CUP/USD y tarifa de pago.
+ * Precios: mosaico por categoría → tipos de trabajo → tabla con precios USD/CUP y tarifa de pago.
  * La categoría activa vive en `?categoria=` para que el sidebar vuelva siempre al mosaico.
+ * Por defecto las filas nuevas ofertan USD; CUP es opcional.
  *
  * @returns Pantalla de administración de precios.
  */
@@ -103,8 +104,8 @@ export function PricesListPage() {
   const [editing, setEditing] = useState<PriceTableRow | null>(null);
   const [editPriceCup, setEditPriceCup] = useState("");
   const [editPriceUsd, setEditPriceUsd] = useState("");
-  const [editCupActive, setEditCupActive] = useState(true);
-  const [editUsdActive, setEditUsdActive] = useState(false);
+  const [editCupActive, setEditCupActive] = useState(false);
+  const [editUsdActive, setEditUsdActive] = useState(true);
   const [editTarifa, setEditTarifa] = useState("0");
   const [editActive, setEditActive] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
@@ -279,18 +280,6 @@ export function PricesListPage() {
         cell: (info) => info.getValue<string | null>() ?? "—",
       },
       {
-        id: "priceCup",
-        accessorFn: (row) => row.priceCup ?? row.price,
-        header: "Precio CUP",
-        cell: ({ row }) => (
-          <PriceCurrencyCell
-            value={row.original.priceCup ?? (row.original.price > 0 ? row.original.price : null)}
-            active={row.original.isCupActive}
-            suffix="CUP"
-          />
-        ),
-      },
-      {
         id: "priceUsd",
         accessorFn: (row) => row.priceUsd,
         header: "Precio USD",
@@ -299,6 +288,18 @@ export function PricesListPage() {
             value={row.original.priceUsd}
             active={row.original.isUsdActive}
             suffix="USD"
+          />
+        ),
+      },
+      {
+        id: "priceCup",
+        accessorFn: (row) => row.priceCup ?? row.price,
+        header: "Precio CUP",
+        cell: ({ row }) => (
+          <PriceCurrencyCell
+            value={row.original.priceCup ?? (row.original.price > 0 ? row.original.price : null)}
+            active={row.original.isCupActive}
+            suffix="CUP"
           />
         ),
       },
@@ -678,6 +679,37 @@ export function PricesListPage() {
                   <input
                     type="checkbox"
                     className="toggle toggle-primary toggle-sm"
+                    checked={editUsdActive}
+                    onChange={(e) => setEditUsdActive(e.target.checked)}
+                  />
+                  <span className="label-text font-medium">Precio USD</span>
+                  <span className="badge badge-ghost badge-xs">default</span>
+                </label>
+                <input
+                  id="edit-price-usd"
+                  type="text"
+                  inputMode="decimal"
+                  className="input input-bordered input-sm mt-2 w-full"
+                  value={editPriceUsd}
+                  onChange={(e) => setEditPriceUsd(e.target.value)}
+                  placeholder="0.00"
+                  aria-label="Precio en USD"
+                />
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs mt-2"
+                  onClick={applyRateToUsd}
+                  disabled={!(usdExchangeRate > 0)}
+                >
+                  Aplicar tasa desde CUP
+                </button>
+              </div>
+
+              <div className="rounded-lg border border-base-300 p-3">
+                <label className="label cursor-pointer justify-start gap-3 py-0">
+                  <input
+                    type="checkbox"
+                    className="toggle toggle-primary toggle-sm"
                     checked={editCupActive}
                     onChange={(e) => setEditCupActive(e.target.checked)}
                   />
@@ -700,36 +732,6 @@ export function PricesListPage() {
                   disabled={!(usdExchangeRate > 0)}
                 >
                   Aplicar tasa desde USD
-                </button>
-              </div>
-
-              <div className="rounded-lg border border-base-300 p-3">
-                <label className="label cursor-pointer justify-start gap-3 py-0">
-                  <input
-                    type="checkbox"
-                    className="toggle toggle-primary toggle-sm"
-                    checked={editUsdActive}
-                    onChange={(e) => setEditUsdActive(e.target.checked)}
-                  />
-                  <span className="label-text font-medium">Precio USD</span>
-                </label>
-                <input
-                  id="edit-price-usd"
-                  type="text"
-                  inputMode="decimal"
-                  className="input input-bordered input-sm mt-2 w-full"
-                  value={editPriceUsd}
-                  onChange={(e) => setEditPriceUsd(e.target.value)}
-                  placeholder="0.00"
-                  aria-label="Precio en USD"
-                />
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-xs mt-2"
-                  onClick={applyRateToUsd}
-                  disabled={!(usdExchangeRate > 0)}
-                >
-                  Aplicar tasa desde CUP
                 </button>
               </div>
             </div>

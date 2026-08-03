@@ -47,12 +47,13 @@ import { useAppSettings } from "@/hooks/use-app-settings";
 import { todayIso } from "@/lib/format-date";
 import { formatMoney } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
+import { DEFAULT_PAYMENT_CURRENCY } from "@/lib/currency";
 import type { AdvancePaymentPayload, CreateInvoiceItemPayload } from "@/types/invoice";
 
 function defaultPaymentState(rate: number): OrderPaymentState {
   return {
     paymentMethod: "efectivo",
-    paymentCurrency: "CUP",
+    paymentCurrency: DEFAULT_PAYMENT_CURRENCY,
     exchangeRate: rate > 0 ? String(rate) : "",
     transferConcept: "",
   };

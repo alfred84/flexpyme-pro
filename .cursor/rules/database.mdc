@@ -18,6 +18,6 @@ globs: ["src/db/**/*.ts", "src-tauri/src/**/*.rs"]
 - Transacciones para operaciones multi-tabla
 
 ## Moneda en BD
-- Todos los importes en CUP como REAL
+- Todos los importes contables (pedidos, caja neta, salarios) en CUP como REAL; precios de venta pueden almacenarse también en USD
 - Tasa USD/CUP almacenada en cada transacción como campo separado
 - Denominaciones de billetes como JSON TEXT en cash_sessions

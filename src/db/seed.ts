@@ -104,6 +104,9 @@ async function main() {
     }
 
     if (row.format === null || formatId !== undefined) {
+      const rate = Number.parseFloat(SETTINGS_SEED.usd_exchange_rate || "0");
+      const priceUsd =
+        rate > 0 ? Math.round((row.price / rate) * 100) / 100 : null;
       sqlite
         .prepare(
           `
@@ -111,7 +114,7 @@ async function main() {
             category_id, format_id, finish, service, price, price_cup, price_usd,
             is_cup_active, is_usd_active, cost, is_active
           )
-          VALUES (?, ?, ?, ?, ?, ?, NULL, 1, 0, ?, 1)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, ?, 1)
         `,
         )
         .run(
@@ -119,8 +122,9 @@ async function main() {
           formatId ?? null,
           row.finish,
           row.service,
+          0,
           row.price,
-          row.price,
+          priceUsd,
           row.cost,
         );
     }

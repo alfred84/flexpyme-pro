@@ -24,7 +24,7 @@ export function CashflowNewPage() {
   const [transactionType, setTransactionType] = useState<"ingreso" | "egreso">("ingreso");
   const [concept, setConcept] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"efectivo" | "transferencia">("efectivo");
-  const [currency, setCurrency] = useState<"CUP" | "USD">("CUP");
+  const [currency, setCurrency] = useState<"CUP" | "USD">("USD");
   const [amount, setAmount] = useState("");
   const [exchangeRate, setExchangeRate] = useState(String(settings.usdExchangeRate || ""));
   const [cupCounts, setCupCounts] = useState<Record<string, number>>(() => emptyDenominationCounts("CUP"));
@@ -160,8 +160,8 @@ export function CashflowNewPage() {
             value={currency}
             onChange={(e) => setCurrency(e.target.value as "CUP" | "USD")}
           >
-            <option value="CUP">CUP</option>
             <option value="USD">USD</option>
+            <option value="CUP">CUP</option>
           </select>
         </div>
         <div className="form-control">

@@ -245,7 +245,7 @@ export function serviceAndFinishOptions(
 
 /**
  * Convierte una fila de precio a importe unitario en CUP según monedas activas.
- * Prioriza CUP; si solo USD está activo, convierte con la tasa indicada.
+ * Prioriza USD (default de venta); si solo CUP está activo, usa CUP.
  *
  * @param row - Fila de precio.
  * @param exchangeRate - Tasa USD→CUP vigente.
@@ -258,12 +258,6 @@ export function resolveSaleUnitPriceCup(
   if (!row || !row.isActive) {
     return null;
   }
-  if (row.isCupActive) {
-    const cup = row.priceCup ?? row.price;
-    if (Number.isFinite(cup) && cup > 0) {
-      return cup;
-    }
-  }
   if (row.isUsdActive) {
     const usd = row.priceUsd;
     if (usd != null && Number.isFinite(usd) && usd > 0) {
@@ -271,6 +265,12 @@ export function resolveSaleUnitPriceCup(
         return null;
       }
       return usd * exchangeRate;
+    }
+  }
+  if (row.isCupActive) {
+    const cup = row.priceCup ?? row.price;
+    if (Number.isFinite(cup) && cup > 0) {
+      return cup;
     }
   }
   if (Number.isFinite(row.price) && row.price > 0) {

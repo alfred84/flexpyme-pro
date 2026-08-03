@@ -126,10 +126,10 @@ fn validate_dual_prices(
     if tarifa < 0.0 {
         return Err("La tarifa de pago no puede ser negativa".to_string());
     }
-    let sale_cup_for_tarifa = if is_cup_active {
-        cup.unwrap_or(0.0)
-    } else if is_usd_active && exchange_rate > 0.0 {
+    let sale_cup_for_tarifa = if is_usd_active && exchange_rate > 0.0 {
         usd.unwrap_or(0.0) * exchange_rate
+    } else if is_cup_active {
+        cup.unwrap_or(0.0)
     } else {
         0.0
     };
@@ -177,8 +177,8 @@ const PRICE_SELECT: &str = "SELECT p.id, p.category_id, c.name, p.format_id, f.l
         p.price,
         COALESCE(p.price_cup, p.price),
         p.price_usd,
-        COALESCE(p.is_cup_active, 1),
-        COALESCE(p.is_usd_active, 0),
+        COALESCE(p.is_cup_active, 0),
+        COALESCE(p.is_usd_active, 1),
         p.cost, p.valid_from, p.is_active
      FROM price_list p
      JOIN product_categories c ON c.id = p.category_id

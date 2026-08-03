@@ -29,8 +29,11 @@ alwaysApply: true
 - Nunca commitear sin actualizar JSDoc y tipos TypeScript
 
 ## Moneda
-- CUP como moneda principal en TODA la UI
-- Denominaciones: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000 CUP
+- Precios de venta: **USD por defecto** (CUP opcional por fila)
+- Libro contable de pedidos/facturas: importes resueltos en CUP (USD × tasa)
+- Cobros/anticipos en efectivo: **USD por defecto** (transferencia sigue en CUP)
+- Denominaciones CUP: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000
+- Salarios y tarifas de pago a empleados: siempre CUP
 - USD siempre con tasa de cambio almacenada en la operación
 
 ## Estados de pedido

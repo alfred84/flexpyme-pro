@@ -66,17 +66,17 @@ export function OrderPaymentSection(props: OrderPaymentSectionProps) {
             <div className="join">
               <button
                 type="button"
-                className={`btn btn-xs join-item ${value.paymentCurrency === "CUP" ? "btn-secondary" : "btn-ghost"}`}
-                onClick={() => onChange({ ...value, paymentCurrency: "CUP" })}
-              >
-                CUP
-              </button>
-              <button
-                type="button"
                 className={`btn btn-xs join-item ${value.paymentCurrency === "USD" ? "btn-secondary" : "btn-ghost"}`}
                 onClick={() => onChange({ ...value, paymentCurrency: "USD" })}
               >
                 USD
+              </button>
+              <button
+                type="button"
+                className={`btn btn-xs join-item ${value.paymentCurrency === "CUP" ? "btn-secondary" : "btn-ghost"}`}
+                onClick={() => onChange({ ...value, paymentCurrency: "CUP" })}
+              >
+                CUP
               </button>
             </div>
           </div>

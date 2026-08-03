@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.13 | Última actualización: 2026-08-03
+### Versión: 2.14 | Última actualización: 2026-08-03
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -135,7 +135,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 ### 3.7 Configuración
 - Datos del negocio (nombre, dirección, teléfono, logo)
 - Tasa de cambio USD → CUP (actualizable desde cabecera o Configuración; histórico de cambios)
-- **Precios** como entrada del sidebar (debajo de Flujo de Caja), no como tab de Configuración. Incluye precios de venta (**CUP y/o USD**, activables por fila) y **tarifas de pago** a trabajadores en CUP (antes «Costos»); la ruta legacy `/costos` redirige a `/precios`. Cada moneda se define de forma independiente; se puede aplicar la tasa vigente de la app para derivar un precio a partir del otro.
+- **Precios** como entrada del sidebar (debajo de Flujo de Caja), no como tab de Configuración. Incluye precios de venta (**USD por defecto**; CUP opcional, activables por fila) y **tarifas de pago** a trabajadores en CUP (antes «Costos»); la ruta legacy `/costos` redirige a `/precios`. Cada moneda se define de forma independiente; se puede aplicar la tasa vigente de la app para derivar un precio a partir del otro.
 - **Categorías** de productos (CRUD con `is_system`, snapshot en pedidos)
 - **Roles de empleados**: catálogo `employee_roles`; cada rol puede asociarse a uno o más **tipos de trabajo** (`role_work_types`) que definen qué trabajos pueden realizar los empleados con ese rol (principal o secundario)
 - **Tipos de trabajo, formatos y acabados por categoría**: tablas `category_work_types`, `category_formats` y `category_finishes` (vinculadas a los catálogos `work_types`, `formats` y `finishes`). Catálogo global de acabados en Configuración → Acabados. Al crear líneas se preseleccionan tipos y acabados «por defecto», se limitan formatos asociados y cada tipo se expande en un `invoice_item`.
@@ -189,8 +189,10 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 
 ## 4. Moneda y Pagos
 
-- **Moneda principal**: CUP (Pesos Cubanos)
-- **Moneda secundaria**: USD (con tasa de conversión almacenada por operación)
+- **Precios de venta**: USD por defecto; CUP permanece disponible por fila
+- **Libro contable (pedidos/facturas)**: importes en CUP (si el precio es USD se convierte con la tasa vigente al crear la línea)
+- **Cobros y anticipos en efectivo**: USD por defecto; transferencia en CUP
+- **Salarios / tarifas de pago / denominaciones de caja internas**: CUP
 - **Denominaciones de billetes CUP**: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000
 - **Denominaciones de billetes USD**: 100, 50, 20, 10, 5, 2, 1
 - **Formas de pago**: Efectivo | Transferencia
@@ -240,7 +242,7 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 ## 7. Reglas de Negocio
 
 1. Un pedido siempre está asociado a un cliente
-2. Los precios se toman de la lista de precios configurada (no se hardcodean). Cada fila puede ofrecer CUP, USD o ambas; en pedidos/facturas el unitario se resuelve en **CUP** (prioridad CUP activo; si solo USD, `precio_usd × tasa` vigente)
+2. Los precios se toman de la lista de precios configurada (no se hardcodean). Cada fila puede ofrecer USD, CUP o ambas; en pedidos/facturas el unitario se resuelve en **CUP** (prioridad **USD activo** → `precio_usd × tasa`; si solo CUP, precio CUP)
 3. Los pagos a empleados usan las **tarifas de pago** en CUP (distintas a precios de VENTA), salvo empleados con **salario fijo diario** o **salario por destajo diario**
 4. La deuda anterior del cliente **no** se incluye en el total del pedido; al guardar se actualiza `clients.balance` (deuda abierta). El saldo a favor vive en `clients.credit_balance` y se puede aplicar al pedido/cobro
 5. El flujo de caja registra TODA operación de dinero (cobros a clientes, anticipos de pedido, pagos a empleados, gastos)
@@ -394,6 +396,12 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 ### v2.13 — Reverso de pago a empleados (mismo día) (2026-08)
 - `cash_transaction_id` en lotes y salarios diarios vincula el egreso de caja.
 - Botón **Deshacer** en nómina (solo fecha = hoy): revierte ítems a `pendiente` e inserta `ingreso` compensatorio (`salario_reverso`), sin borrar el egreso original.
+
+### v2.14 — Precios y cobros por defecto en USD (2026-08)
+- Precios de venta: USD activo por defecto en altas; CUP opcional.
+- Resolución de unitario en pedidos: prioridad USD×tasa; si solo CUP, usa CUP. Totales del pedido siguen en CUP.
+- Cobros/anticipos en efectivo y alta de movimiento de caja: moneda por defecto USD (transferencia sigue CUP).
+- Salarios y tarifas de pago a empleados no cambian (CUP).
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
