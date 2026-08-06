@@ -9,7 +9,7 @@ import {
   PackageMinus,
 } from "lucide-react";
 import { ModalPortal } from "@/components/common/ModalPortal";
-import { fetchInventoryItems, fetchMaterialCategories } from "@/db/queries/inventory";
+import { fetchInventoryItems, fetchMaterialCategories, fetchInventoryPendingOrderDemand } from "@/db/queries/inventory";
 import { InventoryRecipesPanel } from "@/features/inventory/components/InventoryRecipesPanel";
 import { InventoryMovementsSection } from "@/features/inventory/components/InventoryMovementsSection";
 import { ManualOutboundModal } from "@/features/inventory/components/ManualOutboundModal";
@@ -45,10 +45,16 @@ export function InventoryListPage() {
     queryKey: ["inventory", "material-categories"],
     queryFn: () => fetchMaterialCategories(false),
   });
+  const pendingDemandQuery = useQuery({
+    queryKey: ["inventory", "pending-order-demand"],
+    queryFn: fetchInventoryPendingOrderDemand,
+  });
 
   const items = itemsQuery.data ?? [];
   const lowStockCount = items.filter((item) => item.lowStock).length;
   const deficitCount = items.filter((item) => item.deficit).length;
+  const pendingDemand = pendingDemandQuery.data ?? [];
+  const pendingDemandCount = pendingDemand.length;
 
   const tiles = useMemo((): CategoryTile[] => {
     const cats = (categoriesQuery.data ?? []).filter((c) => c.isActive);
@@ -98,12 +104,36 @@ export function InventoryListPage() {
         </div>
       </div>
 
+      {pendingDemandCount > 0 && (
+        <div className="alert alert-warning">
+          <AlertTriangle className="h-5 w-5" />
+          <div className="space-y-1">
+            <span>
+              <strong>{pendingDemandCount}</strong> material(es) pedidos por pedidos en espera
+              (necesario &gt; disponible).
+            </span>
+            <ul className="list-inside list-disc text-sm">
+              {pendingDemand.slice(0, 5).map((d) => (
+                <li key={d.inventoryItemId}>
+                  {d.itemName}: necesario {d.needed.toFixed(2)} {d.unit} / disponible{" "}
+                  {d.available.toFixed(2)} {d.unit} ({d.openOrderCount} pedido
+                  {d.openOrderCount === 1 ? "" : "s"})
+                </li>
+              ))}
+              {pendingDemandCount > 5 && (
+                <li>… y {pendingDemandCount - 5} más</li>
+              )}
+            </ul>
+          </div>
+        </div>
+      )}
+
       {deficitCount > 0 && (
         <div className="alert alert-error">
           <AlertTriangle className="h-5 w-5" />
           <span>
-            <strong>{deficitCount}</strong> ítem(s) en déficit (existencia negativa). Repón material
-            para cubrir las líneas concluidas.
+            <strong>{deficitCount}</strong> ítem(s) con existencia negativa (legado). Repón material
+            con una entrada.
           </span>
         </div>
       )}

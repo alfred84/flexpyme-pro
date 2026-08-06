@@ -4,6 +4,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import {
   fetchInventoryItem,
   fetchInventoryMovements,
+  fetchInventoryPendingOrderDemand,
   registerInventoryMovement,
 } from "@/db/queries/inventory";
 import { formatDate } from "@/lib/format-date";
@@ -37,12 +38,20 @@ export function InventoryItemDetailPage() {
     enabled: Number.isFinite(itemId),
   });
 
+  const pendingDemandQuery = useQuery({
+    queryKey: ["inventory", "pending-order-demand"],
+    queryFn: fetchInventoryPendingOrderDemand,
+  });
+
+  const itemDemand = (pendingDemandQuery.data ?? []).find((d) => d.inventoryItemId === itemId);
+
   const mutation = useMutation({
     mutationFn: registerInventoryMovement,
     onSuccess: async () => {
       setQuantity("");
       setReason("");
       await queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      await queryClient.invalidateQueries({ queryKey: ["invoices"] });
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -137,6 +146,15 @@ export function InventoryItemDetailPage() {
               </div>
             </div>
           </div>
+          {itemDemand && (
+            <div role="alert" className="alert alert-warning">
+              <span>
+                Necesario en pedidos: {itemDemand.needed.toFixed(2)} {itemDemand.unit} / Disponible:{" "}
+                {itemDemand.available.toFixed(2)} {itemDemand.unit} ({itemDemand.openOrderCount}{" "}
+                pedido{itemDemand.openOrderCount === 1 ? "" : "s"} en espera)
+              </span>
+            </div>
+          )}
         </>
       )}
 

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, Plus } from "lucide-react";
-import { fetchInventoryItems, fetchMaterialCategories } from "@/db/queries/inventory";
+import { fetchInventoryItems, fetchMaterialCategories, fetchInventoryPendingOrderDemand } from "@/db/queries/inventory";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 /**
@@ -42,6 +42,10 @@ export function InventoryCategoryPage() {
     queryKey: ["inventory", "list"],
     queryFn: fetchInventoryItems,
   });
+  const pendingDemandQuery = useQuery({
+    queryKey: ["inventory", "pending-order-demand"],
+    queryFn: fetchInventoryPendingOrderDemand,
+  });
 
   const category = useMemo(
     () => (categoriesQuery.data ?? []).find((c) => c.id === categoryId) ?? null,
@@ -52,6 +56,18 @@ export function InventoryCategoryPage() {
     () => (itemsQuery.data ?? []).filter((i) => i.materialCategoryId === categoryId),
     [itemsQuery.data, categoryId],
   );
+
+  const demandByItemId = useMemo(() => {
+    const map = new Map<number, { needed: number; available: number; unit: string }>();
+    for (const d of pendingDemandQuery.data ?? []) {
+      map.set(d.inventoryItemId, {
+        needed: d.needed,
+        available: d.available,
+        unit: d.unit,
+      });
+    }
+    return map;
+  }, [pendingDemandQuery.data]);
 
   const validId = Number.isFinite(categoryId) && categoryId > 0;
 
@@ -113,9 +129,19 @@ export function InventoryCategoryPage() {
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className={item.deficit || item.lowStock ? "bg-error/10" : ""}>
-                  <td className="font-medium">{item.name}</td>
+              {items.map((item) => {
+                const demand = demandByItemId.get(item.id);
+                return (
+                <tr key={item.id} className={item.deficit || item.lowStock || demand ? "bg-error/10" : ""}>
+                  <td className="font-medium">
+                    {item.name}
+                    {demand && (
+                      <div className="mt-0.5 text-xs text-warning">
+                        Necesario en pedidos: {demand.needed.toFixed(2)} {demand.unit} / Disponible:{" "}
+                        {demand.available.toFixed(2)} {demand.unit}
+                      </div>
+                    )}
+                  </td>
                   <td className={`text-right ${item.deficit ? "font-semibold text-error" : ""}`}>
                     {item.quantity}
                   </td>
@@ -123,7 +149,9 @@ export function InventoryCategoryPage() {
                   <td className="text-right">{formatMinStock(item.minStock)}</td>
                   <td className="text-right">{formatCost(item.costPerUnit)}</td>
                   <td>
-                    {item.deficit ? (
+                    {demand ? (
+                      <span className="badge badge-sm badge-warning">Pedido en espera</span>
+                    ) : item.deficit ? (
                       <span className="badge badge-sm badge-error">Déficit</span>
                     ) : item.lowStock ? (
                       <span className="badge badge-sm badge-warning">Bajo</span>
@@ -150,7 +178,8 @@ export function InventoryCategoryPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {items.length === 0 && (
                 <tr>
                   <td colSpan={7} className="py-6 text-center text-base-content/60">
