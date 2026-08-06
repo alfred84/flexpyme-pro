@@ -1,13 +1,13 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.14 | Última actualización: 2026-08-03
+### Versión: 2.16 | Última actualización: 2026-08-06
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
 > producción, Otros gastos, cuadrículas de denominaciones CUP+USD con vuelto que
 > afecta caja, automatización de líneas por categoría (servicios/acabados
-> configurables), inventario por déficit (descuento por línea concluida),
+> configurables), inventario con materiales por línea (descuento al marcar Listo),
 > empleados multi-rol con nómina diaria, caja con neto diario + 30 días, y fecha
 > `dd/mm/aaaa` en toda la UI.
 
@@ -113,9 +113,9 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Listado: mosaico compacto por categoría de material; al entrar, tabla de ítems y alta de ítem; sección **Movimientos** (día/mes) con método Manual vs Rebaja por Pedido; **salida manual** (sin pedido) con **motivo obligatorio**; **normas** desde la opción **Normas** (modal)
 - Historial de movimientos por ítem (salidas con motivo obligatorio)
 - **Normas de producción**: por categoría de pedido + tipo de trabajo (tabs) + formato/acabado + material y cantidad/unidad; editables (solo afectan pedidos futuros); desactivadas ocultas con opción de ver/reactivar
-- En **Pedidos**, por línea: asignar materiales manualmente desde almacén (opción por defecto) **o** aplicar norma (se fijan materiales al crear el pedido)
-- **Descuento por línea concluida (v2.5)**: al concluir cada línea/servicio vía lotes de trabajo se descuentan materiales asignados o, si no hay, los de normas coincidentes
-- **Déficit permitido (v2.5)**: si falta material, la salida se registra igualmente dejando existencia negativa (déficit) en lugar de bloquear; la línea del pedido se marca `resource_missing` con nota y el pedido agrega la bandera; el inventario muestra el ítem en **Déficit**
+- En **Pedidos**, por línea: asignar materiales manualmente desde almacén (opción por defecto) **o** aplicar norma (se fijan materiales al crear el pedido). Solo materiales **existentes** (stock 0 o insuficiente permitido; no crear ítems desde el modal)
+- **Descuento por línea Listo**: al marcar Listo se descuentan materiales asignados o, si no hay, los de normas coincidentes; **solo si hay stock suficiente** (sin existencia negativa)
+- **Déficit al asignar (v2.16)**: si al guardar el pedido el stock no cubre `cant./ud. × cantidad de línea`, se permite guardar y se marca `resource_missing` (línea y pedido) con nota de materiales faltantes. **No** se puede marcar Listo (línea ni pedido) hasta reponer con una **entrada** en Inventario; tras la entrada se recalculan las banderas. Inventario muestra alerta de demanda pendiente (necesario &gt; disponible)
 
 ### 3.6 Flujo de Caja
 - Registro de todas las entradas y salidas de dinero
@@ -148,7 +148,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Ya no hay entrada **Stock** en el sidebar; la bandeja de salida vive en **Pedidos** con filtro `listos`
 - Rutas `/stock` redirigen a `/pedidos?filter=listos` (detalle → `/pedidos/:id`)
 - Badge del sidebar en Pedidos = en producción + listos sin cobrar
-- Al marcar **listo**: `production_completed_at`; el descuento de inventario ocurre por línea/servicio concluido (v2.5), no al marcar todo el pedido listo
+- Al marcar **listo**: `production_completed_at`; el descuento de inventario ocurre por línea al marcar Listo (con stock suficiente), no al marcar todo el pedido listo de golpe sin cubrir materiales
 
 ### 3.9 Módulo Facturas (v2.2)
 - Vista financiera/contable sobre la misma tabla `invoices` (1 pedido = 1 factura)
@@ -249,7 +249,7 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 4. La deuda anterior del cliente **no** se incluye en el total del pedido; al guardar se actualiza `clients.balance` (deuda abierta). El saldo a favor vive en `clients.credit_balance` y se puede aplicar al pedido/cobro
 5. El flujo de caja registra TODA operación de dinero (cobros a clientes, anticipos de pedido, pagos a empleados, gastos)
 6. Los empleados dados de baja no aparecen en nuevas asignaciones pero su historial se conserva
-7. El inventario descuenta materiales **al concluir cada línea/servicio** vía lotes de trabajo (materiales fijados en el pedido desde norma o asignación manual; si no hay, coincidencia con `inventory_recipes`); si falta material se permite déficit (existencia negativa), se marca `resource_missing` en la línea y en el pedido, y no se bloquea la conclusión
+7. El inventario descuenta materiales **al marcar Listo** cada línea (materiales fijados en el pedido desde norma o asignación manual; si no hay, coincidencia con `inventory_recipes`). El déficit se **declara al asignar** materiales con stock insuficiente (`resource_missing`); **no** se concluye la línea/pedido hasta reponer. El descuento exige stock suficiente (sin existencia negativa por conclusión)
 8. La tasa USD/CUP vigente se guarda en cada transacción para auditoría
 
 ---
@@ -342,7 +342,7 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - **Config por categoría**: `category_work_types` / `category_formats` / `category_finishes` (+ catálogo `finishes`); preselección de tipos y acabados al crear líneas; expansión a un `invoice_item` por tipo.
 - **Caja**: KPIs de flujo neto del día y de los últimos 30 días; cuadrículas de denominaciones en movimientos nuevos.
 - **Reportes de producción**: `/reportes-produccion` por Área/día/formato (Realizado vs Pendiente) + Factura vs Salario.
-- **Inventario**: descuento por línea concluida; déficit permitido con bandera `resource_missing`.
+- **Inventario**: descuento por línea concluida; déficit permitido con bandera `resource_missing` (sustituido en v2.16).
 - **Empleados**: multi-rol (`employee_extra_roles`) y nómina diaria.
 - **Otros gastos**: `/otros-gastos` con egreso automático en `cash_transactions`.
 - **Tipos de gasto (Otros gastos)**: catálogo `expense_types` con alta/renombre/activar-desactivar desde la UI; el select del formulario usa tipos activos.
@@ -412,6 +412,13 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - Inicio: KPIs monetarios, gráfico de ingresos y totales de pedidos recientes en USD (+ CUP donde corresponda).
 - Precios de tipo de trabajo editables en USD con equivalente CUP; tarifas de empleados permanecen en CUP.
 - Cuadrícula Pendiente/Recibido/Aplica del anticipo/cobro usa la moneda seleccionada (no fija CUP).
+
+### v2.16 — Materiales en déficit con bloqueo de Listo (2026-08)
+- Déficit se declara al **asignar** materiales (manual o norma) con stock insuficiente; se guarda el pedido y se marca `resource_missing`.
+- **No** se puede marcar Listo (línea ni pedido) ni concluir vía lotes de empleados hasta reponer con entrada en Inventario.
+- Al Listo, descuento **estricto** (sin stock negativo). Tras entradas se recalculan las banderas de pedidos abiertos.
+- Inventario: alerta de demanda pendiente; categoría/detalle muestran necesario vs disponible.
+- Modal de línea: aviso de déficit por material; se permite guardar.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
