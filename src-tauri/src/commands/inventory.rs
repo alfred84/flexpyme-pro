@@ -217,6 +217,330 @@ const ITEM_SELECT: &str = "SELECT ii.id, ii.name, ii.category, ii.material_categ
      FROM inventory_items ii
      LEFT JOIN inventory_material_categories mc ON mc.id = ii.material_category_id";
 
+/// Escasez de un material respecto a lo requerido por una línea.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MaterialShortageDto {
+    pub inventory_item_id: i64,
+    pub name: String,
+    pub needed: f64,
+    pub available: f64,
+}
+
+/// Demanda pendiente de pedidos abiertos sobre un ítem de inventario.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InventoryPendingDemandDto {
+    pub inventory_item_id: i64,
+    pub item_name: String,
+    pub unit: String,
+    pub available: f64,
+    pub needed: f64,
+    pub shortfall: f64,
+    pub open_order_count: i64,
+}
+
+const STOCK_EPS: f64 = 1e-9;
+
+/// Mensaje de escasez para UI / errores.
+pub fn format_shortages_message(shortages: &[MaterialShortageDto]) -> String {
+    shortages
+        .iter()
+        .map(|s| {
+            format!(
+                "{} (necesario {:.2}, disponible {:.2})",
+                s.name, s.needed, s.available
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+/// Resuelve cantidades totales por ítem para una línea (materiales asignados o normas).
+fn resolve_line_material_totals(
+    tx: &rusqlite::Transaction<'_>,
+    invoice_item_id: i64,
+    category_id: i64,
+    service: Option<&str>,
+    format_id: Option<i64>,
+    finish: Option<&str>,
+    quantity: i64,
+) -> Result<std::collections::HashMap<i64, f64>, String> {
+    let mut totals: std::collections::HashMap<i64, f64> = std::collections::HashMap::new();
+    if quantity <= 0 {
+        return Ok(totals);
+    }
+
+    let mut mat_stmt = tx
+        .prepare(
+            "SELECT inventory_item_id, quantity_per_unit
+             FROM invoice_item_materials WHERE invoice_item_id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+    let assigned = mat_stmt
+        .query_map(params![invoice_item_id], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    drop(mat_stmt);
+
+    if !assigned.is_empty() {
+        for (item_id, per_unit) in assigned {
+            let amount = per_unit * (quantity as f64);
+            if amount > 0.0 {
+                *totals.entry(item_id).or_insert(0.0) += amount;
+            }
+        }
+        return Ok(totals);
+    }
+
+    let line_service = normalize_token(service);
+    let line_finish = normalize_token(finish);
+    let mut recipe_stmt = tx
+        .prepare(
+            "SELECT r.service, r.work_type_id, wt.name, wt.code, r.format_id, r.finish,
+                    r.inventory_item_id, r.quantity_per_unit
+             FROM inventory_recipes r
+             LEFT JOIN work_types wt ON wt.id = r.work_type_id
+             WHERE r.is_active = 1 AND r.category_id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+    let recipes = recipe_stmt
+        .query_map(params![category_id], |row| {
+            Ok((
+                row.get::<_, Option<String>>(0)?,
+                row.get::<_, Option<i64>>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, Option<i64>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, i64>(6)?,
+                row.get::<_, f64>(7)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    drop(recipe_stmt);
+
+    for (recipe_service, _wt_id, wt_name, wt_code, recipe_format, recipe_finish, item_id, per_unit) in
+        recipes
+    {
+        if let Some(rf) = recipe_format {
+            if format_id != Some(rf) {
+                continue;
+            }
+        }
+        let rf_finish = normalize_token(recipe_finish.as_deref());
+        if let Some(ref want_finish) = rf_finish {
+            if line_finish.as_ref() != Some(want_finish) {
+                continue;
+            }
+        }
+
+        let mut matched = false;
+        if let Some(ref svc) = line_service {
+            for candidate in [
+                recipe_service.as_deref(),
+                wt_name.as_deref(),
+                wt_code.as_deref(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                if let Some(token) = normalize_token(Some(candidate)) {
+                    if &token == svc || svc.contains(&token) || token.contains(svc.as_str()) {
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+            if !matched
+                && recipe_service
+                    .as_ref()
+                    .map(|s| s.trim().is_empty())
+                    .unwrap_or(true)
+                && wt_name.is_none()
+            {
+                matched = true;
+            }
+        } else if recipe_service
+            .as_ref()
+            .map(|s| s.trim().is_empty())
+            .unwrap_or(true)
+            && wt_name.is_none()
+        {
+            matched = true;
+        }
+        if !matched {
+            continue;
+        }
+        let amount = per_unit * (quantity as f64);
+        if amount > 0.0 {
+            *totals.entry(item_id).or_insert(0.0) += amount;
+        }
+    }
+    Ok(totals)
+}
+
+/// Calcula materiales con stock insuficiente para una cantidad concreta de una línea.
+pub fn line_material_shortages_for_quantity(
+    tx: &rusqlite::Transaction<'_>,
+    invoice_item_id: i64,
+    quantity: i64,
+) -> Result<Vec<MaterialShortageDto>, String> {
+    let (category_id, service, format_id, finish): (
+        i64,
+        Option<String>,
+        Option<i64>,
+        Option<String>,
+    ) = tx
+        .query_row(
+            "SELECT category_id, service, format_id, finish FROM invoice_items WHERE id = ?1",
+            params![invoice_item_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .map_err(|_| "Línea de pedido no encontrada".to_string())?;
+
+    let totals = resolve_line_material_totals(
+        tx,
+        invoice_item_id,
+        category_id,
+        service.as_deref(),
+        format_id,
+        finish.as_deref(),
+        quantity,
+    )?;
+
+    let mut shortages = Vec::new();
+    for (item_id, needed) in totals {
+        if needed <= STOCK_EPS {
+            continue;
+        }
+        let (name, available): (String, f64) = tx
+            .query_row(
+                "SELECT name, quantity FROM inventory_items WHERE id = ?1",
+                params![item_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|_| format!("Ítem de inventario #{} no encontrado", item_id))?;
+        if available + STOCK_EPS < needed {
+            shortages.push(MaterialShortageDto {
+                inventory_item_id: item_id,
+                name,
+                needed,
+                available,
+            });
+        }
+    }
+    Ok(shortages)
+}
+
+/// Calcula materiales con stock insuficiente para la cantidad pendiente de una línea.
+pub fn line_material_shortages(
+    tx: &rusqlite::Transaction<'_>,
+    invoice_item_id: i64,
+) -> Result<Vec<MaterialShortageDto>, String> {
+    let (quantity, completed, status): (i64, i64, String) = tx
+        .query_row(
+            "SELECT quantity, completed_quantity,
+                    COALESCE(production_line_status, 'en_produccion')
+             FROM invoice_items WHERE id = ?1",
+            params![invoice_item_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .map_err(|_| "Línea de pedido no encontrada".to_string())?;
+
+    if status == "listo" {
+        return Ok(Vec::new());
+    }
+    let pending = (quantity - completed).max(0);
+    line_material_shortages_for_quantity(tx, invoice_item_id, pending)
+}
+
+/// Actualiza `resource_missing` / `resource_note` de líneas no listo y la bandera del pedido.
+pub fn recompute_invoice_resource_flags(
+    tx: &rusqlite::Transaction<'_>,
+    invoice_id: i64,
+) -> Result<(), String> {
+    let line_ids: Vec<i64> = {
+        let mut stmt = tx
+            .prepare(
+                "SELECT id FROM invoice_items
+                 WHERE invoice_id = ?1
+                   AND COALESCE(production_line_status, 'en_produccion') != 'listo'",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![invoice_id], |row| row.get(0))
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        rows
+    };
+
+    for line_id in line_ids {
+        let shortages = line_material_shortages(tx, line_id)?;
+        if shortages.is_empty() {
+            tx.execute(
+                "UPDATE invoice_items SET resource_missing = 0, resource_note = NULL WHERE id = ?1",
+                params![line_id],
+            )
+            .map_err(|e| e.to_string())?;
+        } else {
+            let note = format!(
+                "Material en déficit: {}",
+                format_shortages_message(&shortages)
+            );
+            tx.execute(
+                "UPDATE invoice_items SET resource_missing = 1, resource_note = ?1 WHERE id = ?2",
+                params![note, line_id],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+
+    tx.execute(
+        "UPDATE invoices SET resource_missing = (
+             SELECT CASE WHEN EXISTS (
+                 SELECT 1 FROM invoice_items
+                 WHERE invoice_id = ?1 AND resource_missing = 1
+                   AND COALESCE(production_line_status, 'en_produccion') != 'listo'
+             ) THEN 1 ELSE 0 END
+         ) WHERE id = ?1",
+        params![invoice_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Recalcula banderas de déficit en pedidos abiertos (p. ej. tras una entrada).
+pub fn recompute_open_invoices_resource_flags(tx: &rusqlite::Transaction<'_>) -> Result<(), String> {
+    let invoice_ids: Vec<i64> = {
+        let mut stmt = tx
+            .prepare(
+                "SELECT DISTINCT i.id
+                 FROM invoices i
+                 JOIN invoice_items ii ON ii.invoice_id = i.id
+                 WHERE i.deleted_at IS NULL AND i.cancelled_at IS NULL
+                   AND COALESCE(ii.production_line_status, 'en_produccion') != 'listo'",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| row.get(0))
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        rows
+    };
+    for id in invoice_ids {
+        recompute_invoice_resource_flags(tx, id)?;
+    }
+    Ok(())
+}
+
 fn apply_inventory_movement(
     tx: &rusqlite::Transaction<'_>,
     item_id: i64,
@@ -346,46 +670,6 @@ pub fn reverse_inventory_for_cancelled_invoice(
     Ok(())
 }
 
-fn apply_deduction_allow_deficit(
-    tx: &rusqlite::Transaction<'_>,
-    item_id: i64,
-    quantity: f64,
-    reason: Option<&str>,
-    reference_id: Option<i64>,
-    notes: Option<&str>,
-) -> Result<bool, String> {
-    if quantity <= 0.0 {
-        return Ok(false);
-    }
-    let current: f64 = tx
-        .query_row(
-            "SELECT quantity FROM inventory_items WHERE id = ?1",
-            params![item_id],
-            |row| row.get(0),
-        )
-        .map_err(|_| "Ítem de inventario no encontrado".to_string())?;
-    let new_quantity = current - quantity;
-    let unit_snapshot: Option<String> = tx
-        .query_row(
-            "SELECT unit_snapshot FROM inventory_items WHERE id = ?1",
-            params![item_id],
-            |row| row.get(0),
-        )
-        .ok();
-    tx.execute(
-        "INSERT INTO inventory_movements (item_id, type, quantity, unit_snapshot, reason, reference_id, notes)
-         VALUES (?1, 'salida', ?2, ?3, ?4, ?5, ?6)",
-        params![item_id, quantity, unit_snapshot, reason, reference_id, notes],
-    )
-    .map_err(|e| e.to_string())?;
-    tx.execute(
-        "UPDATE inventory_items SET quantity = ?1, updated_at = datetime('now') WHERE id = ?2",
-        params![new_quantity, item_id],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(new_quantity < 0.0)
-}
-
 /// Inserts material assignments for an invoice line.
 pub fn insert_invoice_item_materials(
     tx: &rusqlite::Transaction<'_>,
@@ -419,7 +703,7 @@ pub fn insert_invoice_item_materials(
     Ok(())
 }
 
-/// Deducts inventory for a completed invoice line (materials assigned or matching recipes).
+/// Deduce inventario de forma estricta (sin stock negativo) al concluir una línea.
 pub fn deduct_inventory_for_line(
     tx: &rusqlite::Transaction<'_>,
     invoice_id: i64,
@@ -430,151 +714,34 @@ pub fn deduct_inventory_for_line(
     format_id: Option<i64>,
     finish: Option<&str>,
     quantity: i64,
-) -> Result<Vec<String>, String> {
+) -> Result<(), String> {
     if quantity <= 0 {
-        return Ok(Vec::new());
+        return Ok(());
     }
 
-    let mut totals: std::collections::HashMap<i64, f64> = std::collections::HashMap::new();
-
-    let mut mat_stmt = tx
-        .prepare(
-            "SELECT inventory_item_id, quantity_per_unit
-             FROM invoice_item_materials WHERE invoice_item_id = ?1",
-        )
-        .map_err(|e| e.to_string())?;
-    let assigned = mat_stmt
-        .query_map(params![invoice_item_id], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?))
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    drop(mat_stmt);
-
-    if !assigned.is_empty() {
-        for (item_id, per_unit) in assigned {
-            let amount = per_unit * (quantity as f64);
-            if amount > 0.0 {
-                *totals.entry(item_id).or_insert(0.0) += amount;
-            }
-        }
-    } else {
-        let line_service = normalize_token(service);
-        let line_finish = normalize_token(finish);
-        let mut recipe_stmt = tx
-            .prepare(
-                "SELECT r.service, r.work_type_id, wt.name, wt.code, r.format_id, r.finish,
-                        r.inventory_item_id, r.quantity_per_unit
-                 FROM inventory_recipes r
-                 LEFT JOIN work_types wt ON wt.id = r.work_type_id
-                 WHERE r.is_active = 1 AND r.category_id = ?1",
-            )
-            .map_err(|e| e.to_string())?;
-        let recipes = recipe_stmt
-            .query_map(params![category_id], |row| {
-                Ok((
-                    row.get::<_, Option<String>>(0)?,
-                    row.get::<_, Option<i64>>(1)?,
-                    row.get::<_, Option<String>>(2)?,
-                    row.get::<_, Option<String>>(3)?,
-                    row.get::<_, Option<i64>>(4)?,
-                    row.get::<_, Option<String>>(5)?,
-                    row.get::<_, i64>(6)?,
-                    row.get::<_, f64>(7)?,
-                ))
-            })
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?;
-        drop(recipe_stmt);
-
-        for (recipe_service, _wt_id, wt_name, wt_code, recipe_format, recipe_finish, item_id, per_unit) in
-            recipes
-        {
-            if let Some(rf) = recipe_format {
-                if format_id != Some(rf) {
-                    continue;
-                }
-            }
-            let rf_finish = normalize_token(recipe_finish.as_deref());
-            if let Some(ref want_finish) = rf_finish {
-                if line_finish.as_ref() != Some(want_finish) {
-                    continue;
-                }
-            }
-
-            let mut matched = false;
-            if let Some(ref svc) = line_service {
-                for candidate in [
-                    recipe_service.as_deref(),
-                    wt_name.as_deref(),
-                    wt_code.as_deref(),
-                ]
-                .into_iter()
-                .flatten()
-                {
-                    if let Some(token) = normalize_token(Some(candidate)) {
-                        if &token == svc
-                            || svc.contains(&token)
-                            || token.contains(svc.as_str())
-                        {
-                            matched = true;
-                            break;
-                        }
-                    }
-                }
-                // Legacy: empty recipe service matches any
-                if !matched
-                    && recipe_service
-                        .as_ref()
-                        .map(|s| s.trim().is_empty())
-                        .unwrap_or(true)
-                    && wt_name.is_none()
-                {
-                    matched = true;
-                }
-            } else if recipe_service
-                .as_ref()
-                .map(|s| s.trim().is_empty())
-                .unwrap_or(true)
-                && wt_name.is_none()
-            {
-                matched = true;
-            }
-            if !matched {
-                continue;
-            }
-            let amount = per_unit * (quantity as f64);
-            if amount > 0.0 {
-                *totals.entry(item_id).or_insert(0.0) += amount;
-            }
-        }
-    }
+    let totals = resolve_line_material_totals(
+        tx,
+        invoice_item_id,
+        category_id,
+        service,
+        format_id,
+        finish,
+        quantity,
+    )?;
 
     let reason = format!("Pedido {} (línea concluida)", invoice_number);
-    let mut deficit_items = Vec::new();
     for (item_id, amount) in totals {
-        let deficit = apply_deduction_allow_deficit(
+        apply_inventory_movement(
             tx,
             item_id,
+            "salida",
             amount,
             Some(&reason),
             Some(invoice_id),
             Some("Consumo por línea concluida"),
         )?;
-        if deficit {
-            let name: String = tx
-                .query_row(
-                    "SELECT name FROM inventory_items WHERE id = ?1",
-                    params![item_id],
-                    |row| row.get(0),
-                )
-                .unwrap_or_else(|_| "material".to_string());
-            deficit_items.push(name);
-        }
     }
-    Ok(deficit_items)
+    Ok(())
 }
 
 /// Legacy whole-invoice deduction (kept for compatibility; prefer line deduction).
@@ -618,7 +785,7 @@ pub fn deduct_inventory_for_invoice(
     drop(stmt);
 
     for (item_id, category_id, service, format_id, finish, qty) in lines {
-        let _ = deduct_inventory_for_line(
+        deduct_inventory_for_line(
             tx,
             invoice_id,
             invoice_number,
@@ -984,8 +1151,53 @@ pub fn inventory_movement_register(payload: MovementPayload) -> Result<(), Strin
         None,
         normalize_optional(payload.notes).as_deref(),
     )?;
+    if movement_type == "entrada" {
+        recompute_open_invoices_resource_flags(&tx)?;
+    }
     tx.commit().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Demanda pendiente de materiales en pedidos abiertos (necesario > disponible).
+#[tauri::command]
+pub fn inventory_pending_order_demand() -> Result<Vec<InventoryPendingDemandDto>, String> {
+    let conn = db::open_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT ii.id, ii.name, COALESCE(ii.unit_snapshot, ii.unit, ''), ii.quantity,
+                    SUM(iim.quantity_per_unit * (inv_item.quantity - inv_item.completed_quantity)),
+                    COUNT(DISTINCT inv.id)
+             FROM invoice_item_materials iim
+             JOIN invoice_items inv_item ON inv_item.id = iim.invoice_item_id
+             JOIN invoices inv ON inv.id = inv_item.invoice_id
+             JOIN inventory_items ii ON ii.id = iim.inventory_item_id
+             WHERE inv.deleted_at IS NULL
+               AND inv.cancelled_at IS NULL
+               AND COALESCE(inv_item.production_line_status, 'en_produccion') != 'listo'
+               AND (inv_item.quantity - inv_item.completed_quantity) > 0
+             GROUP BY ii.id, ii.name, ii.unit_snapshot, ii.unit, ii.quantity
+             HAVING SUM(iim.quantity_per_unit * (inv_item.quantity - inv_item.completed_quantity))
+                    > ii.quantity + 1e-9
+             ORDER BY ii.name COLLATE NOCASE",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            let available: f64 = row.get(3)?;
+            let needed: f64 = row.get(4)?;
+            Ok(InventoryPendingDemandDto {
+                inventory_item_id: row.get(0)?,
+                item_name: row.get(1)?,
+                unit: row.get(2)?,
+                available,
+                needed,
+                shortfall: (needed - available).max(0.0),
+                open_order_count: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 /// Lists movements for an item, most recent first.

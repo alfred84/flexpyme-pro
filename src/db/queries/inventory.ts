@@ -5,6 +5,7 @@ import type {
   InventoryItemDto,
   InventoryMovementDto,
   InventoryMovementListDto,
+  InventoryPendingDemandDto,
   InventoryRecipeDto,
   MaterialCategoryDto,
   MovementPayload,
@@ -45,6 +46,13 @@ export async function updateInventoryItem(payload: UpdateItemPayload): Promise<v
  */
 export async function registerInventoryMovement(payload: MovementPayload): Promise<void> {
   return invoke<void>("inventory_movement_register", { payload });
+}
+
+/**
+ * Lista ítems con demanda pendiente de pedidos abiertos (necesario > disponible).
+ */
+export async function fetchInventoryPendingOrderDemand(): Promise<InventoryPendingDemandDto[]> {
+  return invoke<InventoryPendingDemandDto[]>("inventory_pending_order_demand");
 }
 
 /**

@@ -916,6 +916,14 @@ fn mark_invoice_item_completed(
             continue;
         }
         let add = remaining.min(pending);
+        let shortages = crate::commands::inventory::line_material_shortages_for_quantity(tx, id, add)?;
+        if !shortages.is_empty() {
+            return Err(format!(
+                "No se puede concluir el trabajo: falta material ({}). Registra una entrada en Inventario.",
+                crate::commands::inventory::format_shortages_message(&shortages)
+            ));
+        }
+
         tx.execute(
             "UPDATE invoice_items
              SET completed_quantity = completed_quantity + ?1, completed_at = datetime('now')
@@ -930,7 +938,7 @@ fn mark_invoice_item_completed(
         } else {
             Some(service.as_str())
         };
-        let deficit = crate::commands::inventory::deduct_inventory_for_line(
+        crate::commands::inventory::deduct_inventory_for_line(
             tx,
             invoice_id,
             invoice_number,
@@ -941,14 +949,7 @@ fn mark_invoice_item_completed(
             finish.as_deref(),
             add,
         )?;
-        if !deficit.is_empty() {
-            let note = format!("Recurso insuficiente: {}", deficit.join(", "));
-            tx.execute(
-                "UPDATE invoice_items SET resource_missing = 1, resource_note = ?1 WHERE id = ?2",
-                params![note, id],
-            )
-            .map_err(|e| e.to_string())?;
-        }
+        crate::commands::inventory::recompute_invoice_resource_flags(tx, invoice_id)?;
     }
     Ok(())
 }

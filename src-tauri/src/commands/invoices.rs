@@ -33,6 +33,8 @@ pub struct InvoiceListDto {
     pub exchange_rate_snapshot: Option<f64>,
     pub can_edit: bool,
     pub can_cancel: bool,
+    /// True si alguna línea abierta tiene material en déficit.
+    pub resource_missing: bool,
 }
 
 /// Invoice header for detail view.
@@ -469,7 +471,8 @@ pub fn invoices_list() -> Result<Vec<InvoiceListDto>, String> {
             "SELECT i.id, i.invoice_number, i.client_id, c.name, i.date, i.total, i.paid, i.balance, i.status,
                     i.production_status, i.payment_status, i.payment_currency, i.exchange_rate_snapshot,
                     COALESCE((SELECT SUM(completed_quantity) FROM invoice_items WHERE invoice_id = i.id), 0),
-                    COALESCE((SELECT COUNT(*) FROM production_batch_items WHERE invoice_id = i.id), 0)
+                    COALESCE((SELECT COUNT(*) FROM production_batch_items WHERE invoice_id = i.id), 0),
+                    i.resource_missing
              FROM invoices i
              JOIN clients c ON c.id = i.client_id
              WHERE i.deleted_at IS NULL AND i.cancelled_at IS NULL
@@ -501,6 +504,7 @@ pub fn invoices_list() -> Result<Vec<InvoiceListDto>, String> {
                 exchange_rate_snapshot: row.get(12)?,
                 can_edit,
                 can_cancel,
+                resource_missing: row.get::<_, i64>(15)? != 0,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -515,7 +519,7 @@ pub fn invoices_financial_list() -> Result<Vec<InvoiceListDto>, String> {
         .prepare(
             "SELECT i.id, i.invoice_number, i.client_id, c.name, i.date, i.total, i.paid, i.balance, i.status,
                     i.production_status, i.payment_status, i.payment_currency, i.exchange_rate_snapshot,
-                    i.cancelled_at
+                    i.cancelled_at, i.resource_missing
              FROM invoices i
              JOIN clients c ON c.id = i.client_id
              WHERE i.deleted_at IS NULL
@@ -545,6 +549,7 @@ pub fn invoices_financial_list() -> Result<Vec<InvoiceListDto>, String> {
                 exchange_rate_snapshot: row.get(12)?,
                 can_edit: false,
                 can_cancel,
+                resource_missing: row.get::<_, i64>(14)? != 0,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -1025,6 +1030,8 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
         apply_invoice_payment_in_tx(&tx, &register)?;
     }
 
+    crate::commands::inventory::recompute_invoice_resource_flags(&tx, invoice_id)?;
+
     tx.commit().map_err(|e| e.to_string())?;
 
     Ok(CreateInvoiceResponse {
@@ -1191,6 +1198,8 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
     if old_client_id != payload.client_id {
         recalc_client_balance(&tx, payload.client_id)?;
     }
+
+    crate::commands::inventory::recompute_invoice_resource_flags(&tx, payload.id)?;
 
     tx.commit().map_err(|e| e.to_string())?;
     invoices_get_detail(payload.id).map(|d| d.invoice)
@@ -1641,6 +1650,18 @@ pub fn invoice_item_mark_listo(payload: MarkInvoiceItemListoPayload) -> Result<I
         ));
     }
 
+    let shortages = crate::commands::inventory::line_material_shortages_for_quantity(
+        &tx,
+        payload.invoice_item_id,
+        total_qty,
+    )?;
+    if !shortages.is_empty() {
+        return Err(format!(
+            "No se puede marcar Listo: falta material ({}). Registra una entrada en Inventario.",
+            crate::commands::inventory::format_shortages_message(&shortages)
+        ));
+    }
+
     let service_name = service.clone().unwrap_or_default();
     if service_name.trim().is_empty() {
         return Err("La linea no tiene tipo de trabajo".to_string());
@@ -1730,7 +1751,7 @@ pub fn invoice_item_mark_listo(payload: MarkInvoiceItemListoPayload) -> Result<I
     } else {
         Some(service_name.as_str())
     };
-    let deficit = crate::commands::inventory::deduct_inventory_for_line(
+    crate::commands::inventory::deduct_inventory_for_line(
         &tx,
         invoice_id,
         &invoice_number,
@@ -1741,25 +1762,13 @@ pub fn invoice_item_mark_listo(payload: MarkInvoiceItemListoPayload) -> Result<I
         finish.as_deref(),
         total_qty,
     )?;
-    if !deficit.is_empty() {
-        let note = format!("Recurso insuficiente: {}", deficit.join(", "));
-        tx.execute(
-            "UPDATE invoice_items SET resource_missing = 1, resource_note = ?1 WHERE id = ?2",
-            params![note, payload.invoice_item_id],
-        )
-        .map_err(|e| e.to_string())?;
-    }
 
     tx.execute(
-        "UPDATE invoices SET resource_missing = (
-             SELECT CASE WHEN EXISTS (
-                 SELECT 1 FROM invoice_items
-                 WHERE invoice_id = ?1 AND resource_missing = 1
-             ) THEN 1 ELSE 0 END
-         ) WHERE id = ?1",
-        params![invoice_id],
+        "UPDATE invoice_items SET resource_missing = 0, resource_note = NULL WHERE id = ?1",
+        params![payload.invoice_item_id],
     )
     .map_err(|e| e.to_string())?;
+    crate::commands::inventory::recompute_invoice_resource_flags(&tx, invoice_id)?;
 
     sync_invoice_production_status_from_lines(&tx, invoice_id)?;
     tx.commit().map_err(|e| e.to_string())?;

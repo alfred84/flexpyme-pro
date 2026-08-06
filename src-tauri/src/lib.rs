@@ -176,6 +176,7 @@ pub fn run() {
             commands::inventory::inventory_item_create,
             commands::inventory::inventory_item_update,
             commands::inventory::inventory_movement_register,
+            commands::inventory::inventory_pending_order_demand,
             commands::inventory::inventory_movements_for_item,
             commands::inventory::inventory_movements_list,
             commands::inventory::inventory_material_categories_list,

@@ -31,6 +31,19 @@ export interface InventoryItemDto {
 }
 
 /**
+ * Demanda pendiente de pedidos abiertos sobre un ítem (necesario > disponible).
+ */
+export interface InventoryPendingDemandDto {
+  inventoryItemId: number;
+  itemName: string;
+  unit: string;
+  available: number;
+  needed: number;
+  shortfall: number;
+  openOrderCount: number;
+}
+
+/**
  * Movimiento de stock (entrada/salida).
  */
 export interface InventoryMovementDto {

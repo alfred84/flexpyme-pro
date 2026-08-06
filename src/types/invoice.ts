@@ -23,6 +23,8 @@ export interface InvoiceListDto {
   canEdit: boolean;
   /** True si el pedido se puede anular (no cobrado al 100%). */
   canCancel: boolean;
+  /** True si alguna línea abierta tiene material en déficit. */
+  resourceMissing: boolean;
 }
 
 /**
