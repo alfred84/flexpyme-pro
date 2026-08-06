@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -19,13 +19,15 @@ import {
   Package,
   Receipt,
 } from "lucide-react";
+import { DualMoneyText } from "@/components/common/DualMoneyText";
 import { fetchIncomeByCategory, fetchReportsSummary } from "@/db/queries/reports";
 import { fetchInvoices } from "@/db/queries/invoices";
 import { fetchBackupOverview } from "@/db/queries/settings";
+import { useAppSettings } from "@/hooks/use-app-settings";
+import { cupToUsd } from "@/lib/currency";
 import { formatDate, formatDateTime, todayIso } from "@/lib/format-date";
 import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
-import { useAppSettings } from "@/hooks/use-app-settings";
 
 /**
  * Devuelve una fecha en formato `YYYY-MM-DD` (calendario local).
@@ -48,7 +50,7 @@ function isoDate(date: Date): string {
  */
 function KpiCard(props: {
   label: string;
-  value: string;
+  value: ReactNode;
   icon: typeof Receipt;
   accent: string;
 }) {
@@ -61,7 +63,7 @@ function KpiCard(props: {
         </span>
         <div className="min-w-0">
           <p className="truncate text-xs uppercase tracking-wide text-base-content/60">{label}</p>
-          <p className="truncate text-xl font-semibold">{value}</p>
+          <div className="text-xl font-semibold leading-tight">{value}</div>
         </div>
       </div>
     </div>
@@ -75,6 +77,9 @@ function KpiCard(props: {
  */
 export function DashboardPage() {
   const settings = useAppSettings();
+  const rate = settings.usdExchangeRate;
+  const moneyPrimary = rate > 0 ? ("USD" as const) : ("CUP" as const);
+
   const now = new Date();
   const monthStart = isoDate(new Date(now.getFullYear(), now.getMonth(), 1));
   const today = todayIso();
@@ -109,7 +114,18 @@ export function DashboardPage() {
   );
   const unpaidCount = invoices.filter((inv) => inv.balance > 0).length;
   const todayCount = invoices.filter((inv) => inv.date === today).length;
-  const chartData = (incomeQuery.data ?? []).map((row) => ({ name: row.label, total: row.total }));
+
+  const chartData = useMemo(
+    () =>
+      (incomeQuery.data ?? []).map((row) => ({
+        name: row.label,
+        /** Valor del eje (USD si hay tasa; si no, CUP del libro). */
+        total: rate > 0 ? cupToUsd(row.total, rate) : row.total,
+        totalCup: row.total,
+      })),
+    [incomeQuery.data, rate],
+  );
+
   const backups = backupOverviewQuery.data?.backups ?? [];
 
   return (
@@ -121,8 +137,15 @@ export function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label={moneyHeading("Facturación del mes")}
-          value={formatAmount(summary?.totalBilled ?? 0)}
+          label={moneyHeading("Facturación del mes", moneyPrimary)}
+          value={
+            <DualMoneyText
+              amountCup={summary?.totalBilled ?? 0}
+              rate={rate}
+              primary="USD"
+              className="items-start"
+            />
+          }
           icon={Receipt}
           accent="bg-primary/15 text-primary"
         />
@@ -133,8 +156,15 @@ export function DashboardPage() {
           accent="bg-warning/15 text-warning"
         />
         <KpiCard
-          label={moneyHeading("Cobros pendientes")}
-          value={formatAmount(summary?.totalPending ?? 0)}
+          label={moneyHeading("Cobros pendientes", moneyPrimary)}
+          value={
+            <DualMoneyText
+              amountCup={summary?.totalPending ?? 0}
+              rate={rate}
+              primary="USD"
+              className="items-start"
+            />
+          }
           icon={CircleDollarSign}
           accent="bg-error/15 text-error"
         />
@@ -148,7 +178,9 @@ export function DashboardPage() {
 
       <div className="card bg-base-200">
         <div className="card-body">
-          <h3 className="card-title text-base">Ingresos por categoría (últimos 30 días)</h3>
+          <h3 className="card-title text-base">
+            {moneyHeading("Ingresos por categoría (últimos 30 días)", moneyPrimary)}
+          </h3>
           {incomeQuery.isLoading ? (
             <div className="h-72 animate-pulse rounded-lg bg-base-300" />
           ) : chartData.length === 0 ? (
@@ -159,8 +191,25 @@ export function DashboardPage() {
                 <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
                   <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} width={70} />
-                  <Tooltip formatter={(value) => formatMoney(Number(value))} />
+                  <YAxis
+                    tick={{ fontSize: 12 }}
+                    width={80}
+                    tickFormatter={(value: number) => formatAmount(Number(value))}
+                  />
+                  <Tooltip
+                    formatter={(value, _name, item) => {
+                      const cup = Number(
+                        (item?.payload as { totalCup?: number } | undefined)?.totalCup ?? value,
+                      );
+                      if (rate > 0) {
+                        return [
+                          `${formatMoney(Number(value), "USD")} (${formatMoney(cup, "CUP")})`,
+                          "Importe",
+                        ];
+                      }
+                      return [formatMoney(cup, "CUP"), "Importe"];
+                    }}
+                  />
                   <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -185,29 +234,42 @@ export function DashboardPage() {
                     <th>Nº</th>
                     <th>Cliente</th>
                     <th>Fecha</th>
-                    <th className="text-right">{moneyHeading("Total")}</th>
+                    <th className="text-right">{moneyHeading("Total", "USD")}</th>
+                    <th className="text-right">{moneyHeading("Total", "CUP")}</th>
                     <th>Estado</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {recentInvoices.map((inv) => (
-                    <tr key={inv.id}>
-                      <td className="font-mono text-xs">{inv.invoiceNumber}</td>
-                      <td className="max-w-[12rem] truncate">{inv.clientName}</td>
-                      <td className="text-xs">{formatDate(inv.date)}</td>
-                      <td className="text-right">{formatAmount(inv.total)}</td>
-                      <td>
-                        <span
-                          className={`badge badge-sm ${inv.paymentStatus === "cobrado" ? "badge-success" : "badge-warning"}`}
-                        >
-                          {inv.paymentStatus === "cobrado" ? "Cobrado" : "Pendiente"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {recentInvoices.map((inv) => {
+                    const rowRate =
+                      inv.exchangeRateSnapshot && inv.exchangeRateSnapshot > 0
+                        ? inv.exchangeRateSnapshot
+                        : rate;
+                    const paidInCup = (inv.paymentCurrency ?? "").toUpperCase() === "CUP";
+                    return (
+                      <tr key={inv.id}>
+                        <td className="font-mono text-xs">{inv.invoiceNumber}</td>
+                        <td className="max-w-[12rem] truncate">{inv.clientName}</td>
+                        <td className="text-xs">{formatDate(inv.date)}</td>
+                        <td className="text-right tabular-nums">
+                          {formatAmount(cupToUsd(inv.total, rowRate))}
+                        </td>
+                        <td className="text-right tabular-nums">
+                          {paidInCup ? formatAmount(inv.total) : "—"}
+                        </td>
+                        <td>
+                          <span
+                            className={`badge badge-sm ${inv.paymentStatus === "cobrado" ? "badge-success" : "badge-warning"}`}
+                          >
+                            {inv.paymentStatus === "cobrado" ? "Cobrado" : "Pendiente"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {recentInvoices.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="py-6 text-center text-base-content/60">
+                      <td colSpan={6} className="py-6 text-center text-base-content/60">
                         Sin pedidos todavía.
                       </td>
                     </tr>
@@ -251,13 +313,17 @@ export function DashboardPage() {
               <h3 className="card-title text-base">
                 <DatabaseBackup className="h-5 w-5" /> Últimos backups
               </h3>
-              <Link to="/configuracion" search={{ tab: "backup" }} className="btn btn-ghost btn-xs gap-1">
+              <Link
+                to="/configuracion"
+                search={{ tab: "backup" }}
+                className="btn btn-ghost btn-xs gap-1"
+              >
                 Configurar <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
             <p className="text-xs text-base-content/60">
-              Backup automático cada {backupOverviewQuery.data?.intervalDays ?? 1} día(s). Último programado:{" "}
-              {backupOverviewQuery.data?.lastScheduledBackupAt ?? "Sin registro"}
+              Backup automático cada {backupOverviewQuery.data?.intervalDays ?? 1} día(s). Último
+              programado: {backupOverviewQuery.data?.lastScheduledBackupAt ?? "Sin registro"}
             </p>
             {backupOverviewQuery.isLoading ? (
               <p className="text-sm text-base-content/60">Cargando backups...</p>
