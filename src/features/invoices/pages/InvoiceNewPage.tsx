@@ -288,21 +288,27 @@ export function InvoiceNewPage() {
         draftLineToItems(line, recipesQuery.data ?? [], categoryWorkTypesQuery.data ?? []),
       );
 
+      const paymentIsCup =
+        payment.paymentMethod === "transferencia" || payment.paymentCurrency === "CUP";
+      const advanceIsCup =
+        advancePayment.paymentMethod === "transferencia" ||
+        advancePayment.paymentCurrency === "CUP";
+
+      // Pedido en CUP: la tasa convierte precios USD → total CUP (editable en el panel).
+      if (paymentIsCup && summaryRate <= 0) {
+        throw new Error("Indica una tasa USD→CUP válida para el pedido en CUP.");
+      }
+      if (registerAdvance && advanceIsCup && advanceRateForReceive <= 0) {
+        throw new Error("Indica una tasa USD→CUP válida para el anticipo en CUP.");
+      }
+      // Cobro en USD: tasa de libro (app); sigue siendo necesaria para registrar el ingreso.
       if (
         payment.paymentMethod === "efectivo" &&
         payment.paymentCurrency === "USD" &&
         exchangeRateForReceive <= 0 &&
         collectPayment
       ) {
-        throw new Error("Indica una tasa USD→CUP válida para el cobro.");
-      }
-      if (
-        registerAdvance &&
-        advancePayment.paymentMethod === "efectivo" &&
-        advancePayment.paymentCurrency === "USD" &&
-        advanceRateForReceive <= 0
-      ) {
-        throw new Error("Indica una tasa USD→CUP válida para el anticipo.");
+        throw new Error("No hay tasa USD→CUP vigente para registrar el cobro en USD.");
       }
 
       const isUsd = payment.paymentMethod === "efectivo" && payment.paymentCurrency === "USD";

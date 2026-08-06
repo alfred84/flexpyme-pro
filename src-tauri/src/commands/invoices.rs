@@ -818,10 +818,14 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
     if payment_currency != "CUP" && payment_currency != "USD" {
         return Err("Moneda de pago inválida".to_string());
     }
+    // Tasa USD→CUP del pedido: obligatoria al cobrar en USD; también se guarda en CUP
+    // (precios de venta en USD convertidos) para auditoría y listados.
     let exchange_rate = if payment_currency == "USD" {
         if payload.exchange_rate_snapshot <= 0.0 {
             return Err("La tasa de cambio debe ser mayor que cero".to_string());
         }
+        payload.exchange_rate_snapshot
+    } else if payload.exchange_rate_snapshot > 0.0 {
         payload.exchange_rate_snapshot
     } else {
         0.0

@@ -20,6 +20,10 @@ interface OrderPaymentSectionProps {
 /**
  * Sección de método de pago y moneda en el formulario de pedido.
  *
+ * La tasa editable aparece cuando el cobro es en CUP (incl. transferencia):
+ * los precios de venta están en USD y la tasa define el total en CUP.
+ * En cobro USD no se edita aquí (se usa la tasa de la app para el libro).
+ *
  * @param props - Total en CUP y estado controlado del pago.
  * @returns Bloque de UI para capturar forma de pago.
  */
@@ -29,7 +33,9 @@ export function OrderPaymentSection(props: OrderPaymentSectionProps) {
   const rate = Number(value.exchangeRate.replace(",", ".")) || 0;
   const isTransfer = value.paymentMethod === "transferencia";
   const isUsd = !isTransfer && value.paymentCurrency === "USD";
-  const amountUsd = useMemo(() => (isUsd && rate > 0 ? totalCup / rate : 0), [isUsd, rate, totalCup]);
+  /** Cobro en CUP: efectivo CUP o transferencia (siempre CUP). */
+  const isCupPayment = isTransfer || value.paymentCurrency === "CUP";
+  const amountUsd = useMemo(() => (rate > 0 ? totalCup / rate : 0), [rate, totalCup]);
 
   const setMethod = (paymentMethod: PaymentMethod) => {
     const next: OrderPaymentState = { ...value, paymentMethod };
@@ -84,7 +90,7 @@ export function OrderPaymentSection(props: OrderPaymentSectionProps) {
           </div>
         )}
 
-        {isUsd && (
+        {isCupPayment && (
           <div className="space-y-1 rounded-lg bg-base-200 p-2 text-xs">
             <label className="form-control">
               <span className="label-text text-xs">Tasa aplicada (1 USD = CUP)</span>
@@ -95,6 +101,9 @@ export function OrderPaymentSection(props: OrderPaymentSectionProps) {
                 onChange={(e) => onChange({ ...value, exchangeRate: e.target.value })}
               />
             </label>
+            <p className="text-base-content/60">
+              Los precios de venta están en USD; esta tasa convierte el total a CUP.
+            </p>
             <div className="flex justify-between">
               <span>Total USD</span>
               <span>{formatAmount(amountUsd)}</span>
@@ -118,9 +127,12 @@ export function OrderPaymentSection(props: OrderPaymentSectionProps) {
           </label>
         )}
 
-        {!isUsd && (
+        {isUsd && (
           <p className="text-right text-xs">
-            Total a pagar: <span className="font-semibold">{formatMoney(totalCup)}</span>
+            Total a pagar:{" "}
+            <span className="font-semibold">
+              {rate > 0 ? formatMoney(amountUsd, "USD") : "—"}
+            </span>
           </p>
         )}
       </div>
