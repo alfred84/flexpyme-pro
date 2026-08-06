@@ -30,10 +30,6 @@ import { OrderHeaderSection } from "@/features/invoices/components/OrderHeaderSe
 import { OrderLineModal } from "@/features/invoices/components/OrderLineModal";
 import { OrderLinesTable } from "@/features/invoices/components/OrderLinesTable";
 import {
-  OrderWorkTypeSummary,
-  aggregateWorkTypeSummary,
-} from "@/features/invoices/components/OrderWorkTypeSummary";
-import {
   OrderPaymentSection,
   type OrderPaymentState,
 } from "@/features/invoices/components/OrderPaymentSection";
@@ -477,19 +473,6 @@ export function InvoiceNewPage() {
                 exchangeRate={summaryRate}
                 onEdit={openEditLine}
                 onRemove={removeLine}
-              />
-              <OrderWorkTypeSummary
-                exchangeRate={summaryRate}
-                rows={aggregateWorkTypeSummary(
-                  lines.flatMap((line) => {
-                    const qty = Number.parseInt(line.quantity, 10) || 0;
-                    return line.services.map((s) => ({
-                      service: s.service,
-                      quantity: qty,
-                      unitPrice: Number.parseFloat(s.unitPrice.replace(",", ".")) || 0,
-                    }));
-                  }),
-                )}
               />
             </div>
           </div>
