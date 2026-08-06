@@ -149,10 +149,7 @@ export function InvoiceEditPage() {
       await queryClient.invalidateQueries({ queryKey: ["invoices"] });
       await queryClient.invalidateQueries({ queryKey: ["clients"] });
       pushFlashMessage({ kind: "success", text: "Pedido actualizado." });
-      await navigate({
-        to: "/pedidos/$invoiceId",
-        params: { invoiceId: String(invoiceId) },
-      });
+      await navigate({ to: "/pedidos" });
     },
     onError: (err: Error) => setFormError(err.message),
   });
@@ -222,11 +219,7 @@ export function InvoiceEditPage() {
           <h1 className="text-2xl font-bold">Editar pedido</h1>
           {inv && <p className="font-mono text-base-content/70">{inv.invoiceNumber}</p>}
         </div>
-        <Link
-          to="/pedidos/$invoiceId"
-          params={{ invoiceId: String(invoiceId) }}
-          className="btn btn-ghost btn-sm"
-        >
+        <Link to="/pedidos" className="btn btn-ghost btn-sm">
           Cancelar
         </Link>
       </div>
@@ -314,11 +307,7 @@ export function InvoiceEditPage() {
       </div>
 
       <div className="flex justify-end gap-2">
-        <Link
-          to="/pedidos/$invoiceId"
-          params={{ invoiceId: String(invoiceId) }}
-          className="btn btn-ghost"
-        >
+        <Link to="/pedidos" className="btn btn-ghost">
           Cancelar
         </Link>
         <button
