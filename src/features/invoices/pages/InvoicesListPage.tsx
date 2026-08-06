@@ -146,7 +146,16 @@ export function InvoicesListPage() {
       {
         id: "production",
         header: "Producción",
-        cell: ({ row }) => <ProductionStatusBadge status={row.original.productionStatus} />,
+        cell: ({ row }) => (
+          <div className="flex flex-wrap items-center gap-1">
+            <ProductionStatusBadge status={row.original.productionStatus} />
+            {row.original.resourceMissing && (
+              <span className="badge badge-error badge-sm px-2" title="Material en déficit">
+                Falta material
+              </span>
+            )}
+          </div>
+        ),
       },
       {
         id: "payment",
@@ -164,7 +173,12 @@ export function InvoicesListPage() {
                 <button
                   type="button"
                   className="btn btn-xs btn-warning btn-outline"
-                  disabled={markReadyMutation.isPending}
+                  disabled={markReadyMutation.isPending || inv.resourceMissing}
+                  title={
+                    inv.resourceMissing
+                      ? "No se puede marcar listo: falta material en almacén"
+                      : undefined
+                  }
                   onClick={() => void markReadyMutation.mutateAsync(inv.id)}
                 >
                   Marcar listo

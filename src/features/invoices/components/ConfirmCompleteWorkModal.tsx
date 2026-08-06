@@ -144,6 +144,8 @@ export function ConfirmCompleteWorkModal(props: ConfirmCompleteWorkModalProps) {
     return sum + q * c;
   }, 0);
 
+  const blockedByMaterial = item.resourceMissing;
+
   return (
     <ModalPortal>
       <dialog className="modal modal-open">
@@ -153,6 +155,14 @@ export function ConfirmCompleteWorkModal(props: ConfirmCompleteWorkModalProps) {
             Se crearán lotes de producción por empleado. Puedes ajustar cantidad y tarifa antes de
             confirmar.
           </p>
+          {blockedByMaterial && (
+            <div role="alert" className="alert alert-warning mt-3 py-2 text-sm">
+              <span>
+                {item.resourceNote ??
+                  "Falta material en almacén. Registra una entrada en Inventario antes de marcar Listo."}
+              </span>
+            </div>
+          )}
           <label className="form-control mt-3 w-full max-w-xs">
             <span className="label-text text-xs">Fecha del lote</span>
             <input
@@ -160,6 +170,7 @@ export function ConfirmCompleteWorkModal(props: ConfirmCompleteWorkModalProps) {
               className="input input-bordered input-sm"
               value={date}
               onChange={(e) => setDate(e.target.value)}
+              disabled={blockedByMaterial}
             />
           </label>
 
@@ -180,6 +191,7 @@ export function ConfirmCompleteWorkModal(props: ConfirmCompleteWorkModalProps) {
                     <input
                       className="input input-bordered input-xs"
                       value={r.quantity}
+                      disabled={blockedByMaterial}
                       onChange={(e) =>
                         setRows((prev) =>
                           prev.map((x) =>
@@ -196,6 +208,7 @@ export function ConfirmCompleteWorkModal(props: ConfirmCompleteWorkModalProps) {
                     <input
                       className="input input-bordered input-xs"
                       value={r.unitCost}
+                      disabled={blockedByMaterial}
                       onChange={(e) =>
                         setRows((prev) =>
                           prev.map((x) =>
@@ -225,8 +238,17 @@ export function ConfirmCompleteWorkModal(props: ConfirmCompleteWorkModalProps) {
             <button
               type="button"
               className="btn btn-success"
-              disabled={mutation.isPending || rows.length === 0}
-              onClick={() => void mutation.mutateAsync()}
+              disabled={mutation.isPending || rows.length === 0 || blockedByMaterial}
+              onClick={() => {
+                if (blockedByMaterial) {
+                  setError(
+                    item.resourceNote ??
+                      "No se puede marcar Listo: falta material. Registra una entrada en Inventario.",
+                  );
+                  return;
+                }
+                void mutation.mutateAsync();
+              }}
             >
               {mutation.isPending ? (
                 <span className="loading loading-spinner loading-sm" />

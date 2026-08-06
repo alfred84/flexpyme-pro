@@ -327,8 +327,8 @@ export function InvoiceDetailPage() {
             <div role="alert" className="alert alert-warning">
               <AlertTriangle className="h-5 w-5" />
               <span>
-                Este pedido tiene líneas con recursos de inventario insuficientes. Revisa las líneas
-                marcadas y repón el material faltante.
+                Este pedido tiene materiales en déficit. No podrás marcar Listo en esas líneas hasta
+                registrar una entrada en Inventario.
               </span>
             </div>
           )}
@@ -361,10 +361,13 @@ export function InvoiceDetailPage() {
                         {line.resourceMissing && (
                           <span
                             className="badge badge-error badge-sm ml-2 gap-1"
-                            title={line.resourceNote ?? "Recurso insuficiente"}
+                            title={line.resourceNote ?? "Material en déficit"}
                           >
-                            <AlertTriangle className="h-3 w-3" /> Falta recurso
+                            <AlertTriangle className="h-3 w-3" /> Falta material
                           </span>
+                        )}
+                        {line.resourceMissing && line.resourceNote && (
+                          <div className="mt-0.5 text-xs text-error/80">{line.resourceNote}</div>
                         )}
                         {(line.assignments?.length ?? 0) > 0 && (
                           <div className="text-xs text-base-content/50">
@@ -407,7 +410,13 @@ export function InvoiceDetailPage() {
                             <button
                               type="button"
                               className="btn btn-ghost btn-xs"
-                              title="Cambiar a Listo"
+                              title={
+                                line.resourceMissing
+                                  ? (line.resourceNote ??
+                                    "No se puede marcar Listo: falta material en almacén")
+                                  : "Cambiar a Listo"
+                              }
+                              disabled={line.resourceMissing}
                               onClick={() => setListoItem(line)}
                             >
                               → Listo
