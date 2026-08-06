@@ -1,6 +1,7 @@
 import {
   flexRender,
   getCoreRowModel,
+  getPaginationRowModel,
   useReactTable,
   type ColumnDef,
 } from "@tanstack/react-table";
@@ -8,15 +9,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
+import { TablePagination } from "@/components/common/TablePagination";
 import { PaymentStatusBadge, ProductionStatusBadge } from "@/components/invoices/InvoiceStatusBadges";
-import {
-  cancelInvoice,
-  fetchInvoices,
-  markInvoiceAllListo,
-} from "@/db/queries/invoices";
+import { cancelInvoice, fetchInvoices } from "@/db/queries/invoices";
 import { useAppSettings } from "@/hooks/use-app-settings";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 import { cupToUsd } from "@/lib/currency";
-import { todayIso } from "@/lib/format-date";
+import { formatDate } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 import type { InvoiceListDto } from "@/types/invoice";
@@ -49,7 +48,21 @@ function matchesFilter(row: InvoiceListDto, filter: ListFilter): boolean {
 }
 
 /**
- * Lista pedidos con badges de producción/cobro, filtros y acciones rápidas.
+ * Moneda de cobro del pedido normalizada (`CUP` | `USD` | null).
+ *
+ * @param row - Fila del listado.
+ */
+function paymentCurrencyOf(row: InvoiceListDto): "CUP" | "USD" | null {
+  const currency = (row.paymentCurrency ?? "").toUpperCase();
+  if (currency === "CUP" || currency === "USD") {
+    return currency;
+  }
+  return null;
+}
+
+/**
+ * Lista pedidos con badges de producción/cobro, filtros y acciones (cobrar, editar, anular, ver).
+ * Marcar Listo se hace desde el detalle del pedido, línea a línea.
  *
  * @returns Página de listado de pedidos.
  */
@@ -66,21 +79,6 @@ export function InvoicesListPage() {
   const invoicesQuery = useQuery({
     queryKey: ["invoices", "list"],
     queryFn: fetchInvoices,
-  });
-
-  const markReadyMutation = useMutation({
-    mutationFn: (id: number) => markInvoiceAllListo(id, todayIso()),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
-        queryClient.invalidateQueries({ queryKey: ["inventory"] }),
-        queryClient.invalidateQueries({ queryKey: ["employees"] }),
-      ]);
-      pushFlashMessage({ kind: "success", text: "Pedido marcado como listo." });
-    },
-    onError: (e: Error) => {
-      pushFlashMessage({ kind: "error", text: e.message });
-    },
   });
 
   const cancelMutation = useMutation({
@@ -116,16 +114,31 @@ export function InvoicesListPage() {
     });
   }, [invoicesQuery.data, filter, search]);
 
+  const paginationResetKey = `${filter}|${search.trim().toLowerCase()}`;
+  const { pagination, onPaginationChange } = useClientPagination({
+    resetKey: paginationResetKey,
+    itemCount: filteredData.length,
+  });
+
   const columns = useMemo<ColumnDef<InvoiceListDto>[]>(
     () => [
       { accessorKey: "invoiceNumber", header: "Nº Pedido" },
       { accessorKey: "clientName", header: "Cliente" },
+      {
+        accessorKey: "date",
+        header: "Fecha",
+        cell: ({ row }) => formatDate(row.original.date),
+      },
       {
         id: "totalUsd",
         header: moneyHeading("Total", "USD"),
         accessorFn: (row) => row.total,
         cell: ({ row }) => {
           const inv = row.original;
+          // Solo en cobro USD; en CUP el total va en la columna CUP y la tasa queda en Tasa.
+          if (paymentCurrencyOf(inv) !== "USD") {
+            return "—";
+          }
           const rate =
             inv.exchangeRateSnapshot && inv.exchangeRateSnapshot > 0
               ? inv.exchangeRateSnapshot
@@ -139,8 +152,16 @@ export function InvoicesListPage() {
         accessorFn: (row) => row.total,
         cell: ({ row }) => {
           const inv = row.original;
-          const paidInCup = (inv.paymentCurrency ?? "").toUpperCase() === "CUP";
-          return paidInCup ? formatAmount(inv.total) : "—";
+          return paymentCurrencyOf(inv) === "CUP" ? formatAmount(inv.total) : "—";
+        },
+      },
+      {
+        id: "tasa",
+        header: "Tasa",
+        accessorFn: (row) => row.exchangeRateSnapshot ?? 0,
+        cell: ({ row }) => {
+          const rate = row.original.exchangeRateSnapshot;
+          return rate && rate > 0 ? formatAmount(rate) : "—";
         },
       },
       {
@@ -169,21 +190,6 @@ export function InvoicesListPage() {
           const inv = row.original;
           return (
             <div className="flex flex-wrap gap-1">
-              {inv.productionStatus === "en_produccion" && (
-                <button
-                  type="button"
-                  className="btn btn-xs btn-warning btn-outline"
-                  disabled={markReadyMutation.isPending || inv.resourceMissing}
-                  title={
-                    inv.resourceMissing
-                      ? "No se puede marcar listo: falta material en almacén"
-                      : undefined
-                  }
-                  onClick={() => void markReadyMutation.mutateAsync(inv.id)}
-                >
-                  Marcar listo
-                </button>
-              )}
               {inv.paymentStatus === "pendiente" && inv.balance > 1e-6 && (
                 <Link
                   className="btn btn-xs btn-primary"
@@ -226,13 +232,17 @@ export function InvoicesListPage() {
         },
       },
     ],
-    [markReadyMutation.isPending, usdExchangeRate],
+    [usdExchangeRate],
   );
 
   const table = useReactTable({
     data: filteredData,
     columns,
+    state: { pagination },
+    onPaginationChange,
     getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    autoResetPageIndex: false,
   });
 
   const FILTERS: { key: ListFilter; label: string }[] = [
@@ -325,6 +335,14 @@ export function InvoicesListPage() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            pageIndex={pagination.pageIndex}
+            pageSize={pagination.pageSize}
+            totalItems={filteredData.length}
+            onPageChange={(pageIndex) => table.setPageIndex(pageIndex)}
+            onPageSizeChange={(pageSize) => table.setPageSize(pageSize)}
+            label="Paginación de pedidos"
+          />
         </>
       )}
 
