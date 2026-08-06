@@ -247,6 +247,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
       });
     } else {
       const { defaultFinish } = finishOptionsFor(categoryFinishes, prices, defaultCategoryId, null);
+      const defaultMaterial = defaultManualMaterialRow(materialCategories, inventoryItems);
       setDraft({
         key: crypto.randomUUID(),
         categoryId: defaultCategoryId,
@@ -254,8 +255,8 @@ export function OrderLineModal(props: OrderLineModalProps) {
         finish: defaultFinish,
         quantity: "1",
         services: buildDefaultWorkTypes(defaultCategoryId, null, defaultFinish),
-        materialMode: "norma",
-        materials: [],
+        materialMode: "manual",
+        materials: defaultMaterial ? [defaultMaterial] : [],
       });
     }
     setError(null);
@@ -734,18 +735,18 @@ export function OrderLineModal(props: OrderLineModalProps) {
               <button
                 type="button"
                 role="tab"
-                className={`tab flex-1 ${draft.materialMode === "norma" ? "tab-active" : ""}`}
-                onClick={() => setMaterialMode("norma")}
-              >
-                Norma de producción
-              </button>
-              <button
-                type="button"
-                role="tab"
                 className={`tab flex-1 ${draft.materialMode === "manual" ? "tab-active" : ""}`}
                 onClick={() => setMaterialMode("manual")}
               >
                 Asignación manual
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={`tab flex-1 ${draft.materialMode === "norma" ? "tab-active" : ""}`}
+                onClick={() => setMaterialMode("norma")}
+              >
+                Norma de producción
               </button>
             </div>
 

@@ -80,7 +80,7 @@ export function makeDraftLine(categoryId: number): DraftLine {
     finish: "",
     quantity: "1",
     services: [],
-    materialMode: "norma",
+    materialMode: "manual",
     materials: [],
   };
 }

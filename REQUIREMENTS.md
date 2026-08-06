@@ -113,7 +113,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Listado: mosaico compacto por categoría de material; al entrar, tabla de ítems y alta de ítem; sección **Movimientos** (día/mes) con método Manual vs Rebaja por Pedido; **salida manual** (sin pedido) con **motivo obligatorio**; **normas** desde la opción **Normas** (modal)
 - Historial de movimientos por ítem (salidas con motivo obligatorio)
 - **Normas de producción**: por categoría de pedido + tipo de trabajo (tabs) + formato/acabado + material y cantidad/unidad; editables (solo afectan pedidos futuros); desactivadas ocultas con opción de ver/reactivar
-- En **Pedidos**, por línea: aplicar norma (se fijan materiales al crear el pedido) **o** asignar materiales manualmente desde almacén
+- En **Pedidos**, por línea: asignar materiales manualmente desde almacén (opción por defecto) **o** aplicar norma (se fijan materiales al crear el pedido)
 - **Descuento por línea concluida (v2.5)**: al concluir cada línea/servicio vía lotes de trabajo se descuentan materiales asignados o, si no hay, los de normas coincidentes
 - **Déficit permitido (v2.5)**: si falta material, la salida se registra igualmente dejando existencia negativa (déficit) en lugar de bloquear; la línea del pedido se marca `resource_missing` con nota y el pedido agrega la bandera; el inventario muestra el ítem en **Déficit**
 
