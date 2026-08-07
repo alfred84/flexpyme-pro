@@ -189,17 +189,22 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 
 ## 4. Moneda y Pagos
 
-- **Precios de venta**: USD por defecto; CUP permanece disponible por fila
-- **Libro contable (pedidos/facturas)**: importes persistidos en CUP (si el precio es USD se convierte con la tasa al crear la línea)
-- **UI de Pedidos**: muestra importes de venta/cobro en **USD** como moneda principal (con equivalente CUP según tasa). Si el método de pago es CUP/transferencia, la UI invierte el orden (CUP principal + USD equivalente). Tarifas de pago a empleados siguen en CUP
-- **Cobros y anticipos en efectivo**: USD por defecto; transferencia en CUP
+- **Precios de venta**: USD por defecto; CUP permanece disponible por fila. En pedidos, `invoice_items.unit_price_usd` es la fuente de verdad; el CUP de línea = USD × `exchange_rate_snapshot` del pedido
+- **Moneda de cobro del pedido**: `USD` | `CUP` | `mixto` (`payment_currency`). Transferencia fuerza cobro en CUP (el pedido puede ser mixto con parte CUP)
+- **Mixto**: se declara el split `due_usd` + `due_cup` (debe cumplir `due_usd × tasa + due_cup ≈ total_cup`); en el cobro se pueden recibir y devolver billetes en ambas monedas
+- **Saldo dual**: el pedido acumula `balance_usd` y saldo CUP (vía `balance` equivalente / parte CUP); listados y detalle muestran ambas cuando aplica
+- **Libro contable**: totales espejo en CUP (`total`/`paid`/`balance` = equivalente CUP); cajas CUP y USD son flujos independientes (`balance_cup` / `balance_usd`)
+- **UI de Pedidos**: en cobro USD muestra USD principal; en CUP/Mixto/transferencia, CUP principal (+ USD donde corresponda). Tarifas de pago a empleados siguen en CUP
+- **Cobros y anticipos en efectivo**: pueden ser USD, CUP o Mixto; transferencia en CUP
+- **Vuelto dual**: exceso validado como `change_cup + change_usd × tasa ≈ exceso_cup`; neto por moneda en caja = recibido − vuelto de esa moneda
+- **Crédito de cliente** (`clients.credit_balance`): solo en CUP; se aplica contra la parte CUP del saldo. La deuda del cliente (`clients.balance`) es el equivalente CUP de pedidos abiertos (`Σ(balance_cup + balance_usd × tasa)`)
 - **Salarios / tarifas de pago / denominaciones de caja internas**: CUP
 - **Denominaciones de billetes CUP**: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000
 - **Denominaciones de billetes USD**: 100, 50, 20, 10, 5, 2, 1
 - **Formas de pago**: Efectivo | Transferencia
-- La tasa USD/CUP se establece en Configuración y se guarda en cada transacción
-- **Vuelto / saldo a favor (v2.9)**: si el recibido supera lo aplicado, el usuario elige **devolver vuelto** (desglose de billetes; neto caja = recibido − vuelto) o **dejar saldo a favor** (`clients.credit_balance`; ingreso en caja = recibido completo). El vuelto ya no es obligatorio.
-- **Saldo a favor**: se aplica automáticamente a futuros pedidos/cobros (desmarcable); reduce lo pendiente sin movimiento de caja adicional
+- La tasa USD/CUP se establece en Configuración; en pedidos CUP/Mixto es editable y al cambiarla se recalculan las líneas CUP desde precios USD
+- **Vuelto / saldo a favor (v2.9+)**: si el recibido supera lo aplicado, el usuario elige **devolver vuelto** (desglose CUP y/o USD) o **dejar saldo a favor** (`clients.credit_balance`; ingreso en caja = recibido completo). El vuelto ya no es obligatorio
+- **Saldo a favor**: se aplica automáticamente a futuros pedidos/cobros (desmarcable); reduce lo pendiente CUP sin movimiento de caja adicional
 
 ---
 
@@ -420,7 +425,16 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - Inventario: alerta de demanda pendiente; categoría/detalle muestran necesario vs disponible.
 - Modal de línea: aviso de déficit por material; se permite guardar.
 
+### v2.17 — Dualidad monetaria USD / CUP / Mixto (2026-08)
+- `invoice_items.unit_price_usd` + totales/saldos duales en pedidos (`total_usd`, `paid_usd`, `balance_usd`, `due_usd`, `due_cup`).
+- Moneda de pedido: USD | CUP | **Mixto** (split declarado + billetes en ambas monedas al cobrar).
+- Cobro/anticipo/vuelto dual; neto de caja por moneda = recibido − vuelto.
+- Al cambiar la tasa del pedido se recalculan precios CUP desde USD persistidos.
+- Crédito de cliente sigue en CUP; deuda de cliente = equivalente CUP de saldos duales abiertos.
+- Transferencia sigue cobrando en CUP. Sin crédito USD ni reescritura histórica forzada (backfill `unit_price / rate`).
+
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
 - Reporte PDF/XLSX con todas las secciones del exporte web (deudores, producción).
 - Cobro parcial con múltiples métodos en una misma factura (hoy un método por pedido).
+- Crédito de cliente en USD.
