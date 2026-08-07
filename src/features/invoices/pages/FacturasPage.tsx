@@ -178,15 +178,23 @@ export function FacturasPage() {
                 row.exchangeRateSnapshot && row.exchangeRateSnapshot > 0
                   ? row.exchangeRateSnapshot
                   : rate;
-              const paidInCup = (row.paymentCurrency ?? "").toUpperCase() === "CUP";
+              const cur = (row.paymentCurrency ?? "").toLowerCase();
+              const showCup = cur === "cup" || cur === "mixto";
+              const showUsd = cur === "usd" || cur === "mixto" || cur === "";
+              const totalUsd =
+                row.totalUsd != null && row.totalUsd > 0
+                  ? row.totalUsd
+                  : cupToUsd(row.total, rowRate);
               return (
                 <tr key={row.id}>
                   <td className="font-mono text-xs">{row.invoiceNumber}</td>
                   <td>{row.clientName}</td>
                   <td>{formatDate(row.date)}</td>
-                  <td className="text-right tabular-nums">{formatAmount(cupToUsd(row.total, rowRate))}</td>
                   <td className="text-right tabular-nums">
-                    {paidInCup ? formatAmount(row.total) : "—"}
+                    {showUsd ? formatAmount(totalUsd) : "—"}
+                  </td>
+                  <td className="text-right tabular-nums">
+                    {showCup ? formatAmount(row.total) : "—"}
                   </td>
                   <td>
                     <span className={`badge badge-sm ${invoiceFinancialBadgeClass(fin)}`}>

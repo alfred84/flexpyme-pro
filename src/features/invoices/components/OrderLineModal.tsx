@@ -4,8 +4,10 @@ import { SearchSelect } from "@/components/common/SearchSelect";
 import { LineEmployeesModal } from "@/features/invoices/components/LineEmployeesModal";
 import {
   draftLineSubtotal,
+  filterPricesByCategory,
   formatOptionsForCategory,
   resolveRecipeMaterials,
+  resolveSaleUnitPriceUsd,
   resolveServicePrice,
   serviceAndFinishOptions,
   type DraftLine,
@@ -45,6 +47,8 @@ interface OrderLineModalProps {
   inventoryItems: InventoryItemDto[];
   /** Normas activas (vista previa en modo norma). */
   recipes: InventoryRecipeDto[];
+  /** Tasa USD→CUP del pedido (formulario); si falta, se usa la de Configuración. */
+  orderExchangeRate?: number;
   onClose: () => void;
   onSave: (line: DraftLine) => void;
 }
@@ -192,16 +196,55 @@ export function OrderLineModal(props: OrderLineModalProps) {
     materialCategories,
     inventoryItems,
     recipes,
+    orderExchangeRate,
     onClose,
     onSave,
   } = props;
-  const { usdExchangeRate } = useAppSettings();
+  const { usdExchangeRate: appRate } = useAppSettings();
+  /** Tasa del pedido (formulario) con fallback a Configuración. */
+  const usdExchangeRate =
+    orderExchangeRate != null && orderExchangeRate > 0 ? orderExchangeRate : appRate;
   const [draft, setDraft] = useState<DraftLine | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [employeesForService, setEmployeesForService] = useState<string | null>(null);
 
   /**
-   * Construye la lista de tipos de trabajo preseleccionados con su precio en CUP.
+   * Resuelve precios USD+CUP para un tipo de trabajo.
+   */
+  const resolveServicePrices = (
+    categoryId: number,
+    formatId: number | null,
+    service: string,
+    finish: string,
+  ): { unitPrice: string; unitPriceUsd: string } => {
+    const cup = resolveServicePrice(
+      prices,
+      categoryId,
+      formatId,
+      service,
+      finish,
+      usdExchangeRate,
+    );
+    const rows = filterPricesByCategory(prices, categoryId, formatId);
+    const norm = (v: string) => v.trim().toLowerCase();
+    const match =
+      rows.find(
+        (row) =>
+          norm(row.service ?? "") === norm(service) &&
+          norm(row.finish ?? "") === norm(finish),
+      ) ?? rows.find((row) => norm(row.service ?? "") === norm(service));
+    const usd = resolveSaleUnitPriceUsd(match, usdExchangeRate);
+    const usdFallback =
+      usd ??
+      (cup !== null && usdExchangeRate > 0 ? cup / usdExchangeRate : null);
+    return {
+      unitPrice: cup !== null ? String(cup) : "",
+      unitPriceUsd: usdFallback !== null ? String(usdFallback) : "",
+    };
+  };
+
+  /**
+   * Construye la lista de tipos de trabajo preseleccionados con su precio en CUP/USD.
    */
   const buildDefaultWorkTypes = (
     categoryId: number,
@@ -211,17 +254,11 @@ export function OrderLineModal(props: OrderLineModalProps) {
     const options = workTypeOptionsFor(categoryWorkTypes, prices, categoryId, formatId);
     const defaults = options.filter((o) => o.isDefault);
     return defaults.map((o) => {
-      const price = resolveServicePrice(
-        prices,
-        categoryId,
-        formatId,
-        o.name,
-        finish,
-        usdExchangeRate,
-      );
+      const priced = resolveServicePrices(categoryId, formatId, o.name, finish);
       return {
         service: o.name,
-        unitPrice: price !== null ? String(price) : "",
+        unitPrice: priced.unitPrice,
+        unitPriceUsd: priced.unitPriceUsd,
         assignments: [],
       };
     });
@@ -286,7 +323,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
 
   const hasConfiguredWorkTypes = workTypeOptions.length > 0;
 
-  /** Recalcula el precio (CUP) de los tipos seleccionados tras cambiar formato/acabado. */
+  /** Recalcula precios USD/CUP de los tipos seleccionados tras cambiar formato/acabado. */
   const recalcWorkTypePrices = (
     services: DraftLineService[],
     categoryId: number,
@@ -294,15 +331,10 @@ export function OrderLineModal(props: OrderLineModalProps) {
     finish: string,
   ): DraftLineService[] =>
     services.map((s) => {
-      const price = resolveServicePrice(
-        prices,
-        categoryId,
-        formatId,
-        s.service,
-        finish,
-        usdExchangeRate,
-      );
-      return price !== null ? { ...s, unitPrice: String(price) } : s;
+      const priced = resolveServicePrices(categoryId, formatId, s.service, finish);
+      return priced.unitPrice !== ""
+        ? { ...s, unitPrice: priced.unitPrice, unitPriceUsd: priced.unitPriceUsd }
+        : s;
     });
 
   const changeCategory = (categoryId: number) => {
@@ -365,13 +397,11 @@ export function OrderLineModal(props: OrderLineModalProps) {
         if (prev.services.some((s) => s.service === name)) {
           return prev;
         }
-        const price = resolveServicePrice(
-          prices,
+        const priced = resolveServicePrices(
           prev.categoryId,
           prev.formatId,
           name,
           prev.finish,
-          usdExchangeRate,
         );
         return {
           ...prev,
@@ -379,7 +409,8 @@ export function OrderLineModal(props: OrderLineModalProps) {
             ...prev.services,
             {
               service: name,
-              unitPrice: price !== null ? String(price) : "",
+              unitPrice: priced.unitPrice,
+              unitPriceUsd: priced.unitPriceUsd,
               assignments: [],
             },
           ],
@@ -394,9 +425,14 @@ export function OrderLineModal(props: OrderLineModalProps) {
       if (!prev) {
         return prev;
       }
+      const cup = Number.parseFloat(unitPrice.replace(",", "."));
+      const unitPriceUsd =
+        Number.isFinite(cup) && usdExchangeRate > 0 ? String(cup / usdExchangeRate) : "";
       return {
         ...prev,
-        services: prev.services.map((s) => (s.service === name ? { ...s, unitPrice } : s)),
+        services: prev.services.map((s) =>
+          s.service === name ? { ...s, unitPrice, unitPriceUsd } : s,
+        ),
       };
     });
   };
@@ -430,9 +466,12 @@ export function OrderLineModal(props: OrderLineModalProps) {
       if (!prev) {
         return prev;
       }
+      const cup = Number.parseFloat(unitPrice.replace(",", "."));
+      const unitPriceUsd =
+        Number.isFinite(cup) && usdExchangeRate > 0 ? String(cup / usdExchangeRate) : "";
       return {
         ...prev,
-        services: [{ service: "", unitPrice, assignments: [] }],
+        services: [{ service: "", unitPrice, unitPriceUsd, assignments: [] }],
       };
     });
   };

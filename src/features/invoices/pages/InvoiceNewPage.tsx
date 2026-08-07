@@ -23,6 +23,7 @@ import {
   computeChangePending,
   computeReceivedAmount,
   computeReceivedUsd,
+  emptyDenominationCounts,
   emptyOrderCashierState,
   type OrderCashierState,
 } from "@/features/invoices/components/OrderCashierSection";
@@ -30,13 +31,17 @@ import { OrderHeaderSection } from "@/features/invoices/components/OrderHeaderSe
 import { OrderLineModal } from "@/features/invoices/components/OrderLineModal";
 import { OrderLinesTable } from "@/features/invoices/components/OrderLinesTable";
 import {
+  emptyOrderPaymentState,
+  isMixtoSplitValid,
   OrderPaymentSection,
+  resolveDueSplit,
   type OrderPaymentState,
 } from "@/features/invoices/components/OrderPaymentSection";
 import {
   draftLineSubtotal,
   draftLineToItems,
   isDraftLineValid,
+  recalculateDraftLinesForRate,
   type DraftLine,
 } from "@/features/invoices/lib/order-draft";
 import { useAppSettings } from "@/hooks/use-app-settings";
@@ -44,17 +49,8 @@ import { todayIso } from "@/lib/format-date";
 import { DualMoneyText } from "@/components/common/DualMoneyText";
 import { moneyHeading } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
-import { DEFAULT_PAYMENT_CURRENCY, type SaleCurrency } from "@/lib/currency";
+import type { SaleCurrency } from "@/lib/currency";
 import type { AdvancePaymentPayload, CreateInvoiceItemPayload } from "@/types/invoice";
-
-function defaultPaymentState(rate: number): OrderPaymentState {
-  return {
-    paymentMethod: "efectivo",
-    paymentCurrency: DEFAULT_PAYMENT_CURRENCY,
-    exchangeRate: rate > 0 ? String(rate) : "",
-    transferConcept: "",
-  };
-}
 
 /**
  * Formulario de nuevo pedido: encabezado compacto, líneas en tabla/modal,
@@ -112,11 +108,11 @@ export function InvoiceNewPage() {
   const [editingLineKey, setEditingLineKey] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [payment, setPayment] = useState<OrderPaymentState>(() =>
-    defaultPaymentState(appSettings.usdExchangeRate),
+    emptyOrderPaymentState(appSettings.usdExchangeRate),
   );
   const [cashier, setCashier] = useState<OrderCashierState>(() => emptyOrderCashierState());
   const [advancePayment, setAdvancePayment] = useState<OrderPaymentState>(() =>
-    defaultPaymentState(appSettings.usdExchangeRate),
+    emptyOrderPaymentState(appSettings.usdExchangeRate),
   );
   const [advanceCashier, setAdvanceCashier] = useState<OrderCashierState>(() =>
     emptyOrderCashierState(),
@@ -144,9 +140,38 @@ export function InvoiceNewPage() {
     return map;
   }, [formatsQuery.data]);
 
+  const paymentWithRate: OrderPaymentState = {
+    ...payment,
+    exchangeRate: payment.exchangeRate || String(appSettings.usdExchangeRate || ""),
+  };
+
+  const paymentDisplayRate =
+    Number.parseFloat(paymentWithRate.exchangeRate.replace(",", ".")) ||
+    appSettings.usdExchangeRate;
+
+  const summaryRate = paymentDisplayRate > 0 ? paymentDisplayRate : appSettings.usdExchangeRate;
+
   const linesSubtotal = useMemo(
-    () => lines.reduce((sum, line) => sum + draftLineSubtotal(line), 0),
-    [lines],
+    () => lines.reduce((sum, line) => sum + draftLineSubtotal(line, summaryRate), 0),
+    [lines, summaryRate],
+  );
+
+  const linesTotalUsd = useMemo(
+    () =>
+      lines.reduce((sum, line) => {
+        const qty = Number.parseInt(line.quantity, 10) || 0;
+        const usd = line.services.reduce((s, svc) => {
+          const u = Number.parseFloat((svc.unitPriceUsd ?? "").replace(",", "."));
+          if (Number.isFinite(u) && u >= 0) {
+            return s + u;
+          }
+          // Fallback: inferir USD desde CUP si falta unitPriceUsd.
+          const cup = Number.parseFloat(svc.unitPrice.replace(",", "."));
+          return Number.isFinite(cup) && summaryRate > 0 ? s + cup / summaryRate : s;
+        }, 0);
+        return sum + qty * usd;
+      }, 0),
+    [lines, summaryRate],
   );
 
   const advancePaymentWithRate: OrderPaymentState = {
@@ -158,57 +183,80 @@ export function InvoiceNewPage() {
     Number.parseFloat(advancePaymentWithRate.exchangeRate.replace(",", ".")) ||
     appSettings.usdExchangeRate;
 
-  const advanceRateForReceive =
-    advancePayment.paymentCurrency === "USD" && advancePayment.paymentMethod === "efectivo"
-      ? advanceDisplayRate
-      : 0;
-
   const advanceReceived = useMemo(
     () =>
       registerAdvance
-        ? computeReceivedAmount(advancePaymentWithRate, advanceCashier, advanceRateForReceive)
+        ? computeReceivedAmount(advancePaymentWithRate, advanceCashier, advanceDisplayRate)
         : 0,
-    [registerAdvance, advancePaymentWithRate, advanceCashier, advanceRateForReceive],
+    [registerAdvance, advancePaymentWithRate, advanceCashier, advanceDisplayRate],
   );
 
   const advanceNum = Math.min(advanceReceived, linesSubtotal);
   const orderTotal = Math.max(linesSubtotal - advanceNum, 0);
 
-  const paymentWithRate: OrderPaymentState = {
-    ...payment,
-    exchangeRate: payment.exchangeRate || String(appSettings.usdExchangeRate || ""),
-  };
-
-  const paymentDisplayRate =
-    Number.parseFloat(paymentWithRate.exchangeRate.replace(",", ".")) ||
-    appSettings.usdExchangeRate;
-
-  const exchangeRateForReceive =
-    payment.paymentCurrency === "USD" && payment.paymentMethod === "efectivo"
-      ? paymentDisplayRate
-      : 0;
-
   /** Moneda principal del resumen: sigue el método/moneda de pago del cobro. */
   const summaryPrimary: SaleCurrency =
-    payment.paymentMethod === "transferencia" || payment.paymentCurrency === "CUP"
+    payment.paymentMethod === "transferencia" ||
+    payment.paymentCurrency === "CUP" ||
+    payment.paymentCurrency === "mixto"
       ? "CUP"
       : "USD";
 
-  const summaryRate = paymentDisplayRate > 0 ? paymentDisplayRate : appSettings.usdExchangeRate;
+  const orderDue = resolveDueSplit(
+    payment.paymentMethod === "transferencia" ? "CUP" : payment.paymentCurrency,
+    linesTotalUsd,
+    linesSubtotal,
+    payment.dueUsd,
+    payment.dueCup,
+  );
+
+  /** Pendiente a cobrar en CUP: en Mixto prioriza el split declarado (due_usd × tasa + due_cup). */
+  const mixtoCollectEquiv =
+    summaryRate > 0 ? orderDue.dueUsd * summaryRate + orderDue.dueCup : orderDue.dueCup;
+  const collectDueCup =
+    payment.paymentCurrency === "mixto" &&
+    (orderDue.dueUsd > 1e-6 || orderDue.dueCup > 1e-6)
+      ? mixtoCollectEquiv
+      : orderTotal;
+
+  const handleOrderRateChange = (rate: number) => {
+    if (!(rate > 0)) {
+      return;
+    }
+    setLines((prev) => recalculateDraftLinesForRate(prev, rate));
+  };
+
+  const handlePaymentChange = (next: OrderPaymentState) => {
+    const currencyChanged = next.paymentCurrency !== payment.paymentCurrency;
+    const methodChanged = next.paymentMethod !== payment.paymentMethod;
+    setPayment(next);
+    if (currencyChanged || methodChanged) {
+      // Evita montos residuales (p. ej. 20 USD del modo USD) al pasar a Mixto/CUP.
+      setCashier((prev) => ({
+        ...prev,
+        amountCup: "",
+        amountUsd: "",
+        counts: emptyDenominationCounts(),
+        usdCounts: emptyDenominationCounts("USD"),
+        changeCounts: emptyDenominationCounts(),
+        changeUsdCounts: emptyDenominationCounts("USD"),
+      }));
+    }
+  };
 
   const linesValid = lines.length > 0 && lines.every(isDraftLineValid);
   const headerValid = clientId > 0;
   const canCheckout = headerValid && linesValid;
 
   const creditAppliedPreview = cashier.applyClientCredit
-    ? Math.min(clientCredit, orderTotal)
+    ? Math.min(clientCredit, collectDueCup)
     : 0;
-  const effectiveDue = Math.max(0, orderTotal - creditAppliedPreview);
+  const effectiveDue = Math.max(0, collectDueCup - creditAppliedPreview);
 
   const received = useMemo(
     () =>
-      canCheckout ? computeReceivedAmount(paymentWithRate, cashier, exchangeRateForReceive) : 0,
-    [canCheckout, paymentWithRate, cashier, exchangeRateForReceive],
+      canCheckout ? computeReceivedAmount(paymentWithRate, cashier, paymentDisplayRate) : 0,
+    [canCheckout, paymentWithRate, cashier, paymentDisplayRate],
   );
 
   const pendingAfterPay = Math.max(effectiveDue - received, 0);
@@ -220,9 +268,19 @@ export function InvoiceNewPage() {
             effectiveDue,
             cashier.changeCounts,
             cashier.overpaymentDisposition,
+            cashier.changeUsdCounts,
+            paymentDisplayRate,
           )
         : false,
-    [canCheckout, received, effectiveDue, cashier.changeCounts, cashier.overpaymentDisposition],
+    [
+      canCheckout,
+      received,
+      effectiveDue,
+      cashier.changeCounts,
+      cashier.changeUsdCounts,
+      cashier.overpaymentDisposition,
+      paymentDisplayRate,
+    ],
   );
 
   const advanceChangePending = useMemo(
@@ -233,6 +291,8 @@ export function InvoiceNewPage() {
             linesSubtotal,
             advanceCashier.changeCounts,
             advanceCashier.overpaymentDisposition,
+            advanceCashier.changeUsdCounts,
+            advanceDisplayRate,
           )
         : false,
     [
@@ -240,7 +300,9 @@ export function InvoiceNewPage() {
       advanceReceived,
       linesSubtotal,
       advanceCashier.changeCounts,
+      advanceCashier.changeUsdCounts,
       advanceCashier.overpaymentDisposition,
+      advanceDisplayRate,
     ],
   );
 
@@ -258,25 +320,34 @@ export function InvoiceNewPage() {
     if (!registerAdvance || advanceReceived <= 1e-6) {
       return null;
     }
-    const isUsd =
+    const isUsdOnly =
       advancePayment.paymentMethod === "efectivo" && advancePayment.paymentCurrency === "USD";
+    const isMixto =
+      advancePayment.paymentMethod === "efectivo" && advancePayment.paymentCurrency === "mixto";
     const isTransfer = advancePayment.paymentMethod === "transferencia";
+    const recvUsd = computeReceivedUsd(advanceCashier);
     return {
       paymentMethod: advancePayment.paymentMethod,
       paymentCurrency: isTransfer ? "CUP" : advancePayment.paymentCurrency,
-      counts: !isUsd && !isTransfer ? buildCountsPayload(advanceCashier.counts) : null,
+      counts: !isUsdOnly && !isTransfer ? buildCountsPayload(advanceCashier.counts) : null,
+      usdCounts:
+        isUsdOnly || isMixto ? buildCountsPayload(advanceCashier.usdCounts, "USD") : null,
       amountCup: advanceCashier.amountCup.trim()
         ? Number.parseFloat(advanceCashier.amountCup.replace(",", "."))
         : isTransfer
           ? advanceReceived
           : null,
-      amountUsd: isUsd ? computeReceivedUsd(advanceCashier) : null,
-      exchangeRate: isUsd ? advanceRateForReceive : null,
+      amountUsd: recvUsd > 0 ? recvUsd : null,
+      exchangeRate: advanceDisplayRate > 0 ? advanceDisplayRate : null,
       transferConcept:
         (advanceCashier.transferConcept || advancePayment.transferConcept).trim() || null,
       changeCounts:
         !isTransfer && advanceCashier.overpaymentDisposition === "change"
           ? buildCountsPayload(advanceCashier.changeCounts)
+          : null,
+      changeUsdCounts:
+        !isTransfer && advanceCashier.overpaymentDisposition === "change"
+          ? buildCountsPayload(advanceCashier.changeUsdCounts, "USD")
           : null,
       overpaymentDisposition: advanceCashier.overpaymentDisposition,
     };
@@ -285,39 +356,48 @@ export function InvoiceNewPage() {
   const saveMutation = useMutation({
     mutationFn: async (collectPayment: boolean) => {
       const items: CreateInvoiceItemPayload[] = lines.flatMap((line) =>
-        draftLineToItems(line, recipesQuery.data ?? [], categoryWorkTypesQuery.data ?? []),
+        draftLineToItems(
+          line,
+          recipesQuery.data ?? [],
+          categoryWorkTypesQuery.data ?? [],
+          summaryRate,
+        ),
       );
 
-      const paymentIsCup =
-        payment.paymentMethod === "transferencia" || payment.paymentCurrency === "CUP";
-      const advanceIsCup =
-        advancePayment.paymentMethod === "transferencia" ||
-        advancePayment.paymentCurrency === "CUP";
+      const needsRate =
+        payment.paymentMethod === "transferencia" ||
+        payment.paymentCurrency === "CUP" ||
+        payment.paymentCurrency === "mixto" ||
+        payment.paymentCurrency === "USD";
 
-      // Pedido en CUP: la tasa convierte precios USD → total CUP (editable en el panel).
-      if (paymentIsCup && summaryRate <= 0) {
-        throw new Error("Indica una tasa USD→CUP válida para el pedido en CUP.");
+      if (needsRate && summaryRate <= 0) {
+        throw new Error("Indica una tasa USD→CUP válida para el pedido.");
       }
-      if (registerAdvance && advanceIsCup && advanceRateForReceive <= 0) {
-        throw new Error("Indica una tasa USD→CUP válida para el anticipo en CUP.");
-      }
-      // Cobro en USD: tasa de libro (app); sigue siendo necesaria para registrar el ingreso.
+
       if (
-        payment.paymentMethod === "efectivo" &&
-        payment.paymentCurrency === "USD" &&
-        exchangeRateForReceive <= 0 &&
-        collectPayment
+        payment.paymentCurrency === "mixto" &&
+        !isMixtoSplitValid(orderDue.dueUsd, orderDue.dueCup, summaryRate, linesSubtotal)
       ) {
-        throw new Error("No hay tasa USD→CUP vigente para registrar el cobro en USD.");
+        throw new Error(
+          "En modo Mixto, due USD × tasa + due CUP debe coincidir con el total del pedido.",
+        );
       }
 
-      const isUsd = payment.paymentMethod === "efectivo" && payment.paymentCurrency === "USD";
+      const isUsdOnly = payment.paymentMethod === "efectivo" && payment.paymentCurrency === "USD";
+      const isMixto = payment.paymentMethod === "efectivo" && payment.paymentCurrency === "mixto";
       const isTransfer = payment.paymentMethod === "transferencia";
-      const counts = !isUsd && !isTransfer ? buildCountsPayload(cashier.counts) : null;
+      const counts = !isUsdOnly && !isTransfer ? buildCountsPayload(cashier.counts) : null;
+      const usdCounts =
+        isUsdOnly || isMixto ? buildCountsPayload(cashier.usdCounts, "USD") : null;
       const changeCounts =
         !isTransfer && cashier.overpaymentDisposition === "change"
           ? buildCountsPayload(cashier.changeCounts)
           : null;
+      const changeUsdCounts =
+        !isTransfer && cashier.overpaymentDisposition === "change"
+          ? buildCountsPayload(cashier.changeUsdCounts, "USD")
+          : null;
+      const recvUsd = computeReceivedUsd(cashier);
 
       const res = await createInvoice({
         clientId,
@@ -327,7 +407,9 @@ export function InvoiceNewPage() {
         paid: 0,
         paymentMethod: payment.paymentMethod,
         paymentCurrency: payment.paymentMethod === "transferencia" ? "CUP" : payment.paymentCurrency,
-        exchangeRateSnapshot: exchangeRateForReceive || advanceRateForReceive || summaryRate,
+        exchangeRateSnapshot: summaryRate,
+        dueUsd: orderDue.dueUsd,
+        dueCup: orderDue.dueCup,
         transferConcept: (cashier.transferConcept || payment.transferConcept).trim() || null,
         advancePaymentDetail: buildAdvanceDetail(),
         applyClientCredit: cashier.applyClientCredit,
@@ -335,15 +417,17 @@ export function InvoiceNewPage() {
           collectPayment && received > 1e-6
             ? {
                 counts,
+                usdCounts,
                 amountCup: cashier.amountCup.trim()
                   ? Number.parseFloat(cashier.amountCup.replace(",", "."))
                   : isTransfer
                     ? received
                     : null,
-                amountUsd: isUsd ? computeReceivedUsd(cashier) : null,
-                exchangeRate: isUsd ? exchangeRateForReceive : null,
+                amountUsd: recvUsd > 0 ? recvUsd : null,
+                exchangeRate: summaryRate > 0 ? summaryRate : null,
                 transferConcept: (cashier.transferConcept || payment.transferConcept).trim() || null,
                 changeCounts,
+                changeUsdCounts,
                 overpaymentDisposition: cashier.overpaymentDisposition,
                 applyClientCredit: cashier.applyClientCredit,
               }
@@ -499,11 +583,14 @@ export function InvoiceNewPage() {
                   <OrderPaymentSection
                     title="Método de pago del anticipo"
                     totalCup={linesSubtotal}
+                    totalUsd={linesTotalUsd}
                     value={advancePaymentWithRate}
                     onChange={setAdvancePayment}
+                    onExchangeRateCommit={handleOrderRateChange}
                   />
                   <OrderCashierSection
                     balanceDue={linesSubtotal}
+                    balanceDueUsd={linesTotalUsd}
                     payment={advancePaymentWithRate}
                     value={advanceCashier}
                     exchangeRate={advanceDisplayRate}
@@ -522,14 +609,17 @@ export function InvoiceNewPage() {
               <OrderPaymentSection
                 title={registerAdvance ? "Método de pago del saldo" : "Método de pago"}
                 totalCup={orderTotal}
+                totalUsd={Math.max(0, linesTotalUsd - (summaryRate > 0 ? advanceNum / summaryRate : 0))}
                 value={paymentWithRate}
-                onChange={setPayment}
+                onChange={handlePaymentChange}
+                onExchangeRateCommit={handleOrderRateChange}
               />
 
               {canCheckout && (
                 <div className="transition-all duration-300">
                   <OrderCashierSection
-                    balanceDue={orderTotal}
+                    balanceDue={collectDueCup}
+                    balanceDueUsd={orderDue.dueUsd}
                     payment={paymentWithRate}
                     value={cashier}
                     exchangeRate={paymentDisplayRate}
@@ -659,6 +749,7 @@ export function InvoiceNewPage() {
         materialCategories={materialCategoriesQuery.data ?? []}
         inventoryItems={inventoryItemsQuery.data ?? []}
         recipes={recipesQuery.data ?? []}
+        orderExchangeRate={summaryRate}
         onClose={() => setLineModalOpen(false)}
         onSave={handleSaveLine}
       />

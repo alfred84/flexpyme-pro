@@ -81,10 +81,12 @@ export function InvoiceCashierPage() {
   });
 
   const balance = inv?.balance ?? 0;
+  const balanceUsd = inv?.balanceUsd ?? 0;
   const paymentMethod = (inv?.paymentMethod ?? "efectivo") as PaymentMethod;
   const paymentCurrency = (inv?.paymentCurrency ?? "CUP") as PaymentCurrency;
   const isTransfer = paymentMethod === "transferencia";
   const isUsd = !isTransfer && paymentCurrency === "USD";
+  const isMixto = !isTransfer && paymentCurrency === "mixto";
   const summaryPrimary: SaleCurrency = isUsd ? "USD" : "CUP";
 
   const rate =
@@ -97,6 +99,8 @@ export function InvoiceCashierPage() {
     paymentCurrency,
     exchangeRate: String(rate || ""),
     transferConcept: "",
+    dueUsd: String(inv?.dueUsd ?? balanceUsd),
+    dueCup: String(inv?.dueCup ?? Math.max(0, balance - balanceUsd * (rate || 0))),
   };
 
   const clientCredit = clientQuery.data?.creditBalance ?? 0;
@@ -117,8 +121,17 @@ export function InvoiceCashierPage() {
         effectiveDue,
         cashier.changeCounts,
         cashier.overpaymentDisposition,
+        cashier.changeUsdCounts,
+        rate,
       ),
-    [received, effectiveDue, cashier.changeCounts, cashier.overpaymentDisposition],
+    [
+      received,
+      effectiveDue,
+      cashier.changeCounts,
+      cashier.changeUsdCounts,
+      cashier.overpaymentDisposition,
+      rate,
+    ],
   );
 
   if (!Number.isFinite(invoiceId) || invoiceId <= 0) {
@@ -132,22 +145,31 @@ export function InvoiceCashierPage() {
   function submit() {
     setFeedback(null);
     const counts = !isUsd && !isTransfer ? buildCountsPayload(cashier.counts) : null;
+    const usdCounts =
+      isUsd || isMixto ? buildCountsPayload(cashier.usdCounts, "USD") : null;
     const changeCounts =
       !isTransfer && cashier.overpaymentDisposition === "change"
         ? buildCountsPayload(cashier.changeCounts)
         : null;
+    const changeUsdCounts =
+      !isTransfer && cashier.overpaymentDisposition === "change"
+        ? buildCountsPayload(cashier.changeUsdCounts, "USD")
+        : null;
+    const recvUsd = computeReceivedUsd(cashier);
     registerMutation.mutate({
       invoiceId,
       counts,
+      usdCounts,
       amountCup: cashier.amountCup.trim()
         ? Number.parseFloat(cashier.amountCup.replace(",", "."))
         : isTransfer
           ? received
           : null,
-      amountUsd: isUsd ? computeReceivedUsd(cashier) : null,
-      exchangeRate: isUsd ? rate : null,
+      amountUsd: recvUsd > 0 ? recvUsd : null,
+      exchangeRate: rate > 0 ? rate : null,
       transferConcept: cashier.transferConcept.trim() || null,
       changeCounts,
+      changeUsdCounts,
       overpaymentDisposition: cashier.overpaymentDisposition,
       applyClientCredit: cashier.applyClientCredit,
     });
@@ -191,10 +213,16 @@ export function InvoiceCashierPage() {
           <div className="alert alert-info text-sm">
             Forma de pago del pedido:{" "}
             <strong>
-              {isTransfer ? "Transferencia (CUP)" : isUsd ? "Efectivo USD" : "Efectivo CUP"}
+              {isTransfer
+                ? "Transferencia (CUP)"
+                : isUsd
+                  ? "Efectivo USD"
+                  : isMixto
+                    ? "Efectivo Mixto (USD + CUP)"
+                    : "Efectivo CUP"}
             </strong>
-            . El cobro se registrará en el flujo de caja. Puedes devolver vuelto o dejar el exceso
-            como saldo a favor.
+            . El cobro se registrará en el flujo de caja. Puedes devolver vuelto en una o ambas
+            monedas, o dejar el exceso como saldo a favor (CUP).
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -244,6 +272,7 @@ export function InvoiceCashierPage() {
             <div className="space-y-3">
               <OrderCashierSection
                 balanceDue={balance}
+                balanceDueUsd={balanceUsd}
                 payment={payment}
                 value={cashier}
                 exchangeRate={rate}
@@ -283,18 +312,20 @@ export function InvoiceCashierPage() {
                     <thead>
                       <tr>
                         <th>Fecha</th>
-                        <th className="text-right">{moneyHeading("Pendiente")}</th>
-                        <th className="text-right">{moneyHeading("Recibido")}</th>
-                        <th className="text-right">{moneyHeading("Vuelto")}</th>
+                        <th className="text-right">Recibido CUP</th>
+                        <th className="text-right">Recibido USD</th>
+                        <th className="text-right">Vuelto CUP</th>
+                        <th className="text-right">Vuelto USD</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sessionsQuery.data.map((row) => (
                         <tr key={row.id}>
                           <td className="whitespace-nowrap text-xs">{formatDate(row.date)}</td>
-                          <td className="text-right">{formatAmount(row.totalAmount)}</td>
                           <td className="text-right">{formatAmount(row.amountReceived)}</td>
+                          <td className="text-right">{formatAmount(row.amountReceivedUsd)}</td>
                           <td className="text-right">{formatAmount(row.changeGiven)}</td>
+                          <td className="text-right">{formatAmount(row.changeGivenUsd)}</td>
                         </tr>
                       ))}
                     </tbody>

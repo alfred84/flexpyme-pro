@@ -48,15 +48,15 @@ function matchesFilter(row: InvoiceListDto, filter: ListFilter): boolean {
 }
 
 /**
- * Moneda de cobro del pedido normalizada (`CUP` | `USD` | null).
+ * Moneda de cobro del pedido normalizada (`CUP` | `USD` | `mixto` | null).
  *
  * @param row - Fila del listado.
  */
-function paymentCurrencyOf(row: InvoiceListDto): "CUP" | "USD" | null {
-  const currency = (row.paymentCurrency ?? "").toUpperCase();
-  if (currency === "CUP" || currency === "USD") {
-    return currency;
-  }
+function paymentCurrencyOf(row: InvoiceListDto): "CUP" | "USD" | "mixto" | null {
+  const currency = (row.paymentCurrency ?? "").toLowerCase();
+  if (currency === "cup") return "CUP";
+  if (currency === "usd") return "USD";
+  if (currency === "mixto") return "mixto";
   return null;
 }
 
@@ -132,12 +132,15 @@ export function InvoicesListPage() {
       {
         id: "totalUsd",
         header: moneyHeading("Total", "USD"),
-        accessorFn: (row) => row.total,
+        accessorFn: (row) => row.totalUsd ?? row.total,
         cell: ({ row }) => {
           const inv = row.original;
-          // Solo en cobro USD; en CUP el total va en la columna CUP y la tasa queda en Tasa.
-          if (paymentCurrencyOf(inv) !== "USD") {
+          const cur = paymentCurrencyOf(inv);
+          if (cur !== "USD" && cur !== "mixto") {
             return "—";
+          }
+          if (inv.totalUsd != null && inv.totalUsd > 0) {
+            return formatAmount(inv.totalUsd);
           }
           const rate =
             inv.exchangeRateSnapshot && inv.exchangeRateSnapshot > 0
@@ -152,7 +155,8 @@ export function InvoicesListPage() {
         accessorFn: (row) => row.total,
         cell: ({ row }) => {
           const inv = row.original;
-          return paymentCurrencyOf(inv) === "CUP" ? formatAmount(inv.total) : "—";
+          const cur = paymentCurrencyOf(inv);
+          return cur === "CUP" || cur === "mixto" ? formatAmount(inv.total) : "—";
         },
       },
       {

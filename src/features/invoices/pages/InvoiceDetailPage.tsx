@@ -104,15 +104,18 @@ export function InvoiceDetailPage() {
   const canCancel = detailQuery.data?.canCancel ?? false;
   const isCancelled = Boolean(inv?.cancelledAt) || inv?.status === "anulada";
 
+  const paymentCurrencyNorm = (inv?.paymentCurrency ?? "").toLowerCase();
   const displayPrimary: SaleCurrency =
     inv?.paymentMethod === "transferencia" ||
-    (inv?.paymentCurrency ?? "").toUpperCase() === "CUP"
+    paymentCurrencyNorm === "cup" ||
+    paymentCurrencyNorm === "mixto"
       ? "CUP"
       : "USD";
   const displayRate =
     inv?.exchangeRateSnapshot && inv.exchangeRateSnapshot > 0
       ? inv.exchangeRateSnapshot
       : usdExchangeRate;
+  const isMixto = paymentCurrencyNorm === "mixto";
 
   return (
     <section className="space-y-6">
@@ -282,7 +285,7 @@ export function InvoiceDetailPage() {
                     </dd>
                   </div>
                   <div className="flex justify-between gap-2 text-primary">
-                    <dt>{moneyHeading("Pendiente (sin saldo)", displayPrimary)}</dt>
+                    <dt>{moneyHeading("Pendiente (equiv.)", displayPrimary)}</dt>
                     <dd>
                       <DualMoneyText
                         amountCup={inv.balance}
@@ -291,6 +294,26 @@ export function InvoiceDetailPage() {
                       />
                     </dd>
                   </div>
+                  {(isMixto || (inv.balanceUsd ?? 0) > 1e-6) && (
+                    <>
+                      <div className="flex justify-between gap-2 text-xs">
+                        <dt>Saldo USD</dt>
+                        <dd>{formatMoney(inv.balanceUsd ?? 0, "USD")}</dd>
+                      </div>
+                      <div className="flex justify-between gap-2 text-xs">
+                        <dt>Saldo CUP</dt>
+                        <dd>
+                          {formatMoney(
+                            Math.max(
+                              0,
+                              inv.balance - (inv.balanceUsd ?? 0) * (displayRate || 0),
+                            ),
+                            "CUP",
+                          )}
+                        </dd>
+                      </div>
+                    </>
+                  )}
                 </dl>
                 {inv.paymentMethod && <div className="divider my-1" />}
                 {inv.paymentMethod && (
@@ -302,6 +325,18 @@ export function InvoiceDetailPage() {
                         {inv.paymentCurrency ? ` ${inv.paymentCurrency}` : ""}
                       </dd>
                     </div>
+                    {isMixto && (
+                      <>
+                        <div className="flex justify-between text-xs">
+                          <dt>Split due USD</dt>
+                          <dd>{formatMoney(inv.dueUsd ?? 0, "USD")}</dd>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <dt>Split due CUP</dt>
+                          <dd>{formatMoney(inv.dueCup ?? 0, "CUP")}</dd>
+                        </div>
+                      </>
+                    )}
                     {inv.paymentCurrency === "USD" && inv.exchangeRateSnapshot && (
                       <>
                         <div className="flex justify-between">

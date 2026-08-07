@@ -57,9 +57,11 @@ export function FacturaDetailPage() {
     ? invoiceFinancialStatus(inv.balance, inv.paid, inv.status === "anulada" || Boolean(inv.cancelledAt))
     : "pendiente";
 
+  const paymentCurrencyNorm = (inv?.paymentCurrency ?? "").toLowerCase();
   const displayPrimary: SaleCurrency =
     inv?.paymentMethod === "transferencia" ||
-    (inv?.paymentCurrency ?? "").toUpperCase() === "CUP"
+    paymentCurrencyNorm === "cup" ||
+    paymentCurrencyNorm === "mixto"
       ? "CUP"
       : "USD";
   const displayRate =

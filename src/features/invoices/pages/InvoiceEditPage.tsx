@@ -15,21 +15,19 @@ import { fetchFormats, fetchPrices } from "@/db/queries/prices";
 import { OrderHeaderSection } from "@/features/invoices/components/OrderHeaderSection";
 import { OrderLineModal } from "@/features/invoices/components/OrderLineModal";
 import { OrderLinesTable } from "@/features/invoices/components/OrderLinesTable";
-import {
-  OrderWorkTypeSummary,
-  aggregateWorkTypeSummary,
-} from "@/features/invoices/components/OrderWorkTypeSummary";
 import { invoiceItemsToDraftLines } from "@/features/invoices/lib/invoice-to-draft";
 import {
   draftLineSubtotal,
   draftLineToItems,
   isDraftLineValid,
+  recalculateDraftLinesForRate,
   type DraftLine,
 } from "@/features/invoices/lib/order-draft";
 import { DualMoneyText } from "@/components/common/DualMoneyText";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { formatMoney, moneyHeading } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
+import { pedidosListSearch } from "@/lib/pedidos-search";
 
 /**
  * Edición de un pedido aún sin trabajo de producción registrado.
@@ -87,6 +85,7 @@ export function InvoiceEditPage() {
   const [clientId, setClientId] = useState(0);
   const [date, setDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [orderRate, setOrderRate] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [lineModalOpen, setLineModalOpen] = useState(false);
@@ -106,9 +105,19 @@ export function InvoiceEditPage() {
     setClientId(detail.invoice.clientId);
     setDate(detail.invoice.date.slice(0, 10));
     setNotes(detail.invoice.notes ?? "");
+    const snap = detail.invoice.exchangeRateSnapshot;
+    setOrderRate(
+      snap && snap > 0 ? String(snap) : usdExchangeRate > 0 ? String(usdExchangeRate) : "",
+    );
     setLines(invoiceItemsToDraftLines(detail.items, inventoryItems ?? []));
     setHydrated(true);
-  }, [detailQuery.data, inventoryItemsQuery.data, inventoryItemsQuery.isLoading, hydrated]);
+  }, [
+    detailQuery.data,
+    inventoryItemsQuery.data,
+    inventoryItemsQuery.isLoading,
+    hydrated,
+    usdExchangeRate,
+  ]);
 
   const defaultCategoryId = categoriesQuery.data?.[0]?.id ?? 1;
   const categoryNames = useMemo(() => {
@@ -122,22 +131,32 @@ export function InvoiceEditPage() {
     return map;
   }, [formatsQuery.data]);
 
-  const linesSubtotal = useMemo(
-    () => lines.reduce((sum, line) => sum + draftLineSubtotal(line), 0),
-    [lines],
-  );
-
   const inv = detailQuery.data?.invoice;
   const displayRate =
-    inv?.exchangeRateSnapshot && inv.exchangeRateSnapshot > 0
+    Number.parseFloat(orderRate.replace(",", ".")) ||
+    (inv?.exchangeRateSnapshot && inv.exchangeRateSnapshot > 0
       ? inv.exchangeRateSnapshot
-      : usdExchangeRate;
+      : usdExchangeRate);
+
+  const linesSubtotal = useMemo(
+    () => lines.reduce((sum, line) => sum + draftLineSubtotal(line, displayRate), 0),
+    [lines, displayRate],
+  );
+
   const advanceNum = inv?.advancePayment ?? 0;
   const paidNum = inv?.paid ?? 0;
   const orderTotal = Math.max(linesSubtotal - advanceNum, 0);
   const pendingBalance = Math.max(orderTotal - paidNum, 0);
   const linesValid = lines.length > 0 && lines.every(isDraftLineValid);
   const canSave = clientId > 0 && linesValid && Boolean(detailQuery.data?.canEdit);
+
+  const handleRateChange = (raw: string) => {
+    setOrderRate(raw);
+    const n = Number.parseFloat(raw.replace(",", ".")) || 0;
+    if (n > 0) {
+      setLines((prev) => recalculateDraftLinesForRate(prev, n));
+    }
+  };
 
   const editingLine = editingLineKey
     ? (lines.find((l) => l.key === editingLineKey) ?? null)
@@ -149,7 +168,7 @@ export function InvoiceEditPage() {
       await queryClient.invalidateQueries({ queryKey: ["invoices"] });
       await queryClient.invalidateQueries({ queryKey: ["clients"] });
       pushFlashMessage({ kind: "success", text: "Pedido actualizado." });
-      await navigate({ to: "/pedidos" });
+      await navigate({ to: "/pedidos", search: pedidosListSearch });
     },
     onError: (err: Error) => setFormError(err.message),
   });
@@ -174,13 +193,22 @@ export function InvoiceEditPage() {
       return;
     }
     const items = lines.flatMap((line) =>
-      draftLineToItems(line, recipesQuery.data ?? [], categoryWorkTypesQuery.data ?? []),
+      draftLineToItems(
+        line,
+        recipesQuery.data ?? [],
+        categoryWorkTypesQuery.data ?? [],
+        displayRate,
+      ),
     );
     void saveMutation.mutateAsync({
       id: invoiceId,
       clientId,
       date,
       notes: notes.trim() || null,
+      exchangeRateSnapshot: displayRate > 0 ? displayRate : null,
+      paymentCurrency: (inv?.paymentCurrency as "CUP" | "USD" | "mixto" | null) ?? null,
+      dueUsd: inv?.dueUsd ?? null,
+      dueCup: inv?.dueCup ?? null,
       items,
     });
   };
@@ -219,7 +247,7 @@ export function InvoiceEditPage() {
           <h1 className="text-2xl font-bold">Editar pedido</h1>
           {inv && <p className="font-mono text-base-content/70">{inv.invoiceNumber}</p>}
         </div>
-        <Link to="/pedidos" className="btn btn-ghost btn-sm">
+        <Link to="/pedidos" search={pedidosListSearch} className="btn btn-ghost btn-sm">
           Cancelar
         </Link>
       </div>
@@ -247,6 +275,20 @@ export function InvoiceEditPage() {
         onNotesChange={setNotes}
       />
 
+      <label className="form-control max-w-xs">
+        <span className="label-text text-xs">Tasa del pedido (1 USD = CUP)</span>
+        <input
+          type="number"
+          className="input input-bordered input-sm"
+          value={orderRate}
+          onChange={(e) => handleRateChange(e.target.value)}
+        />
+        <span className="label-text-alt text-base-content/60">
+          Al cambiar la tasa se recalculan los precios CUP desde USD.
+          {inv?.paymentCurrency ? ` Moneda: ${inv.paymentCurrency}.` : ""}
+        </span>
+      </label>
+
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Líneas</h2>
@@ -272,19 +314,6 @@ export function InvoiceEditPage() {
           }}
           onRemove={(key) => setLines((prev) => prev.filter((l) => l.key !== key))}
         />
-        <OrderWorkTypeSummary
-          exchangeRate={displayRate}
-          rows={aggregateWorkTypeSummary(
-            lines.flatMap((line) => {
-              const qty = Number.parseInt(line.quantity, 10) || 0;
-              return line.services.map((s) => ({
-                service: s.service,
-                quantity: qty,
-                unitPrice: Number.parseFloat(s.unitPrice.replace(",", ".")) || 0,
-              }));
-            }),
-          )}
-        />
       </div>
 
       <div className="rounded-lg border border-base-300 bg-base-100 p-4 text-sm">
@@ -307,7 +336,7 @@ export function InvoiceEditPage() {
       </div>
 
       <div className="flex justify-end gap-2">
-        <Link to="/pedidos" className="btn btn-ghost">
+        <Link to="/pedidos" search={pedidosListSearch} className="btn btn-ghost">
           Cancelar
         </Link>
         <button
@@ -337,6 +366,7 @@ export function InvoiceEditPage() {
         materialCategories={materialCategoriesQuery.data ?? []}
         inventoryItems={inventoryItemsQuery.data ?? []}
         recipes={recipesQuery.data ?? []}
+        orderExchangeRate={displayRate}
         onClose={() => {
           setLineModalOpen(false);
           setEditingLineKey(null);

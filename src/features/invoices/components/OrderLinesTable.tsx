@@ -1,6 +1,6 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { DualMoneyText } from "@/components/common/DualMoneyText";
-import { draftLineSubtotal, type DraftLine } from "@/features/invoices/lib/order-draft";
+import { draftLineSubtotal, draftServiceUnitPriceCup, type DraftLine } from "@/features/invoices/lib/order-draft";
 import { moneyHeading } from "@/lib/format-money";
 
 interface OrderLinesTableProps {
@@ -51,7 +51,7 @@ export function OrderLinesTable(props: OrderLinesTableProps) {
               .map((s) => s.service.trim())
               .filter((s) => s.length > 0);
             const unitCup = line.services.reduce(
-              (sum, s) => sum + (Number(s.unitPrice.replace(",", ".")) || 0),
+              (sum, s) => sum + draftServiceUnitPriceCup(s, exchangeRate),
               0,
             );
             return (
@@ -80,7 +80,7 @@ export function OrderLinesTable(props: OrderLinesTableProps) {
                 </td>
                 <td className="text-right font-mono text-xs">
                   <DualMoneyText
-                    amountCup={draftLineSubtotal(line)}
+                    amountCup={draftLineSubtotal(line, exchangeRate)}
                     rate={exchangeRate}
                     primary="USD"
                   />
