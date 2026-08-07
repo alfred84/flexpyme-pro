@@ -148,6 +148,16 @@ export const invoices = sqliteTable("invoices", {
   total: real("total").notNull().default(0),
   paid: real("paid").notNull().default(0),
   balance: real("balance").notNull().default(0),
+  /** Total del pedido en USD (precios de venta). */
+  totalUsd: real("total_usd").notNull().default(0),
+  /** Pagado acumulado en USD. */
+  paidUsd: real("paid_usd").notNull().default(0),
+  /** Saldo pendiente en USD. */
+  balanceUsd: real("balance_usd").notNull().default(0),
+  /** Parte del total declarada a cobrar en USD (split Mixto / puro USD). */
+  dueUsd: real("due_usd").notNull().default(0),
+  /** Parte del total declarada a cobrar en CUP (split Mixto / puro CUP). */
+  dueCup: real("due_cup").notNull().default(0),
   /** Crédito de cliente aplicado a este pedido. */
   creditApplied: real("credit_applied").notNull().default(0),
   /** Exceso de cobro dejado como saldo a favor. */
@@ -156,6 +166,7 @@ export const invoices = sqliteTable("invoices", {
   productionStatus: text("production_status").notNull().default("en_produccion"),
   paymentStatus: text("payment_status").notNull().default("pendiente"),
   paymentMethod: text("payment_method"),
+  /** `CUP` | `USD` | `mixto`. */
   paymentCurrency: text("payment_currency").default("CUP"),
   exchangeRateSnapshot: real("exchange_rate_snapshot"),
   amountUsd: real("amount_usd").notNull().default(0),
@@ -184,6 +195,9 @@ export const invoiceItems = sqliteTable("invoice_items", {
   finish: text("finish"),
   service: text("service"),
   quantity: integer("quantity").notNull().default(0),
+  /** Precio unitario de venta en USD (fuente de verdad). */
+  unitPriceUsd: real("unit_price_usd").notNull().default(0),
+  /** Precio unitario en CUP (`unit_price_usd × tasa`). */
   unitPrice: real("unit_price").notNull(),
   subtotal: real("subtotal").notNull(),
   completedQuantity: integer("completed_quantity").notNull().default(0),
@@ -291,9 +305,13 @@ export const cashSessions = sqliteTable("cash_sessions", {
   totalAmount: real("total_amount").notNull(),
   amountReceived: real("amount_received").notNull(),
   changeGiven: real("change_given").notNull(),
+  amountReceivedUsd: real("amount_received_usd").notNull().default(0),
+  changeGivenUsd: real("change_given_usd").notNull().default(0),
   date: text("date").notNull().default(sql`(datetime('now'))`),
   denominationBreakdown: text("denomination_breakdown"),
   changeBreakdown: text("change_breakdown"),
+  denominationBreakdownUsd: text("denomination_breakdown_usd"),
+  changeBreakdownUsd: text("change_breakdown_usd"),
 });
 
 export const settings = sqliteTable("settings", {

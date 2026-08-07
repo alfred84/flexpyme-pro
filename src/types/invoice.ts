@@ -12,12 +12,17 @@ export interface InvoiceListDto {
   total: number;
   paid: number;
   balance: number;
+  totalUsd: number;
+  paidUsd: number;
+  balanceUsd: number;
+  dueUsd: number;
+  dueCup: number;
   status: string;
   productionStatus: string;
   paymentStatus: string;
-  /** Moneda de cobro (`CUP` | `USD`), si se definió. */
+  /** Moneda de cobro (`CUP` | `USD` | `mixto`). */
   paymentCurrency: string | null;
-  /** Tasa USD→CUP del pedido, si hubo cobro/anticipo en USD. */
+  /** Tasa USD→CUP del pedido. */
   exchangeRateSnapshot: number | null;
   /** True si el pedido aún se puede editar (sin trabajo iniciado). */
   canEdit: boolean;
@@ -42,6 +47,11 @@ export interface InvoiceHeaderDto {
   total: number;
   paid: number;
   balance: number;
+  totalUsd: number;
+  paidUsd: number;
+  balanceUsd: number;
+  dueUsd: number;
+  dueCup: number;
   status: string;
   productionStatus: string;
   paymentStatus: string;
@@ -95,6 +105,7 @@ export interface InvoiceItemDto {
   finish: string | null;
   service: string | null;
   quantity: number;
+  unitPriceUsd: number;
   unitPrice: number;
   subtotal: number;
   completedQuantity: number;
@@ -145,6 +156,9 @@ export interface CreateInvoiceItemPayload {
   finish: string | null;
   service: string | null;
   quantity: number;
+  /** Precio unitario en USD (fuente de verdad). */
+  unitPriceUsd: number;
+  /** Precio unitario en CUP (derivado). */
   unitPrice: number;
   /** Materiales a descontar al concluir la línea (norma o asignación manual). */
   materials?: InvoiceItemMaterialInput[] | null;
@@ -168,11 +182,15 @@ export interface UpdateInvoicePayload {
   clientId: number;
   date: string;
   notes?: string | null;
+  exchangeRateSnapshot?: number | null;
+  paymentCurrency?: PaymentCurrency | null;
+  dueUsd?: number | null;
+  dueCup?: number | null;
   items: CreateInvoiceItemPayload[];
 }
 
 export type PaymentMethod = "efectivo" | "transferencia";
-export type PaymentCurrency = "CUP" | "USD";
+export type PaymentCurrency = "CUP" | "USD" | "mixto";
 
 /** Qué hacer con el exceso recibido sobre el saldo. */
 export type OverpaymentDisposition = "change" | "credit";
@@ -182,11 +200,13 @@ export type OverpaymentDisposition = "change" | "credit";
  */
 export interface InitialPaymentPayload {
   counts?: Record<string, number> | null;
+  usdCounts?: Record<string, number> | null;
   amountCup?: number | null;
   amountUsd?: number | null;
   exchangeRate?: number | null;
   transferConcept?: string | null;
   changeCounts?: Record<string, number> | null;
+  changeUsdCounts?: Record<string, number> | null;
   overpaymentDisposition?: OverpaymentDisposition | null;
   applyClientCredit?: boolean | null;
 }
@@ -198,11 +218,13 @@ export interface AdvancePaymentPayload {
   paymentMethod: PaymentMethod;
   paymentCurrency?: PaymentCurrency | null;
   counts?: Record<string, number> | null;
+  usdCounts?: Record<string, number> | null;
   amountCup?: number | null;
   amountUsd?: number | null;
   exchangeRate?: number | null;
   transferConcept?: string | null;
   changeCounts?: Record<string, number> | null;
+  changeUsdCounts?: Record<string, number> | null;
   overpaymentDisposition?: OverpaymentDisposition | null;
 }
 
@@ -215,6 +237,10 @@ export interface CreateInvoicePayload {
   paymentMethod: PaymentMethod;
   paymentCurrency: PaymentCurrency;
   exchangeRateSnapshot: number;
+  /** Split Mixto / puro: parte en USD. */
+  dueUsd?: number | null;
+  /** Split Mixto / puro: parte en CUP. */
+  dueCup?: number | null;
   transferConcept?: string | null;
   advancePaymentDetail?: AdvancePaymentPayload | null;
   /** Aplicar saldo a favor del cliente al crear (default true). */

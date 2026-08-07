@@ -36,8 +36,13 @@ export interface CashSessionDto {
   totalAmount: number;
   amountReceived: number;
   changeGiven: number;
+  amountReceivedUsd: number;
+  changeGivenUsd: number;
   date: string;
   denominationBreakdown: string | null;
+  changeBreakdown?: string | null;
+  denominationBreakdownUsd?: string | null;
+  changeBreakdownUsd?: string | null;
 }
 
 /** Qué hacer con el exceso recibido sobre el saldo. */
@@ -45,17 +50,21 @@ export type OverpaymentDisposition = "change" | "credit";
 
 export interface CashierRegisterPayload {
   invoiceId: number;
-  /** Conteo de billetes CUP (efectivo con desglose). */
+  /** Conteo de billetes CUP recibidos. */
   counts?: Record<string, number> | null;
+  /** Conteo de billetes USD recibidos. */
+  usdCounts?: Record<string, number> | null;
   /** Monto directo en CUP (transferencia o efectivo sin desglose). */
   amountCup?: number | null;
-  /** Monto en USD si el pedido se cobra en dólares. */
+  /** Monto en USD (efectivo sin desglose o refuerzo). */
   amountUsd?: number | null;
   exchangeRate?: number | null;
   transferConcept?: string | null;
   /** Desglose de billetes CUP del vuelto. */
   changeCounts?: Record<string, number> | null;
-  /** `change` = devolver vuelto; `credit` = dejar saldo a favor. */
+  /** Desglose de billetes USD del vuelto. */
+  changeUsdCounts?: Record<string, number> | null;
+  /** `change` = devolver vuelto; `credit` = dejar saldo a favor (CUP). */
   overpaymentDisposition?: OverpaymentDisposition | null;
   /** Aplicar saldo a favor del cliente antes del cobro (default true). */
   applyClientCredit?: boolean | null;
@@ -64,11 +73,15 @@ export interface CashierRegisterPayload {
 export interface CashierRegisterResponse {
   sessionId: number | null;
   amountReceived: number;
+  amountReceivedUsd: number;
   changeGiven: number;
+  changeGivenUsd: number;
   amountApplied: number;
+  amountAppliedUsd: number;
   creditApplied: number;
   creditAdded: number;
   invoiceNewBalance: number;
+  invoiceNewBalanceUsd: number;
   invoiceStatus: string;
   paymentStatus: string;
 }

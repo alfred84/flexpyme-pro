@@ -112,6 +112,8 @@ const EMBEDDED_EMPLOYEE_PAY_MODE_DESTAJO_SCHEMA: &str =
     include_str!("../../src/db/migrations/0028_employee_pay_mode_destajo.sql");
 const EMBEDDED_EMPLOYEE_PAYMENT_CASH_LINK_SCHEMA: &str =
     include_str!("../../src/db/migrations/0029_employee_payment_cash_link.sql");
+const EMBEDDED_DUAL_CURRENCY_ORDERS_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0030_dual_currency_orders.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -416,6 +418,13 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             conn,
             EMBEDDED_EMPLOYEE_PAYMENT_CASH_LINK_SCHEMA,
             "0029_employee_payment_cash_link",
+        )?;
+    }
+    if !column_exists(conn, "invoice_items", "unit_price_usd") {
+        execute_migration(
+            conn,
+            EMBEDDED_DUAL_CURRENCY_ORDERS_SCHEMA,
+            "0030_dual_currency_orders",
         )?;
     }
     Ok(())
