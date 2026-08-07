@@ -24,16 +24,19 @@ pub struct InvoiceListDto {
     pub total: f64,
     pub paid: f64,
     pub balance: f64,
+    pub total_usd: f64,
+    pub paid_usd: f64,
+    pub balance_usd: f64,
+    pub due_usd: f64,
+    pub due_cup: f64,
     pub status: String,
     pub production_status: String,
     pub payment_status: String,
-    /// Moneda de cobro del pedido (`CUP` | `USD`), si se definió.
+    /// Moneda de cobro (`CUP` | `USD` | `mixto`).
     pub payment_currency: Option<String>,
-    /// Tasa USD→CUP guardada en el pedido (si hubo cobro/anticipo en USD).
     pub exchange_rate_snapshot: Option<f64>,
     pub can_edit: bool,
     pub can_cancel: bool,
-    /// True si alguna línea abierta tiene material en déficit.
     pub resource_missing: bool,
 }
 
@@ -52,6 +55,11 @@ pub struct InvoiceHeaderDto {
     pub total: f64,
     pub paid: f64,
     pub balance: f64,
+    pub total_usd: f64,
+    pub paid_usd: f64,
+    pub balance_usd: f64,
+    pub due_usd: f64,
+    pub due_cup: f64,
     pub status: String,
     pub production_status: String,
     pub payment_status: String,
@@ -78,6 +86,7 @@ pub struct InvoiceItemDto {
     pub finish: Option<String>,
     pub service: Option<String>,
     pub quantity: i64,
+    pub unit_price_usd: f64,
     pub unit_price: f64,
     pub subtotal: f64,
     pub completed_quantity: i64,
@@ -134,6 +143,9 @@ pub struct CreateInvoiceItemPayload {
     pub finish: Option<String>,
     pub service: Option<String>,
     pub quantity: i64,
+    /// Precio unitario USD (fuente de verdad). Si falta, se deriva de unit_price/rate.
+    #[serde(default)]
+    pub unit_price_usd: Option<f64>,
     pub unit_price: f64,
     pub materials: Option<Vec<crate::commands::inventory::InvoiceItemMaterialInput>>,
     #[serde(default)]
@@ -151,6 +163,10 @@ pub struct CreateInvoicePayload {
     pub payment_method: String,
     pub payment_currency: String,
     pub exchange_rate_snapshot: f64,
+    #[serde(default)]
+    pub due_usd: Option<f64>,
+    #[serde(default)]
+    pub due_cup: Option<f64>,
     pub transfer_concept: Option<String>,
     /// Detalle opcional del anticipo (método, moneda, denominaciones).
     pub advance_payment_detail: Option<AdvancePaymentPayload>,
@@ -176,6 +192,14 @@ pub struct UpdateInvoicePayload {
     pub client_id: i64,
     pub date: String,
     pub notes: Option<String>,
+    #[serde(default)]
+    pub exchange_rate_snapshot: Option<f64>,
+    #[serde(default)]
+    pub payment_currency: Option<String>,
+    #[serde(default)]
+    pub due_usd: Option<f64>,
+    #[serde(default)]
+    pub due_cup: Option<f64>,
     pub items: Vec<CreateInvoiceItemPayload>,
 }
 
@@ -472,7 +496,9 @@ pub fn invoices_list() -> Result<Vec<InvoiceListDto>, String> {
                     i.production_status, i.payment_status, i.payment_currency, i.exchange_rate_snapshot,
                     COALESCE((SELECT SUM(completed_quantity) FROM invoice_items WHERE invoice_id = i.id), 0),
                     COALESCE((SELECT COUNT(*) FROM production_batch_items WHERE invoice_id = i.id), 0),
-                    i.resource_missing
+                    i.resource_missing,
+                    COALESCE(i.total_usd, 0), COALESCE(i.paid_usd, 0), COALESCE(i.balance_usd, 0),
+                    COALESCE(i.due_usd, 0), COALESCE(i.due_cup, i.total)
              FROM invoices i
              JOIN clients c ON c.id = i.client_id
              WHERE i.deleted_at IS NULL AND i.cancelled_at IS NULL
@@ -505,6 +531,11 @@ pub fn invoices_list() -> Result<Vec<InvoiceListDto>, String> {
                 can_edit,
                 can_cancel,
                 resource_missing: row.get::<_, i64>(15)? != 0,
+                total_usd: row.get(16)?,
+                paid_usd: row.get(17)?,
+                balance_usd: row.get(18)?,
+                due_usd: row.get(19)?,
+                due_cup: row.get(20)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -519,7 +550,9 @@ pub fn invoices_financial_list() -> Result<Vec<InvoiceListDto>, String> {
         .prepare(
             "SELECT i.id, i.invoice_number, i.client_id, c.name, i.date, i.total, i.paid, i.balance, i.status,
                     i.production_status, i.payment_status, i.payment_currency, i.exchange_rate_snapshot,
-                    i.cancelled_at, i.resource_missing
+                    i.cancelled_at, i.resource_missing,
+                    COALESCE(i.total_usd, 0), COALESCE(i.paid_usd, 0), COALESCE(i.balance_usd, 0),
+                    COALESCE(i.due_usd, 0), COALESCE(i.due_cup, i.total)
              FROM invoices i
              JOIN clients c ON c.id = i.client_id
              WHERE i.deleted_at IS NULL
@@ -550,6 +583,11 @@ pub fn invoices_financial_list() -> Result<Vec<InvoiceListDto>, String> {
                 can_edit: false,
                 can_cancel,
                 resource_missing: row.get::<_, i64>(14)? != 0,
+                total_usd: row.get(15)?,
+                paid_usd: row.get(16)?,
+                balance_usd: row.get(17)?,
+                due_usd: row.get(18)?,
+                due_cup: row.get(19)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -643,7 +681,9 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                     i.total, i.paid, i.balance, i.status, i.production_status, i.payment_status,
                     i.payment_method, i.payment_currency,
                     i.exchange_rate_snapshot, i.amount_usd, i.amount_cup, i.notes,
-                    i.resource_missing, i.cancelled_at, i.cancelled_reason
+                    i.resource_missing, i.cancelled_at, i.cancelled_reason,
+                    COALESCE(i.total_usd, 0), COALESCE(i.paid_usd, 0), COALESCE(i.balance_usd, 0),
+                    COALESCE(i.due_usd, 0), COALESCE(i.due_cup, i.total)
              FROM invoices i
              JOIN clients c ON c.id = i.client_id
              WHERE i.id = ?1 AND i.deleted_at IS NULL",
@@ -673,6 +713,11 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                     resource_missing: row.get::<_, i64>(20)? != 0,
                     cancelled_at: row.get(21)?,
                     cancelled_reason: row.get(22)?,
+                    total_usd: row.get(23)?,
+                    paid_usd: row.get(24)?,
+                    balance_usd: row.get(25)?,
+                    due_usd: row.get(26)?,
+                    due_cup: row.get(27)?,
                 })
             },
         )
@@ -684,7 +729,8 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                     COALESCE(ii.category_snapshot, NULLIF(trim(pc.label_es), ''), pc.name),
                     ii.format_id,
                     COALESCE(ii.format_label_snapshot, f.label) AS format_label,
-                    ii.finish, ii.service, ii.quantity, ii.unit_price, ii.subtotal, ii.completed_quantity,
+                    ii.finish, ii.service, ii.quantity,
+                    COALESCE(ii.unit_price_usd, 0), ii.unit_price, ii.subtotal, ii.completed_quantity,
                     ii.resource_missing, ii.resource_note,
                     COALESCE(ii.production_line_status, 'en_produccion')
              FROM invoice_items ii
@@ -705,12 +751,13 @@ pub fn invoices_get_detail(id: i64) -> Result<InvoiceDetailDto, String> {
                 finish: row.get(5)?,
                 service: row.get(6)?,
                 quantity: row.get(7)?,
-                unit_price: row.get(8)?,
-                subtotal: row.get(9)?,
-                completed_quantity: row.get(10)?,
-                resource_missing: row.get::<_, i64>(11)? != 0,
-                resource_note: row.get(12)?,
-                production_line_status: row.get(13)?,
+                unit_price_usd: row.get(8)?,
+                unit_price: row.get(9)?,
+                subtotal: row.get(10)?,
+                completed_quantity: row.get(11)?,
+                resource_missing: row.get::<_, i64>(12)? != 0,
+                resource_note: row.get(13)?,
+                production_line_status: row.get(14)?,
                 materials: Vec::new(),
                 assignments: Vec::new(),
             })
@@ -811,25 +858,36 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
     if payment_method != "efectivo" && payment_method != "transferencia" {
         return Err("Método de pago inválido".to_string());
     }
-    let mut payment_currency = payload.payment_currency.trim().to_uppercase();
-    if payment_method == "transferencia" {
-        payment_currency = "CUP".to_string();
-    }
-    if payment_currency != "CUP" && payment_currency != "USD" {
-        return Err("Moneda de pago inválida".to_string());
-    }
-    // Tasa USD→CUP del pedido: obligatoria al cobrar en USD; también se guarda en CUP
-    // (precios de venta en USD convertidos) para auditoría y listados.
-    let exchange_rate = if payment_currency == "USD" {
-        if payload.exchange_rate_snapshot <= 0.0 {
-            return Err("La tasa de cambio debe ser mayor que cero".to_string());
+    let mut payment_currency = payload.payment_currency.trim().to_lowercase();
+    if payment_method == "transferencia" && payment_currency != "mixto" {
+        // Transferencia cobra en CUP; el pedido puede seguir siendo mixto.
+        if payment_currency != "mixto" {
+            payment_currency = "cup".to_string();
         }
+    }
+    if payment_currency != "cup" && payment_currency != "usd" && payment_currency != "mixto" {
+        return Err("Moneda de pago inválida (CUP, USD o mixto)".to_string());
+    }
+    let payment_currency = payment_currency.to_uppercase();
+    if payment_currency == "CUP" {
+        // normalize display
+    }
+    let payment_currency = match payment_currency.as_str() {
+        "USD" => "USD".to_string(),
+        "MIXTO" => "mixto".to_string(),
+        _ => "CUP".to_string(),
+    };
+
+    let exchange_rate = if payload.exchange_rate_snapshot > 0.0 {
         payload.exchange_rate_snapshot
-    } else if payload.exchange_rate_snapshot > 0.0 {
-        payload.exchange_rate_snapshot
+    } else if payment_currency == "USD" || payment_currency == "mixto" {
+        return Err("La tasa de cambio debe ser mayor que cero".to_string());
     } else {
         0.0
     };
+    if (payment_currency == "CUP" || payment_currency == "mixto") && exchange_rate <= 0.0 {
+        return Err("Indica una tasa USD→CUP válida para el pedido".to_string());
+    }
 
     // Totales provisionales (se ajustan tras el anticipo real).
     let provisional_advance = if payload.advance_payment_detail.is_some() {
@@ -844,12 +902,37 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
         return Err("No hay saldo pendiente para cobrar en este pedido".to_string());
     }
 
-    let amount_cup = total.max(0.0);
-    let amount_usd = if payment_currency == "USD" && exchange_rate > 0.0 {
-        amount_cup / exchange_rate
+    let total_usd = if exchange_rate > 0.0 {
+        subtotal / exchange_rate
     } else {
         0.0
     };
+    let (due_usd, due_cup) = match payment_currency.as_str() {
+        "USD" => (
+            if exchange_rate > 0.0 {
+                total / exchange_rate
+            } else {
+                0.0
+            },
+            0.0,
+        ),
+        "mixto" => {
+            let d_usd = payload.due_usd.unwrap_or(0.0).max(0.0);
+            let d_cup = payload.due_cup.unwrap_or(0.0).max(0.0);
+            let equiv = d_cup + d_usd * exchange_rate;
+            if (equiv - total).abs() > 1.0 && total > EPS {
+                return Err(format!(
+                    "El split Mixto ({:.2} CUP equiv.) no coincide con el total ({:.2} CUP)",
+                    equiv, total
+                ));
+            }
+            (d_usd, d_cup)
+        }
+        _ => (0.0, total),
+    };
+    let balance_usd = due_usd;
+    let amount_cup = total.max(0.0);
+    let amount_usd = balance_usd;
 
     let invoice_number = next_invoice_number(&tx, &year)?;
     let status = compute_invoice_status(balance, 0.0);
@@ -871,8 +954,8 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
     tx.execute(
         "INSERT INTO invoices (invoice_number, client_id, date, subtotal, advance_payment, previous_debt, total, paid, balance, status,
          production_status, payment_status, payment_method, payment_currency, exchange_rate_snapshot, amount_usd, amount_cup, notes,
-         credit_applied, credit_added)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 0, 0)",
+         credit_applied, credit_added, total_usd, paid_usd, balance_usd, due_usd, due_cup)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 0, 0, ?18, 0, ?19, ?20, ?21)",
         params![
             invoice_number,
             payload.client_id,
@@ -890,7 +973,11 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
             exchange_rate,
             amount_usd,
             amount_cup,
-            notes
+            notes,
+            total_usd,
+            balance_usd,
+            due_usd,
+            due_cup
         ],
     )
     .map_err(|e| {
@@ -918,9 +1005,16 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
             None
         };
         let category_snapshot = category_display_name(&tx, item.category_id)?;
+        let unit_usd = item.unit_price_usd.unwrap_or_else(|| {
+            if exchange_rate > 0.0 {
+                item.unit_price / exchange_rate
+            } else {
+                0.0
+            }
+        });
         tx.execute(
-            "INSERT INTO invoice_items (invoice_id, category_id, category_snapshot, format_id, format_label_snapshot, finish, service, quantity, unit_price, subtotal)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO invoice_items (invoice_id, category_id, category_snapshot, format_id, format_label_snapshot, finish, service, quantity, unit_price_usd, unit_price, subtotal)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 invoice_id,
                 item.category_id,
@@ -930,6 +1024,7 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
                 finish,
                 service,
                 item.quantity,
+                unit_usd,
                 item.unit_price,
                 line_subtotal
             ],
@@ -1087,6 +1182,10 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
         return Err("Cliente no encontrado".to_string());
     }
 
+    let rate = payload
+        .exchange_rate_snapshot
+        .unwrap_or(0.0)
+        .max(0.0);
     let mut subtotal = 0.0_f64;
     for item in &payload.items {
         subtotal += (item.quantity as f64) * item.unit_price;
@@ -1105,6 +1204,31 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
     let status = compute_invoice_status(balance, paid);
     let payment_status = if balance <= EPS { "cobrado" } else { "pendiente" };
     let notes = trim_notes(payload.notes);
+    let total_usd = if rate > 0.0 { subtotal / rate } else { 0.0 };
+    let paid_usd: f64 = tx
+        .query_row(
+            "SELECT COALESCE(paid_usd, 0) FROM invoices WHERE id = ?1",
+            params![payload.id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0.0);
+    let currency = payload
+        .payment_currency
+        .as_deref()
+        .map(|c| c.trim().to_lowercase())
+        .unwrap_or_else(|| "cup".to_string());
+    let (due_usd, due_cup, balance_usd) = match currency.as_str() {
+        "usd" => {
+            let d = if rate > 0.0 { total / rate } else { 0.0 };
+            (d, 0.0, (d - paid_usd).max(0.0))
+        }
+        "mixto" => {
+            let d_usd = payload.due_usd.unwrap_or(0.0).max(0.0);
+            let d_cup = payload.due_cup.unwrap_or(0.0).max(0.0);
+            (d_usd, d_cup, (d_usd - paid_usd).max(0.0))
+        }
+        _ => (0.0, total, 0.0),
+    };
 
     tx.execute(
         "DELETE FROM invoice_item_materials
@@ -1139,9 +1263,16 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
             None
         };
         let category_snapshot = category_display_name(&tx, item.category_id)?;
+        let unit_usd = item.unit_price_usd.unwrap_or_else(|| {
+            if rate > 0.0 {
+                item.unit_price / rate
+            } else {
+                0.0
+            }
+        });
         tx.execute(
-            "INSERT INTO invoice_items (invoice_id, category_id, category_snapshot, format_id, format_label_snapshot, finish, service, quantity, unit_price, subtotal)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO invoice_items (invoice_id, category_id, category_snapshot, format_id, format_label_snapshot, finish, service, quantity, unit_price_usd, unit_price, subtotal)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 payload.id,
                 item.category_id,
@@ -1151,6 +1282,7 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
                 finish,
                 service,
                 item.quantity,
+                unit_usd,
                 item.unit_price,
                 line_subtotal
             ],
@@ -1180,8 +1312,11 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
     tx.execute(
         "UPDATE invoices
          SET client_id = ?1, date = ?2, subtotal = ?3, total = ?4, balance = ?5, status = ?6,
-             payment_status = ?7, notes = ?8, amount_cup = ?9
-         WHERE id = ?10",
+             payment_status = ?7, notes = ?8, amount_cup = ?9,
+             exchange_rate_snapshot = COALESCE(?10, exchange_rate_snapshot),
+             payment_currency = COALESCE(?11, payment_currency),
+             total_usd = ?12, balance_usd = ?13, due_usd = ?14, due_cup = ?15, amount_usd = ?13
+         WHERE id = ?16",
         params![
             payload.client_id,
             date_trim,
@@ -1192,6 +1327,19 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
             payment_status,
             notes,
             total.max(0.0),
+            if rate > 0.0 { Some(rate) } else { None::<f64> },
+            payload.payment_currency.as_deref().map(|c| {
+                let t = c.trim().to_lowercase();
+                match t.as_str() {
+                    "usd" => "USD".to_string(),
+                    "mixto" => "mixto".to_string(),
+                    _ => "CUP".to_string(),
+                }
+            }),
+            total_usd,
+            balance_usd,
+            due_usd,
+            due_cup,
             payload.id
         ],
     )
