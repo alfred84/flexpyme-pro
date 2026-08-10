@@ -108,6 +108,8 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["employees", "batches", "invoice", invoiceId] }),
         queryClient.invalidateQueries({ queryKey: ["cashflow"] }),
+        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+        queryClient.invalidateQueries({ queryKey: ["inventory"] }),
       ]);
       pushFlashMessage({ kind: "success", text: "Trabajo registrado correctamente." });
     },

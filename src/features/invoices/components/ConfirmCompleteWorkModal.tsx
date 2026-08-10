@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import { fetchCostListForWorkType } from "@/db/queries/employees";
@@ -36,6 +36,7 @@ interface ConfirmCompleteWorkModalProps {
  */
 export function ConfirmCompleteWorkModal(props: ConfirmCompleteWorkModalProps) {
   const { open, item, workTypes, onClose, onSuccess } = props;
+  const queryClient = useQueryClient();
   const [date, setDate] = useState(() => todayIso());
   const [rows, setRows] = useState<WorkerRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +128,13 @@ export function ConfirmCompleteWorkModal(props: ConfirmCompleteWorkModalProps) {
         workers,
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Listo descuenta stock: refrescar movimientos, listados y demanda pendiente.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["inventory"] }),
+        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+        queryClient.invalidateQueries({ queryKey: ["employees", "batches"] }),
+      ]);
       onSuccess();
       onClose();
     },

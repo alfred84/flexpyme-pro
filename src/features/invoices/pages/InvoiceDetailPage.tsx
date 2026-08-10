@@ -478,7 +478,6 @@ export function InvoiceDetailPage() {
             workTypes={workTypesQuery.data ?? []}
             onClose={() => setListoItem(null)}
             onSuccess={() => {
-              void queryClient.invalidateQueries({ queryKey: ["invoices"] });
               pushFlashMessage({ kind: "success", text: "Línea marcada como listo." });
             }}
           />

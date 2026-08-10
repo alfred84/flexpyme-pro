@@ -71,6 +71,8 @@ export function EmployeeWorkBatchPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["employees", "batches", employeeId] });
       await queryClient.invalidateQueries({ queryKey: ["cashflow"] });
+      await queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      await queryClient.invalidateQueries({ queryKey: ["inventory"] });
       pushFlashMessage({ kind: "success", text: "Lote registrado correctamente." });
       await navigate({ to: "/empleados/$employeeId", params: { employeeId: String(employeeId) } });
     },
