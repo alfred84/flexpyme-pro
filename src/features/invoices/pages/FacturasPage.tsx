@@ -155,6 +155,7 @@ export function FacturasPage() {
               <th>Fecha</th>
               <th className="text-right">{moneyHeading("Total", "USD")}</th>
               <th className="text-right">{moneyHeading("Total", "CUP")}</th>
+              <th className="text-right">Tasa</th>
               <th>Estado</th>
               <th>Acciones</th>
             </tr>
@@ -162,22 +163,21 @@ export function FacturasPage() {
           <tbody>
             {listQuery.isLoading && (
               <tr>
-                <td colSpan={7}>Cargando...</td>
+                <td colSpan={8}>Cargando...</td>
               </tr>
             )}
             {!listQuery.isLoading && rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center text-base-content/60">
+                <td colSpan={8} className="text-center text-base-content/60">
                   No hay facturas con este filtro.
                 </td>
               </tr>
             )}
             {rows.map((row) => {
               const fin = invoiceFinancialStatus(row.balance, row.paid, row.status === "anulada");
+              const snapshotRate = row.exchangeRateSnapshot;
               const rowRate =
-                row.exchangeRateSnapshot && row.exchangeRateSnapshot > 0
-                  ? row.exchangeRateSnapshot
-                  : rate;
+                snapshotRate && snapshotRate > 0 ? snapshotRate : rate;
               const cur = (row.paymentCurrency ?? "").toLowerCase();
               const showCup = cur === "cup" || cur === "mixto";
               const showUsd = cur === "usd" || cur === "mixto" || cur === "";
@@ -195,6 +195,9 @@ export function FacturasPage() {
                   </td>
                   <td className="text-right tabular-nums">
                     {showCup ? formatAmount(row.total) : "—"}
+                  </td>
+                  <td className="text-right tabular-nums">
+                    {snapshotRate && snapshotRate > 0 ? formatAmount(snapshotRate) : "—"}
                   </td>
                   <td>
                     <span className={`badge badge-sm ${invoiceFinancialBadgeClass(fin)}`}>
