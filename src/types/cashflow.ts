@@ -1,11 +1,13 @@
 /**
- * Balance de caja por moneda.
+ * Balance de caja por moneda (cajones físicos independientes).
  */
 export interface CashBalanceDto {
   balanceCup: number;
   balanceUsd: number;
   totalIncomeCup: number;
   totalExpenseCup: number;
+  totalIncomeUsd: number;
+  totalExpenseUsd: number;
 }
 
 /**
@@ -25,11 +27,12 @@ export interface CashTransactionDto {
 }
 
 /**
- * Punto de la serie diaria de flujo de caja.
+ * Punto de la serie diaria de flujo de caja (neto por moneda).
  */
 export interface CashDailyPointDto {
   date: string;
   netCup: number;
+  netUsd: number;
 }
 
 /**
@@ -49,6 +52,11 @@ export interface CashFilters {
   dateFrom?: string | null;
   dateTo?: string | null;
   transactionType?: string | null;
+  /** Subcadena de concepto. */
+  concept?: string | null;
+  /** `cup` | `usd` | `mixto` | vacío = todas. */
+  currency?: string | null;
+  paymentMethod?: string | null;
 }
 
 /**

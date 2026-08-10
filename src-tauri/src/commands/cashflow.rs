@@ -1,9 +1,12 @@
 //! General cash-flow commands (CUP/USD) backed by SQLite.
+//! Cajeros físicos independientes: `amount_cup` y `amount_usd` no se mezclan por conversión.
 
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
 use crate::db;
+
+const EPS: f64 = 1e-6;
 
 /// Current cash balance split by currency.
 #[derive(Debug, Serialize)]
@@ -13,6 +16,8 @@ pub struct CashBalanceDto {
     pub balance_usd: f64,
     pub total_income_cup: f64,
     pub total_expense_cup: f64,
+    pub total_income_usd: f64,
+    pub total_expense_usd: f64,
 }
 
 /// Cash transaction row.
@@ -31,12 +36,13 @@ pub struct CashTransactionDto {
     pub date: String,
 }
 
-/// One point of the 30-day cash-flow series.
+/// One point of the 30-day cash-flow series (net per currency).
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CashDailyPointDto {
     pub date: String,
     pub net_cup: f64,
+    pub net_usd: f64,
 }
 
 /// Net cash flow for the current day and the last 30 days.
@@ -70,6 +76,11 @@ pub struct CashFilters {
     pub date_from: Option<String>,
     pub date_to: Option<String>,
     pub transaction_type: Option<String>,
+    /// Subcadena de concepto (case-insensitive).
+    pub concept: Option<String>,
+    /// `cup` | `usd` | `mixto` | vacío = todas.
+    pub currency: Option<String>,
+    pub payment_method: Option<String>,
 }
 
 fn normalize_optional(value: Option<String>) -> Option<String> {
@@ -83,7 +94,7 @@ fn normalize_optional(value: Option<String>) -> Option<String> {
     })
 }
 
-/// Returns the current cash balance in CUP and USD.
+/// Returns the current cash balance in CUP and USD (physical drawers).
 #[tauri::command]
 pub fn cash_balance() -> Result<CashBalanceDto, String> {
     let conn = db::open_connection()?;
@@ -105,6 +116,8 @@ pub fn cash_balance() -> Result<CashBalanceDto, String> {
         balance_usd: income_usd - expense_usd,
         total_income_cup: income_cup,
         total_expense_cup: expense_cup,
+        total_income_usd: income_usd,
+        total_expense_usd: expense_usd,
     })
 }
 
@@ -116,6 +129,9 @@ pub fn cash_transactions_list(filters: Option<CashFilters>) -> Result<Vec<CashTr
         date_from: None,
         date_to: None,
         transaction_type: None,
+        concept: None,
+        currency: None,
+        payment_method: None,
     });
 
     let mut clauses: Vec<String> = Vec::new();
@@ -131,6 +147,28 @@ pub fn cash_transactions_list(filters: Option<CashFilters>) -> Result<Vec<CashTr
     if let Some(t) = normalize_optional(filters.transaction_type) {
         clauses.push(format!("type = ?{}", args.len() + 1));
         args.push(t);
+    }
+    if let Some(concept) = normalize_optional(filters.concept) {
+        clauses.push(format!("LOWER(concept) LIKE '%' || LOWER(?{}) || '%'", args.len() + 1));
+        args.push(concept);
+    }
+    if let Some(method) = normalize_optional(filters.payment_method) {
+        clauses.push(format!("LOWER(payment_method) = LOWER(?{})", args.len() + 1));
+        args.push(method);
+    }
+    if let Some(currency) = normalize_optional(filters.currency) {
+        match currency.to_lowercase().as_str() {
+            "cup" => clauses.push(
+                "amount_cup > 0.000001 AND amount_usd <= 0.000001".to_string(),
+            ),
+            "usd" => clauses.push(
+                "amount_usd > 0.000001 AND amount_cup <= 0.000001".to_string(),
+            ),
+            "mixto" => {
+                clauses.push("amount_cup > 0.000001 AND amount_usd > 0.000001".to_string())
+            }
+            _ => {}
+        }
     }
 
     let where_clause = if clauses.is_empty() {
@@ -173,7 +211,8 @@ pub fn cash_daily_series() -> Result<Vec<CashDailyPointDto>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT date(date) AS d,
-                    COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount_cup ELSE -amount_cup END), 0)
+                    COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount_cup ELSE -amount_cup END), 0),
+                    COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount_usd ELSE -amount_usd END), 0)
              FROM cash_transactions
              WHERE date(date) >= date('now', '-30 days')
              GROUP BY d
@@ -185,6 +224,7 @@ pub fn cash_daily_series() -> Result<Vec<CashDailyPointDto>, String> {
             Ok(CashDailyPointDto {
                 date: row.get(0)?,
                 net_cup: row.get(1)?,
+                net_usd: row.get(2)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -225,7 +265,7 @@ pub fn cash_net_summary() -> Result<CashNetSummaryDto, String> {
     })
 }
 
-/// Creates a manual cash transaction (ingreso/egreso).
+/// Creates a manual cash transaction (ingreso/egreso) in one physical currency drawer.
 #[tauri::command]
 pub fn cash_transaction_create(payload: CreateTransactionPayload) -> Result<i64, String> {
     let transaction_type = payload.transaction_type.trim().to_lowercase();
@@ -236,8 +276,14 @@ pub fn cash_transaction_create(payload: CreateTransactionPayload) -> Result<i64,
     if concept.is_empty() {
         return Err("El concepto es obligatorio".to_string());
     }
-    if payload.amount_cup <= 0.0 {
-        return Err("El importe en CUP debe ser mayor que cero".to_string());
+    let amount_cup = payload.amount_cup.max(0.0);
+    let amount_usd = payload.amount_usd.unwrap_or(0.0).max(0.0);
+    if amount_cup <= EPS && amount_usd <= EPS {
+        return Err("Indica un importe en CUP o en USD mayor que cero".to_string());
+    }
+    let exchange_rate = payload.exchange_rate.unwrap_or(0.0).max(0.0);
+    if amount_usd > EPS && exchange_rate <= EPS {
+        return Err("Indica una tasa USD→CUP válida para movimientos en USD".to_string());
     }
 
     let conn = db::open_connection()?;
@@ -250,9 +296,9 @@ pub fn cash_transaction_create(payload: CreateTransactionPayload) -> Result<i64,
             transaction_type,
             concept,
             normalize_optional(payload.reference_type),
-            payload.amount_cup,
-            payload.amount_usd.unwrap_or(0.0),
-            payload.exchange_rate.unwrap_or(0.0),
+            amount_cup,
+            amount_usd,
+            exchange_rate,
             payload.payment_method.trim(),
             normalize_optional(payload.denomination_breakdown)
         ],

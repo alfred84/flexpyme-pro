@@ -66,17 +66,19 @@ export function CashflowNewPage() {
       return;
     }
 
-    let amountCup = value;
+    // Cajón físico: USD no escribe equivalente en CUP (ni viceversa).
+    let amountCup = 0;
     let amountUsd = 0;
     let rate = 0;
     if (currency === "USD") {
       rate = Number(exchangeRate) || 0;
       if (rate <= 0) {
-        setError("Indica una tasa USD→CUP válida.");
+        setError("Indica una tasa USD→CUP válida (auditoría).");
         return;
       }
       amountUsd = value;
-      amountCup = value * rate;
+    } else {
+      amountCup = value;
     }
 
     const denominationBreakdown = isCash
@@ -89,7 +91,7 @@ export function CashflowNewPage() {
       referenceType: "otro",
       amountCup,
       amountUsd,
-      exchangeRate: rate,
+      exchangeRate: rate > 0 ? rate : null,
       paymentMethod,
       denominationBreakdown,
     });
@@ -103,6 +105,11 @@ export function CashflowNewPage() {
           Cancelar
         </Link>
       </div>
+
+      <p className="text-sm text-base-content/70">
+        El movimiento afecta solo el cajón de la moneda elegida. La tasa en USD es para auditoría; no
+        convierte ni altera el balance CUP.
+      </p>
 
       {error && (
         <div className="alert alert-error">
@@ -179,7 +186,7 @@ export function CashflowNewPage() {
         {currency === "USD" && (
           <div className="form-control sm:col-span-2">
             <label className="label" htmlFor="cf-rate">
-              <span className="label-text">Tasa USD → CUP</span>
+              <span className="label-text">Tasa USD → CUP (auditoría)</span>
             </label>
             <input
               id="cf-rate"
