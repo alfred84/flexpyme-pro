@@ -8,12 +8,20 @@ export interface ClientDto {
   phone: string | null;
   address: string | null;
   notes: string | null;
-  /** Deuda abierta (suma de saldos de pedidos). */
+  /** Deuda abierta equivalente CUP (espejo contable). */
   balance: number;
-  /** Saldo a favor disponible. */
+  /** Deuda abierta en USD (suma de `balance_usd` de pedidos). */
+  balanceUsd: number;
+  /** Deuda abierta en CUP (parte CUP pendiente, sin restar crédito). */
+  balanceCup: number;
+  /** Saldo a favor disponible (CUP). */
   creditBalance: number;
-  /** Suma de totales de todos los pedidos del cliente. */
+  /** Suma de totales CUP equivalentes de todos los pedidos. */
   totalHistorical: number;
+  /** Total histórico declarado a cobrar en USD (`Σ due_usd`). */
+  totalHistoricalUsd: number;
+  /** Total histórico declarado a cobrar en CUP (`Σ due_cup`). */
+  totalHistoricalCup: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -26,11 +34,16 @@ export interface ClientWorkHistoryRow {
   invoiceNumber: string;
   date: string;
   total: number;
+  totalUsd: number;
   paid: number;
+  paidUsd: number;
   balance: number;
+  balanceUsd: number;
+  dueUsd: number;
+  dueCup: number;
   productionStatus: string;
   paymentStatus: string;
-  /** Moneda de cobro del pedido (`CUP` | `USD`), si se definió. */
+  /** Moneda de cobro del pedido (`CUP` | `USD` | `mixto`), si se definió. */
   paymentCurrency: string | null;
   /** Tasa USD→CUP del pedido, si aplica. */
   exchangeRateSnapshot: number | null;
@@ -42,6 +55,8 @@ export interface ClientWorkHistoryRow {
 export interface ClientWorkHistoryDto {
   invoices: ClientWorkHistoryRow[];
   totalHistorical: number;
+  totalHistoricalUsd: number;
+  totalHistoricalCup: number;
 }
 
 /**
@@ -53,6 +68,8 @@ export interface DeletedClientDto {
   name: string;
   phone: string | null;
   balance: number;
+  balanceUsd: number;
+  balanceCup: number;
   creditBalance: number;
   deletedAt: string;
 }

@@ -2,11 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
+import { formatClientBalanceDisplay } from "@/features/clients/lib/client-balance";
 import { fetchDeletedClients, restoreClient } from "@/db/queries/clients";
-import { useAppSettings } from "@/hooks/use-app-settings";
-import { cupToUsd } from "@/lib/currency";
 import { formatDate } from "@/lib/format-date";
-import { formatAmount, moneyHeading } from "@/lib/format-money";
+import { moneyHeading } from "@/lib/format-money";
 
 interface RestoreClientsModalProps {
   /** Cierra el modal. */
@@ -22,7 +21,6 @@ interface RestoreClientsModalProps {
 export function RestoreClientsModal(props: RestoreClientsModalProps) {
   const { onClose } = props;
   const queryClient = useQueryClient();
-  const { usdExchangeRate } = useAppSettings();
   const [filter, setFilter] = useState("");
   const [restoringId, setRestoringId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; text: string } | null>(
@@ -171,10 +169,18 @@ export function RestoreClientsModal(props: RestoreClientsModalProps) {
                         {formatDate(cliente.deletedAt)}
                       </td>
                       <td className="text-right tabular-nums text-sm">
-                        {formatAmount(cupToUsd(cliente.balance, usdExchangeRate))}
+                        {
+                          formatClientBalanceDisplay(cliente.balanceUsd ?? 0, 0)
+                            .text
+                        }
                       </td>
                       <td className="text-right tabular-nums text-sm">
-                        {formatAmount(cliente.balance)}
+                        {
+                          formatClientBalanceDisplay(
+                            cliente.balanceCup ?? 0,
+                            cliente.creditBalance ?? 0,
+                          ).text
+                        }
                       </td>
                       <td className="text-right">
                         <button

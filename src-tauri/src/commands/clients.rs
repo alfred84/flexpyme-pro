@@ -15,9 +15,19 @@ pub struct ClientDto {
     pub phone: Option<String>,
     pub address: Option<String>,
     pub notes: Option<String>,
+    /// Deuda abierta equivalente CUP (espejo contable; suma de `invoices.balance`).
     pub balance: f64,
+    /// Deuda abierta en USD (suma de `invoices.balance_usd` de pedidos no anulados).
+    pub balance_usd: f64,
+    /// Deuda abierta en CUP (parte CUP pendiente, sin restar crédito).
+    pub balance_cup: f64,
     pub credit_balance: f64,
+    /// Suma de totales CUP de todos los pedidos (legado / equivalente).
     pub total_historical: f64,
+    /// Total histórico a cobrar en USD (`Σ due_usd`).
+    pub total_historical_usd: f64,
+    /// Total histórico a cobrar en CUP (`Σ due_cup`).
+    pub total_historical_cup: f64,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -30,8 +40,13 @@ pub struct ClientWorkHistoryRow {
     pub invoice_number: String,
     pub date: String,
     pub total: f64,
+    pub total_usd: f64,
     pub paid: f64,
+    pub paid_usd: f64,
     pub balance: f64,
+    pub balance_usd: f64,
+    pub due_usd: f64,
+    pub due_cup: f64,
     pub production_status: String,
     pub payment_status: String,
     pub payment_currency: Option<String>,
@@ -44,12 +59,39 @@ pub struct ClientWorkHistoryRow {
 pub struct ClientWorkHistoryDto {
     pub invoices: Vec<ClientWorkHistoryRow>,
     pub total_historical: f64,
+    pub total_historical_usd: f64,
+    pub total_historical_cup: f64,
 }
 
 const CLIENT_SELECT: &str = "SELECT c.id, c.code, c.name, c.phone, c.address, c.notes, c.balance,
+    COALESCE((
+        SELECT SUM(COALESCE(i.balance_usd, 0)) FROM invoices i
+        WHERE i.client_id = c.id AND i.deleted_at IS NULL AND i.cancelled_at IS NULL
+    ), 0),
+    COALESCE((
+        SELECT SUM(CASE
+            WHEN COALESCE(i.balance, 0)
+                - COALESCE(i.balance_usd, 0) * COALESCE(i.exchange_rate_snapshot, 0) > 0
+            THEN COALESCE(i.balance, 0)
+                - COALESCE(i.balance_usd, 0) * COALESCE(i.exchange_rate_snapshot, 0)
+            ELSE 0
+        END) FROM invoices i
+        WHERE i.client_id = c.id AND i.deleted_at IS NULL AND i.cancelled_at IS NULL
+    ), 0),
     COALESCE(c.credit_balance, 0),
     COALESCE((
         SELECT SUM(i.total) FROM invoices i
+        WHERE i.client_id = c.id AND i.deleted_at IS NULL
+    ), 0),
+    COALESCE((
+        SELECT SUM(COALESCE(i.due_usd, 0)) FROM invoices i
+        WHERE i.client_id = c.id AND i.deleted_at IS NULL
+    ), 0),
+    COALESCE((
+        SELECT SUM(COALESCE(i.due_cup, CASE
+            WHEN LOWER(COALESCE(i.payment_currency, 'cup')) = 'usd' THEN 0
+            ELSE i.total
+        END)) FROM invoices i
         WHERE i.client_id = c.id AND i.deleted_at IS NULL
     ), 0),
     c.created_at, c.updated_at";
@@ -101,10 +143,14 @@ fn map_client_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClientDto> {
         address: row.get(4)?,
         notes: row.get(5)?,
         balance: row.get(6)?,
-        credit_balance: row.get(7)?,
-        total_historical: row.get(8)?,
-        created_at: row.get(9)?,
-        updated_at: row.get(10)?,
+        balance_usd: row.get(7)?,
+        balance_cup: row.get(8)?,
+        credit_balance: row.get(9)?,
+        total_historical: row.get(10)?,
+        total_historical_usd: row.get(11)?,
+        total_historical_cup: row.get(12)?,
+        created_at: row.get(13)?,
+        updated_at: row.get(14)?,
     })
 }
 
@@ -159,17 +205,31 @@ pub fn clients_work_history(client_id: i64) -> Result<ClientWorkHistoryDto, Stri
         return Err("Cliente no encontrado".to_string());
     }
 
-    let total_historical: f64 = conn
+    let (total_historical, total_historical_usd, total_historical_cup): (f64, f64, f64) = conn
         .query_row(
-            "SELECT COALESCE(SUM(total), 0) FROM invoices WHERE client_id = ?1 AND deleted_at IS NULL",
+            "SELECT
+                COALESCE(SUM(total), 0),
+                COALESCE(SUM(COALESCE(due_usd, 0)), 0),
+                COALESCE(SUM(COALESCE(due_cup, CASE
+                    WHEN LOWER(COALESCE(payment_currency, 'cup')) = 'usd' THEN 0
+                    ELSE total
+                END)), 0)
+             FROM invoices WHERE client_id = ?1 AND deleted_at IS NULL",
             params![client_id],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .map_err(|e| e.to_string())?;
 
     let mut stmt = conn
         .prepare(
-            "SELECT i.id, i.invoice_number, i.date, i.total, i.paid, i.balance,
+            "SELECT i.id, i.invoice_number, i.date, i.total,
+                    COALESCE(i.total_usd, 0), i.paid, COALESCE(i.paid_usd, 0),
+                    i.balance, COALESCE(i.balance_usd, 0),
+                    COALESCE(i.due_usd, 0),
+                    COALESCE(i.due_cup, CASE
+                        WHEN LOWER(COALESCE(i.payment_currency, 'cup')) = 'usd' THEN 0
+                        ELSE i.total
+                    END),
                     i.production_status, i.payment_status, i.payment_currency, i.exchange_rate_snapshot
              FROM invoices i
              WHERE i.client_id = ?1 AND i.deleted_at IS NULL
@@ -184,12 +244,17 @@ pub fn clients_work_history(client_id: i64) -> Result<ClientWorkHistoryDto, Stri
                 invoice_number: row.get(1)?,
                 date: row.get(2)?,
                 total: row.get(3)?,
-                paid: row.get(4)?,
-                balance: row.get(5)?,
-                production_status: row.get(6)?,
-                payment_status: row.get(7)?,
-                payment_currency: row.get(8)?,
-                exchange_rate_snapshot: row.get(9)?,
+                total_usd: row.get(4)?,
+                paid: row.get(5)?,
+                paid_usd: row.get(6)?,
+                balance: row.get(7)?,
+                balance_usd: row.get(8)?,
+                due_usd: row.get(9)?,
+                due_cup: row.get(10)?,
+                production_status: row.get(11)?,
+                payment_status: row.get(12)?,
+                payment_currency: row.get(13)?,
+                exchange_rate_snapshot: row.get(14)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -202,6 +267,8 @@ pub fn clients_work_history(client_id: i64) -> Result<ClientWorkHistoryDto, Stri
     Ok(ClientWorkHistoryDto {
         invoices,
         total_historical,
+        total_historical_usd,
+        total_historical_cup,
     })
 }
 
@@ -303,6 +370,8 @@ pub struct DeletedClientDto {
     pub name: String,
     pub phone: Option<String>,
     pub balance: f64,
+    pub balance_usd: f64,
+    pub balance_cup: f64,
     pub credit_balance: f64,
     pub deleted_at: String,
 }
@@ -313,10 +382,25 @@ pub fn clients_list_deleted() -> Result<Vec<DeletedClientDto>, String> {
     let conn = db::open_connection()?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, code, name, phone, balance, COALESCE(credit_balance, 0), deleted_at
-             FROM clients
-             WHERE deleted_at IS NOT NULL
-             ORDER BY deleted_at DESC, id DESC",
+            "SELECT c.id, c.code, c.name, c.phone, c.balance,
+                    COALESCE((
+                        SELECT SUM(COALESCE(i.balance_usd, 0)) FROM invoices i
+                        WHERE i.client_id = c.id AND i.deleted_at IS NULL AND i.cancelled_at IS NULL
+                    ), 0),
+                    COALESCE((
+                        SELECT SUM(CASE
+                            WHEN COALESCE(i.balance, 0)
+                                - COALESCE(i.balance_usd, 0) * COALESCE(i.exchange_rate_snapshot, 0) > 0
+                            THEN COALESCE(i.balance, 0)
+                                - COALESCE(i.balance_usd, 0) * COALESCE(i.exchange_rate_snapshot, 0)
+                            ELSE 0
+                        END) FROM invoices i
+                        WHERE i.client_id = c.id AND i.deleted_at IS NULL AND i.cancelled_at IS NULL
+                    ), 0),
+                    COALESCE(c.credit_balance, 0), c.deleted_at
+             FROM clients c
+             WHERE c.deleted_at IS NOT NULL
+             ORDER BY c.deleted_at DESC, c.id DESC",
         )
         .map_err(|e| e.to_string())?;
 
@@ -328,8 +412,10 @@ pub fn clients_list_deleted() -> Result<Vec<DeletedClientDto>, String> {
                 name: row.get(2)?,
                 phone: row.get(3)?,
                 balance: row.get(4)?,
-                credit_balance: row.get(5)?,
-                deleted_at: row.get(6)?,
+                balance_usd: row.get(5)?,
+                balance_cup: row.get(6)?,
+                credit_balance: row.get(7)?,
+                deleted_at: row.get(8)?,
             })
         })
         .map_err(|e| e.to_string())?;

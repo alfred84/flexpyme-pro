@@ -5,12 +5,12 @@ const BALANCE_EPS = 1e-6;
 
 /**
  * Estado visual del balance del cliente (perspectiva del cliente).
- * Deuda = `balance > 0` y sin crédito neto; saldo a favor = `creditBalance` supera la deuda.
+ * Deuda = posición neta positiva; saldo a favor = negativa; al día ≈ 0.
  */
 export type ClientBalanceStatus = "deuda" | "saldo" | "al_dia";
 
 /**
- * Posición neta del cliente: deuda abierta menos crédito disponible.
+ * Posición neta en una sola moneda: deuda abierta menos crédito disponible.
  * `> 0` = debe; `< 0` = saldo a favor; `≈ 0` = al día.
  *
  * @param balance - Deuda abierta.
@@ -22,7 +22,28 @@ export function clientNetPosition(balance: number, creditBalance = 0): number {
 }
 
 /**
- * Resuelve el estado del cliente según deuda y crédito.
+ * Posición neta dual convertida a CUP con la tasa vigente.
+ * Combina deuda USD, deuda CUP y crédito CUP (solo CUP hoy).
+ *
+ * @param balanceUsd - Deuda abierta en USD.
+ * @param balanceCup - Deuda abierta en CUP (sin restar crédito).
+ * @param creditCup - Saldo a favor en CUP.
+ * @param exchangeRate - Tasa USD→CUP para netear el estado.
+ * @returns Posición neta en CUP (deuda positiva).
+ */
+export function clientDualNetPositionCup(
+  balanceUsd: number,
+  balanceCup: number,
+  creditCup = 0,
+  exchangeRate = 0,
+): number {
+  const cupNet = clientNetPosition(balanceCup, creditCup);
+  const usdAsCup = exchangeRate > BALANCE_EPS ? balanceUsd * exchangeRate : 0;
+  return cupNet + usdAsCup;
+}
+
+/**
+ * Resuelve el estado del cliente según deuda/crédito en una moneda.
  *
  * @param balance - Deuda abierta.
  * @param creditBalance - Saldo a favor.
@@ -37,6 +58,39 @@ export function resolveClientBalanceStatus(
     return "deuda";
   }
   if (net < -BALANCE_EPS) {
+    return "saldo";
+  }
+  return "al_dia";
+}
+
+/**
+ * Estado del cliente con balances duales: convierte USD↔CUP con la tasa
+ * para decidir deuda / saldo a favor / al día.
+ *
+ * @param balanceUsd - Deuda USD.
+ * @param balanceCup - Deuda CUP.
+ * @param creditCup - Crédito CUP.
+ * @param exchangeRate - Tasa USD→CUP.
+ * @returns Estado para badge.
+ */
+export function resolveDualClientBalanceStatus(
+  balanceUsd: number,
+  balanceCup: number,
+  creditCup = 0,
+  exchangeRate = 0,
+): ClientBalanceStatus {
+  const cupNet = clientNetPosition(balanceCup, creditCup);
+  if (exchangeRate > BALANCE_EPS) {
+    return resolveClientBalanceStatus(
+      clientDualNetPositionCup(balanceUsd, balanceCup, creditCup, exchangeRate),
+      0,
+    );
+  }
+  // Sin tasa: no se puede netear entre monedas; prioriza señales por moneda.
+  if (balanceUsd > BALANCE_EPS || cupNet > BALANCE_EPS) {
+    return "deuda";
+  }
+  if (cupNet < -BALANCE_EPS) {
     return "saldo";
   }
   return "al_dia";
@@ -63,15 +117,15 @@ export function clientBalanceStatusLabel(status: ClientBalanceStatus): string {
  * Formatea el balance para la tabla: signo explícito y color semántico.
  * Deuda se muestra como negativo (−); saldo a favor como positivo (+).
  *
- * @param balance - Deuda abierta en BD (CUP).
- * @param creditBalance - Crédito disponible (CUP).
- * @param formatAbs - Formatea el valor absoluto (p. ej. convertir a USD antes).
+ * @param balance - Deuda abierta.
+ * @param creditBalance - Crédito disponible.
+ * @param formatAbs - Formatea el valor absoluto.
  * @returns Texto, clases CSS y estado.
  */
 export function formatClientBalanceDisplay(
   balance: number,
   creditBalance = 0,
-  formatAbs: (absCup: number) => string = formatAmount,
+  formatAbs: (absValue: number) => string = formatAmount,
 ): {
   text: string;
   className: string;

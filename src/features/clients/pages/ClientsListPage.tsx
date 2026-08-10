@@ -16,19 +16,18 @@ import {
   clientBalanceStatusBadgeClass,
   clientBalanceStatusLabel,
   formatClientBalanceDisplay,
-  resolveClientBalanceStatus,
+  resolveDualClientBalanceStatus,
 } from "@/features/clients/lib/client-balance";
 import { fetchClients, fetchDeletedClients } from "@/db/queries/clients";
 import { useAppSettings } from "@/hooks/use-app-settings";
-import { cupToUsd } from "@/lib/currency";
 import type { ClientDto } from "@/types/client";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
 
 /**
- * Columnas de la tabla de clientes (balance con signo/color y estado).
+ * Columnas de la tabla de clientes (balances duales por cobro y estado neto).
  *
- * @param usdExchangeRate - Tasa USD→CUP vigente.
+ * @param usdExchangeRate - Tasa USD→CUP vigente (solo para el estado).
  * @returns Definición de columnas para TanStack Table.
  */
 function useClientColumns(usdExchangeRate: number): ColumnDef<ClientDto>[] {
@@ -44,13 +43,9 @@ function useClientColumns(usdExchangeRate: number): ColumnDef<ClientDto>[] {
       {
         id: "balanceUsd",
         header: moneyHeading("Balance", "USD"),
-        accessorFn: (row) => row.balance - (row.creditBalance ?? 0),
+        accessorFn: (row) => row.balanceUsd ?? 0,
         cell: ({ row }) => {
-          const display = formatClientBalanceDisplay(
-            row.original.balance,
-            row.original.creditBalance ?? 0,
-            (absCup) => formatAmount(cupToUsd(absCup, usdExchangeRate)),
-          );
+          const display = formatClientBalanceDisplay(row.original.balanceUsd ?? 0, 0);
           return (
             <span className={display.className} title={clientBalanceStatusLabel(display.status)}>
               {display.text}
@@ -61,10 +56,10 @@ function useClientColumns(usdExchangeRate: number): ColumnDef<ClientDto>[] {
       {
         id: "balanceCup",
         header: moneyHeading("Balance", "CUP"),
-        accessorFn: (row) => row.balance - (row.creditBalance ?? 0),
+        accessorFn: (row) => (row.balanceCup ?? 0) - (row.creditBalance ?? 0),
         cell: ({ row }) => {
           const display = formatClientBalanceDisplay(
-            row.original.balance,
+            row.original.balanceCup ?? 0,
             row.original.creditBalance ?? 0,
           );
           return (
@@ -77,28 +72,39 @@ function useClientColumns(usdExchangeRate: number): ColumnDef<ClientDto>[] {
       {
         id: "totalHistoricalUsd",
         header: moneyHeading("Total histórico", "USD"),
-        accessorFn: (row) => row.totalHistorical,
+        accessorFn: (row) => row.totalHistoricalUsd ?? 0,
         cell: ({ row }) => (
           <span className="tabular-nums">
-            {formatAmount(cupToUsd(row.original.totalHistorical, usdExchangeRate))}
+            {formatAmount(row.original.totalHistoricalUsd ?? 0)}
           </span>
         ),
       },
       {
         id: "totalHistoricalCup",
         header: moneyHeading("Total histórico", "CUP"),
-        accessorKey: "totalHistorical",
-        cell: (info) => <span className="tabular-nums">{formatAmount(info.getValue<number>())}</span>,
+        accessorFn: (row) => row.totalHistoricalCup ?? 0,
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {formatAmount(row.original.totalHistoricalCup ?? 0)}
+          </span>
+        ),
       },
       {
         id: "estado",
         header: "Estado",
         accessorFn: (row) =>
-          resolveClientBalanceStatus(row.balance, row.creditBalance ?? 0),
+          resolveDualClientBalanceStatus(
+            row.balanceUsd ?? 0,
+            row.balanceCup ?? 0,
+            row.creditBalance ?? 0,
+            usdExchangeRate,
+          ),
         cell: ({ row }) => {
-          const status = resolveClientBalanceStatus(
-            row.original.balance,
+          const status = resolveDualClientBalanceStatus(
+            row.original.balanceUsd ?? 0,
+            row.original.balanceCup ?? 0,
             row.original.creditBalance ?? 0,
+            usdExchangeRate,
           );
           return (
             <span className={clientBalanceStatusBadgeClass(status)}>
@@ -136,7 +142,7 @@ function useClientColumns(usdExchangeRate: number): ColumnDef<ClientDto>[] {
 }
 
 /**
- * Lista de clientes activos con búsqueda, balance semántico y estado.
+ * Lista de clientes activos con búsqueda, balance dual y estado neto.
  *
  * @returns Página de tabla de clientes.
  */
@@ -177,8 +183,8 @@ export function ClientsListPage() {
         <div>
           <h1 className="text-2xl font-bold">Clientes</h1>
           <p className="text-sm text-base-content/70">
-            El balance se muestra desde la perspectiva del cliente: saldo a favor en verde y deuda en
-            rojo.
+            Balance USD y CUP según cobros de pedidos (no por conversión). El estado netea ambas
+            monedas con la tasa vigente: saldo a favor en verde y deuda en rojo.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

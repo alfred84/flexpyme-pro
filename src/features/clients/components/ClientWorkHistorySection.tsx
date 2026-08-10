@@ -1,30 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { History } from "lucide-react";
-import { DualMoneyText } from "@/components/common/DualMoneyText";
 import { ProductionStatusBadge, PaymentStatusBadge } from "@/components/invoices/InvoiceStatusBadges";
 import { fetchClientWorkHistory } from "@/db/queries/clients";
-import { useAppSettings } from "@/hooks/use-app-settings";
-import { cupToUsd } from "@/lib/currency";
 import { formatDate } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 interface ClientWorkHistorySectionProps {
   /** Id del cliente cuyo historial se muestra. */
   clientId: number;
-  /** Total histórico ya cargado en la ficha (opcional, evita parpadeo). */
-  totalHistoricalHint?: number;
+  /** Total histórico USD precargado (evita parpadeo). */
+  totalHistoricalUsdHint?: number;
+  /** Total histórico CUP precargado (evita parpadeo). */
+  totalHistoricalCupHint?: number;
 }
 
 /**
- * Tabla de pedidos realizados a un cliente y resumen del total histórico.
+ * Tabla de pedidos de un cliente con totales históricos duales (por moneda de cobro).
  *
- * @param props - Identificador del cliente y total opcional precargado.
+ * @param props - Identificador del cliente y totales opcionales precargados.
  * @returns Sección con estadística y tabla (vacía si no hay pedidos).
  */
 export function ClientWorkHistorySection(props: ClientWorkHistorySectionProps) {
-  const { clientId, totalHistoricalHint } = props;
-  const { usdExchangeRate } = useAppSettings();
+  const { clientId, totalHistoricalUsdHint, totalHistoricalCupHint } = props;
 
   const historyQuery = useQuery({
     queryKey: ["clients", "work-history", clientId],
@@ -32,7 +30,10 @@ export function ClientWorkHistorySection(props: ClientWorkHistorySectionProps) {
     enabled: Number.isFinite(clientId) && clientId > 0,
   });
 
-  const totalHistorical = historyQuery.data?.totalHistorical ?? totalHistoricalHint ?? 0;
+  const totalHistoricalUsd =
+    historyQuery.data?.totalHistoricalUsd ?? totalHistoricalUsdHint ?? 0;
+  const totalHistoricalCup =
+    historyQuery.data?.totalHistoricalCup ?? totalHistoricalCupHint ?? 0;
   const rows = historyQuery.data?.invoices ?? [];
 
   return (
@@ -43,20 +44,25 @@ export function ClientWorkHistorySection(props: ClientWorkHistorySectionProps) {
             <History className="h-5 w-5 text-primary" aria-hidden />
             <h2 className="card-title text-base">Historial de trabajos</h2>
           </div>
-          <div className="rounded-lg border border-base-300 bg-base-200 px-4 py-2 text-sm">
-            <span className="text-base-content/60">{moneyHeading("Total histórico", "USD")}: </span>
-            <span className="inline-block align-middle font-semibold">
-              <DualMoneyText
-                amountCup={totalHistorical}
-                rate={usdExchangeRate}
-                primary="USD"
-                className="items-start"
-              />
-            </span>
+          <div className="flex flex-wrap gap-2 text-sm">
+            <div className="rounded-lg border border-base-300 bg-base-200 px-4 py-2">
+              <span className="text-base-content/60">
+                {moneyHeading("Total histórico", "USD")}:{" "}
+              </span>
+              <span className="font-semibold tabular-nums">{formatAmount(totalHistoricalUsd)}</span>
+            </div>
+            <div className="rounded-lg border border-base-300 bg-base-200 px-4 py-2">
+              <span className="text-base-content/60">
+                {moneyHeading("Total histórico", "CUP")}:{" "}
+              </span>
+              <span className="font-semibold tabular-nums">{formatAmount(totalHistoricalCup)}</span>
+            </div>
           </div>
         </div>
 
-        {historyQuery.isLoading && <p className="text-sm text-base-content/70">Cargando historial...</p>}
+        {historyQuery.isLoading && (
+          <p className="text-sm text-base-content/70">Cargando historial...</p>
+        )}
         {historyQuery.isError && (
           <div className="alert alert-error py-2 text-sm">
             <span>No se pudo cargar el historial de pedidos.</span>
@@ -86,20 +92,20 @@ export function ClientWorkHistorySection(props: ClientWorkHistorySectionProps) {
                   </tr>
                 ) : (
                   rows.map((row) => {
-                    const rowRate =
-                      row.exchangeRateSnapshot && row.exchangeRateSnapshot > 0
-                        ? row.exchangeRateSnapshot
-                        : usdExchangeRate;
-                    const paidInCup = (row.paymentCurrency ?? "").toUpperCase() === "CUP";
+                    const cur = (row.paymentCurrency ?? "").toLowerCase();
+                    const showUsd = cur === "usd" || cur === "mixto";
+                    const showCup = cur === "cup" || cur === "mixto" || cur === "";
+                    const amountUsd = row.dueUsd > 0 ? row.dueUsd : row.totalUsd;
+                    const amountCup = row.dueCup > 0 ? row.dueCup : showCup ? row.total : 0;
                     return (
                       <tr key={row.id}>
                         <td className="font-mono text-xs">{row.invoiceNumber}</td>
                         <td>{formatDate(row.date)}</td>
                         <td className="text-right tabular-nums">
-                          {formatAmount(cupToUsd(row.total, rowRate))}
+                          {showUsd && amountUsd > 0 ? formatAmount(amountUsd) : "—"}
                         </td>
                         <td className="text-right tabular-nums">
-                          {paidInCup ? formatAmount(row.total) : "—"}
+                          {showCup && amountCup > 0 ? formatAmount(amountCup) : "—"}
                         </td>
                         <td>
                           <ProductionStatusBadge status={row.productionStatus} />

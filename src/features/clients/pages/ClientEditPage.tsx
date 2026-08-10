@@ -94,7 +94,8 @@ export function ClientEditPage() {
       {clientQuery.data && (
         <ClientWorkHistorySection
           clientId={clientQuery.data.id}
-          totalHistoricalHint={clientQuery.data.totalHistorical}
+          totalHistoricalUsdHint={clientQuery.data.totalHistoricalUsd}
+          totalHistoricalCupHint={clientQuery.data.totalHistoricalCup}
         />
       )}
     </section>

@@ -197,7 +197,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **UI de Pedidos**: en cobro USD muestra USD principal; en CUP/Mixto/transferencia, CUP principal (+ USD donde corresponda). Tarifas de pago a empleados siguen en CUP
 - **Cobros y anticipos en efectivo**: pueden ser USD, CUP o Mixto; transferencia en CUP
 - **Vuelto dual**: exceso validado como `change_cup + change_usd × tasa ≈ exceso_cup`; neto por moneda en caja = recibido − vuelto de esa moneda
-- **Crédito de cliente** (`clients.credit_balance`): solo en CUP; se aplica contra la parte CUP del saldo. La deuda del cliente (`clients.balance`) es el equivalente CUP de pedidos abiertos (`Σ(balance_cup + balance_usd × tasa)`)
+- **Crédito de cliente** (`clients.credit_balance`): solo en CUP; se aplica contra la parte CUP del saldo. La deuda espejo (`clients.balance`) sigue siendo el equivalente CUP de pedidos abiertos. **UI Clientes**: Balance USD = `Σ balance_usd` y Balance CUP = `Σ (balance − balance_usd × tasa_pedido)` (importes reales de cobro, no conversión de un solo total); Total histórico USD/CUP = `Σ due_usd` / `Σ due_cup`. El **Estado** netea ambas monedas con la tasa vigente de la app (`deuda_cup − crédito + deuda_usd × tasa`)
 - **Salarios / tarifas de pago / denominaciones de caja internas**: CUP
 - **Denominaciones de billetes CUP**: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000
 - **Denominaciones de billetes USD**: 100, 50, 20, 10, 5, 2, 1
@@ -413,7 +413,7 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 ### v2.15 — UI Pedidos en USD con equivalente CUP (2026-08)
 - Listado, resumen, líneas y cobro/anticipo muestran venta en USD (+ CUP según tasa); si el pago es CUP, el orden se invierte.
 - Listado de pedidos y Facturas: columnas **Total (USD)** y **Total (CUP)**; CUP solo muestra importe si `payment_currency = CUP` (si es USD queda `—`). Indicadores de Facturas en USD (+ equivalente CUP).
-- Clientes: **Balance** y **Total histórico** en USD y CUP (listado, Ver/Editar e historial de trabajos).
+- Clientes: **Balance** y **Total histórico** en USD y CUP por moneda de cobro (listado, Ver/Editar e historial); estado por posición neta convertida con la tasa.
 - Inicio: KPIs monetarios, gráfico de ingresos y totales de pedidos recientes en USD (+ CUP donde corresponda).
 - Precios de tipo de trabajo editables en USD con equivalente CUP; tarifas de empleados permanecen en CUP.
 - Cuadrícula Pendiente/Recibido/Aplica del anticipo/cobro usa la moneda seleccionada (no fija CUP).
@@ -430,8 +430,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - Moneda de pedido: USD | CUP | **Mixto** (split declarado + billetes en ambas monedas al cobrar).
 - Cobro/anticipo/vuelto dual; neto de caja por moneda = recibido − vuelto.
 - Al cambiar la tasa del pedido se recalculan precios CUP desde USD persistidos.
-- Crédito de cliente sigue en CUP; deuda de cliente = equivalente CUP de saldos duales abiertos.
+- Crédito de cliente sigue en CUP; deuda espejo de cliente = equivalente CUP de saldos duales abiertos.
 - Transferencia sigue cobrando en CUP. Sin crédito USD ni reescritura histórica forzada (backfill `unit_price / rate`).
+- **Clientes (listado/detalle)**: balances e históricos duales por moneda de cobro; estado por posición neta convertida.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
