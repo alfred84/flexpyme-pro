@@ -116,35 +116,56 @@ function finishOptionsFor(
 }
 
 /**
- * Construye una fila de material manual con la primera categoría e ítem disponibles.
+ * Construye una fila de material manual eligiendo la primera categoría con ítems
+ * (o la primera categoría activa si ninguna tiene stock aún).
  *
  * @param materialCategories - Categorías de material activas.
  * @param inventoryItems - Ítems de inventario.
- * @returns Fila por defecto o `null` si no hay datos.
+ * @param excludeItemIds - Ítems ya asignados en la línea (para sugerir otro).
+ * @returns Fila por defecto o `null` si no hay categorías.
  */
 function defaultManualMaterialRow(
   materialCategories: MaterialCategoryDto[],
   inventoryItems: InventoryItemDto[],
+  excludeItemIds: ReadonlySet<number> = new Set(),
 ): DraftLineMaterial | null {
   const categories = materialCategories.filter((c) => c.isActive);
-  const firstCat = categories[0];
-  if (!firstCat) {
+  if (categories.length === 0) {
     return null;
   }
-  const itemsInCat = inventoryItems.filter((i) => i.materialCategoryId === firstCat.id);
-  const firstItem = itemsInCat[0];
-  if (!firstItem) {
-    return {
-      materialCategoryId: firstCat.id,
-      inventoryItemId: 0,
-      quantityPerUnit: "1",
-    };
+
+  // Preferir un ítem aún no usado en la línea.
+  for (const cat of categories) {
+    const itemsInCat = inventoryItems.filter((i) => i.materialCategoryId === cat.id);
+    const unused = itemsInCat.find((i) => !excludeItemIds.has(i.id));
+    if (unused) {
+      return {
+        materialCategoryId: cat.id,
+        inventoryItemId: unused.id,
+        quantityPerUnit: "1",
+        label: unused.name,
+      };
+    }
   }
+
+  // Si todos los ítems ya están en la línea, repetir el primero disponible.
+  for (const cat of categories) {
+    const firstItem = inventoryItems.find((i) => i.materialCategoryId === cat.id);
+    if (firstItem) {
+      return {
+        materialCategoryId: cat.id,
+        inventoryItemId: firstItem.id,
+        quantityPerUnit: "1",
+        label: firstItem.name,
+      };
+    }
+  }
+
+  // Hay categorías pero ningún ítem en inventario: fila vacía para que elijan categoría.
   return {
-    materialCategoryId: firstCat.id,
-    inventoryItemId: firstItem.id,
+    materialCategoryId: categories[0].id,
+    inventoryItemId: 0,
     quantityPerUnit: "1",
-    label: firstItem.name,
   };
 }
 
@@ -615,9 +636,25 @@ export function OrderLineModal(props: OrderLineModalProps) {
   };
 
   const addManualMaterial = () => {
-    const row = defaultManualMaterialRow(materialCategories, inventoryItems);
-    if (!row || row.inventoryItemId <= 0) {
+    if (activeMaterialCategories.length === 0) {
+      setError("No hay categorías de material activas. Créalas en Inventario.");
+      return;
+    }
+    const usedIds = new Set(
+      (draft?.materials ?? [])
+        .map((m) => m.inventoryItemId)
+        .filter((id) => id > 0),
+    );
+    const hasAnyItem = inventoryItems.some((i) =>
+      activeMaterialCategories.some((c) => c.id === i.materialCategoryId),
+    );
+    if (!hasAnyItem) {
       setError("No hay materiales en inventario para asignar.");
+      return;
+    }
+    const row = defaultManualMaterialRow(materialCategories, inventoryItems, usedIds);
+    if (!row) {
+      setError("No hay categorías de material activas. Créalas en Inventario.");
       return;
     }
     setError(null);
