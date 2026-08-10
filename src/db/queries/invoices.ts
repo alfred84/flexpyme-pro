@@ -8,6 +8,7 @@ import type {
   InvoiceMetricsDto,
   InvoicePaymentHistoryRow,
   UpdateInvoicePayload,
+  UpdateInvoicePaymentConfigPayload,
 } from "@/types/invoice";
 
 /**
@@ -64,6 +65,18 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Crea
  */
 export async function updateInvoice(payload: UpdateInvoicePayload): Promise<InvoiceHeaderDto> {
   return invoke<InvoiceHeaderDto>("invoices_update", { payload });
+}
+
+/**
+ * Actualiza método/moneda/tasa/due de un pedido sin cobros.
+ *
+ * @param payload - Nueva forma de pago.
+ * @returns Cabecera actualizada.
+ */
+export async function updateInvoicePaymentConfig(
+  payload: UpdateInvoicePaymentConfigPayload,
+): Promise<InvoiceHeaderDto> {
+  return invoke<InvoiceHeaderDto>("invoices_update_payment_config", { payload });
 }
 
 /**

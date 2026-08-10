@@ -183,10 +183,23 @@ export interface UpdateInvoicePayload {
   date: string;
   notes?: string | null;
   exchangeRateSnapshot?: number | null;
+  paymentMethod?: PaymentMethod | null;
   paymentCurrency?: PaymentCurrency | null;
   dueUsd?: number | null;
   dueCup?: number | null;
   items: CreateInvoiceItemPayload[];
+}
+
+/**
+ * Cambio de forma de pago en un pedido sin cobros ni anticipo.
+ */
+export interface UpdateInvoicePaymentConfigPayload {
+  id: number;
+  paymentMethod: PaymentMethod;
+  paymentCurrency: PaymentCurrency;
+  exchangeRateSnapshot: number;
+  dueUsd?: number | null;
+  dueCup?: number | null;
 }
 
 export type PaymentMethod = "efectivo" | "transferencia";

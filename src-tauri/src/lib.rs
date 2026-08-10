@@ -78,6 +78,7 @@ pub fn run() {
             commands::invoices::invoices_get_detail,
             commands::invoices::invoices_create,
             commands::invoices::invoices_update,
+            commands::invoices::invoices_update_payment_config,
             commands::invoices::invoices_update_production_status,
             commands::invoices::invoice_item_mark_listo,
             commands::invoices::invoice_mark_all_listo,

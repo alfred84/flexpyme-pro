@@ -195,12 +195,28 @@ pub struct UpdateInvoicePayload {
     #[serde(default)]
     pub exchange_rate_snapshot: Option<f64>,
     #[serde(default)]
+    pub payment_method: Option<String>,
+    #[serde(default)]
     pub payment_currency: Option<String>,
     #[serde(default)]
     pub due_usd: Option<f64>,
     #[serde(default)]
     pub due_cup: Option<f64>,
     pub items: Vec<CreateInvoiceItemPayload>,
+}
+
+/// Payload para cambiar solo la forma de pago de un pedido sin cobros.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateInvoicePaymentConfigPayload {
+    pub id: i64,
+    pub payment_method: String,
+    pub payment_currency: String,
+    pub exchange_rate_snapshot: f64,
+    #[serde(default)]
+    pub due_usd: Option<f64>,
+    #[serde(default)]
+    pub due_cup: Option<f64>,
 }
 
 fn trim_notes(value: Option<String>) -> Option<String> {
@@ -465,6 +481,222 @@ fn recalc_client_balance(tx: &rusqlite::Transaction<'_>, client_id: i64) -> Resu
     tx.execute(
         "UPDATE clients SET balance = ?1, updated_at = datetime('now') WHERE id = ?2",
         params![new_client_balance, client_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Indica si el pedido ya tiene dinero cobrado (pagado, anticipo o ingresos en caja).
+fn invoice_has_collections(tx: &rusqlite::Transaction<'_>, invoice_id: i64) -> Result<bool, String> {
+    let (paid, paid_usd, advance): (f64, f64, f64) = tx
+        .query_row(
+            "SELECT COALESCE(paid, 0), COALESCE(paid_usd, 0), COALESCE(advance_payment, 0)
+             FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
+            params![invoice_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .map_err(|_| "Pedido no encontrado".to_string())?;
+    if paid > EPS || paid_usd > EPS || advance > EPS {
+        return Ok(true);
+    }
+    let tx_count: i64 = tx
+        .query_row(
+            "SELECT COUNT(*) FROM cash_transactions
+             WHERE reference_type = 'pedido' AND reference_id = ?1 AND type = 'ingreso'",
+            params![invoice_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(tx_count > 0)
+}
+
+/// Exige que el pedido no tenga cobros/anticipo antes de cambiar forma de pago.
+fn assert_invoice_unpaid_for_payment_config(
+    tx: &rusqlite::Transaction<'_>,
+    invoice_id: i64,
+) -> Result<(), String> {
+    if invoice_has_collections(tx, invoice_id)? {
+        return Err(
+            "No se puede cambiar la forma de pago: el pedido ya tiene cobros o anticipo registrados."
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+/// Normaliza método de pago (`efectivo` | `transferencia`).
+fn normalize_payment_method(raw: &str) -> Result<String, String> {
+    let method = raw.trim().to_lowercase();
+    if method != "efectivo" && method != "transferencia" {
+        return Err("Método de pago inválido".to_string());
+    }
+    Ok(method)
+}
+
+/// Normaliza moneda de cobro (`CUP` | `USD` | `mixto`). Transferencia fuerza CUP salvo mixto.
+fn normalize_payment_currency(method: &str, raw: &str) -> Result<String, String> {
+    let mut currency = raw.trim().to_lowercase();
+    if method == "transferencia" && currency != "mixto" {
+        currency = "cup".to_string();
+    }
+    match currency.as_str() {
+        "usd" => Ok("USD".to_string()),
+        "mixto" => Ok("mixto".to_string()),
+        "cup" => Ok("CUP".to_string()),
+        _ => Err("Moneda de pago inválida (CUP, USD o mixto)".to_string()),
+    }
+}
+
+/// Resuelve due_usd / due_cup según moneda y total del pedido.
+fn resolve_due_for_currency(
+    currency: &str,
+    total_cup: f64,
+    total_usd: f64,
+    rate: f64,
+    due_usd_opt: Option<f64>,
+    due_cup_opt: Option<f64>,
+) -> Result<(f64, f64), String> {
+    match currency {
+        "USD" => Ok((total_usd.max(0.0), 0.0)),
+        "mixto" => {
+            let d_usd = due_usd_opt.unwrap_or(0.0).max(0.0);
+            let d_cup = due_cup_opt.unwrap_or(0.0).max(0.0);
+            if rate <= EPS {
+                return Err("Indica una tasa USD→CUP válida para el pedido Mixto".to_string());
+            }
+            let equiv = d_cup + d_usd * rate;
+            if (equiv - total_cup).abs() > 1.0 && total_cup > EPS {
+                return Err(format!(
+                    "El split Mixto ({:.2} CUP equiv.) no coincide con el total ({:.2} CUP)",
+                    equiv, total_cup
+                ));
+            }
+            Ok((d_usd, d_cup))
+        }
+        _ => Ok((0.0, total_cup.max(0.0))),
+    }
+}
+
+/// Aplica método/moneda/tasa/due en un pedido sin cobros.
+/// Si cambia la tasa, recalcula líneas CUP desde `unit_price_usd`.
+fn apply_payment_config_unpaid(
+    tx: &rusqlite::Transaction<'_>,
+    invoice_id: i64,
+    payment_method: &str,
+    payment_currency: &str,
+    rate: f64,
+    due_usd_opt: Option<f64>,
+    due_cup_opt: Option<f64>,
+) -> Result<(), String> {
+    assert_invoice_unpaid_for_payment_config(tx, invoice_id)?;
+
+    if (payment_currency == "CUP" || payment_currency == "mixto" || payment_currency == "USD")
+        && rate <= EPS
+    {
+        return Err("Indica una tasa USD→CUP válida para el pedido".to_string());
+    }
+
+    // Recalcular líneas CUP desde USD persistido.
+    let mut stmt = tx
+        .prepare(
+            "SELECT id, quantity, COALESCE(unit_price_usd, 0), unit_price
+             FROM invoice_items WHERE invoice_id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![invoice_id], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, f64>(2)?,
+                row.get::<_, f64>(3)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    drop(stmt);
+
+    let mut subtotal = 0.0_f64;
+    for (item_id, qty, unit_usd_raw, old_cup) in rows {
+        let unit_usd = if unit_usd_raw > EPS {
+            unit_usd_raw
+        } else if rate > EPS && old_cup > EPS {
+            old_cup / rate
+        } else {
+            0.0
+        };
+        let unit_price = if rate > EPS {
+            unit_usd * rate
+        } else {
+            old_cup
+        };
+        let line_sub = (qty as f64) * unit_price;
+        subtotal += line_sub;
+        tx.execute(
+            "UPDATE invoice_items
+             SET unit_price_usd = ?1, unit_price = ?2, subtotal = ?3
+             WHERE id = ?4",
+            params![unit_usd, unit_price, line_sub, item_id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    let advance: f64 = tx
+        .query_row(
+            "SELECT COALESCE(advance_payment, 0) FROM invoices WHERE id = ?1",
+            params![invoice_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let total = (subtotal - advance).max(0.0);
+    let total_usd = if rate > EPS { subtotal / rate } else { 0.0 };
+    let (due_usd, due_cup) = resolve_due_for_currency(
+        payment_currency,
+        total,
+        if rate > EPS { total / rate } else { total_usd },
+        rate,
+        due_usd_opt,
+        due_cup_opt,
+    )?;
+    let balance = total; // unpaid
+    let balance_usd = due_usd;
+    let status = compute_invoice_status(balance, 0.0);
+    let payment_status = if balance <= EPS { "cobrado" } else { "pendiente" };
+
+    tx.execute(
+        "UPDATE invoices
+         SET payment_method = ?1,
+             payment_currency = ?2,
+             exchange_rate_snapshot = ?3,
+             subtotal = ?4,
+             total = ?5,
+             balance = ?6,
+             total_usd = ?7,
+             paid_usd = 0,
+             balance_usd = ?8,
+             due_usd = ?9,
+             due_cup = ?10,
+             amount_cup = ?5,
+             amount_usd = ?8,
+             status = ?11,
+             payment_status = ?12
+         WHERE id = ?13",
+        params![
+            payment_method,
+            payment_currency,
+            rate,
+            subtotal,
+            total,
+            balance,
+            total_usd,
+            balance_usd,
+            due_usd,
+            due_cup,
+            status,
+            payment_status,
+            invoice_id
+        ],
     )
     .map_err(|e| e.to_string())?;
     Ok(())
@@ -1162,12 +1394,39 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     assert_invoice_editable(&tx, payload.id)?;
 
-    let (old_client_id, advance_payment, previous_debt, paid): (i64, f64, f64, f64) = tx
+    let (
+        old_client_id,
+        advance_payment,
+        previous_debt,
+        paid,
+        paid_usd,
+        prev_method,
+        prev_currency,
+        prev_rate,
+        prev_due_usd,
+        prev_due_cup,
+    ): (i64, f64, f64, f64, f64, String, String, f64, f64, f64) = tx
         .query_row(
-            "SELECT client_id, advance_payment, previous_debt, paid
+            "SELECT client_id, advance_payment, previous_debt, paid, COALESCE(paid_usd, 0),
+                    COALESCE(payment_method, 'efectivo'), COALESCE(payment_currency, 'CUP'),
+                    COALESCE(exchange_rate_snapshot, 0),
+                    COALESCE(due_usd, 0), COALESCE(due_cup, 0)
              FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
             params![payload.id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
+                ))
+            },
         )
         .map_err(|_| "Pedido no encontrado".to_string())?;
 
@@ -1184,8 +1443,27 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
 
     let rate = payload
         .exchange_rate_snapshot
-        .unwrap_or(0.0)
+        .unwrap_or(prev_rate)
         .max(0.0);
+    let payment_method = match &payload.payment_method {
+        Some(m) => normalize_payment_method(m)?,
+        None => prev_method.trim().to_lowercase(),
+    };
+    let payment_currency = match &payload.payment_currency {
+        Some(c) => normalize_payment_currency(&payment_method, c)?,
+        None => normalize_payment_currency(&payment_method, &prev_currency)?,
+    };
+
+    let payment_config_changed = payload.payment_method.is_some()
+        || payload.payment_currency.is_some()
+        || payload.due_usd.is_some()
+        || payload.due_cup.is_some()
+        || (payload.exchange_rate_snapshot.is_some()
+            && (rate - prev_rate).abs() > EPS);
+    if payment_config_changed {
+        assert_invoice_unpaid_for_payment_config(&tx, payload.id)?;
+    }
+
     let mut subtotal = 0.0_f64;
     for item in &payload.items {
         subtotal += (item.quantity as f64) * item.unit_price;
@@ -1197,7 +1475,7 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
     let balance = total - paid;
     if balance < -EPS {
         return Err(
-            "El nuevo total es menor que lo ya cobrado. Ajusta las l?neas o registra un ajuste en caja."
+            "El nuevo total es menor que lo ya cobrado. Ajusta las líneas o registra un ajuste en caja."
                 .to_string(),
         );
     }
@@ -1205,30 +1483,28 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
     let payment_status = if balance <= EPS { "cobrado" } else { "pendiente" };
     let notes = trim_notes(payload.notes);
     let total_usd = if rate > 0.0 { subtotal / rate } else { 0.0 };
-    let paid_usd: f64 = tx
-        .query_row(
-            "SELECT COALESCE(paid_usd, 0) FROM invoices WHERE id = ?1",
-            params![payload.id],
-            |row| row.get(0),
-        )
-        .unwrap_or(0.0);
-    let currency = payload
-        .payment_currency
-        .as_deref()
-        .map(|c| c.trim().to_lowercase())
-        .unwrap_or_else(|| "cup".to_string());
-    let (due_usd, due_cup, balance_usd) = match currency.as_str() {
-        "usd" => {
-            let d = if rate > 0.0 { total / rate } else { 0.0 };
-            (d, 0.0, (d - paid_usd).max(0.0))
-        }
-        "mixto" => {
-            let d_usd = payload.due_usd.unwrap_or(0.0).max(0.0);
-            let d_cup = payload.due_cup.unwrap_or(0.0).max(0.0);
-            (d_usd, d_cup, (d_usd - paid_usd).max(0.0))
-        }
-        _ => (0.0, total, 0.0),
+    let (due_usd, due_cup) = if payment_config_changed {
+        resolve_due_for_currency(
+            &payment_currency,
+            total,
+            if rate > 0.0 { total / rate } else { 0.0 },
+            rate,
+            payload.due_usd,
+            payload.due_cup,
+        )?
+    } else if payment_currency == "mixto" {
+        (prev_due_usd, prev_due_cup)
+    } else {
+        resolve_due_for_currency(
+            &payment_currency,
+            total,
+            if rate > 0.0 { total / rate } else { 0.0 },
+            rate,
+            None,
+            None,
+        )?
     };
+    let balance_usd = (due_usd - paid_usd).max(0.0);
 
     tx.execute(
         "DELETE FROM invoice_item_materials
@@ -1314,9 +1590,10 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
          SET client_id = ?1, date = ?2, subtotal = ?3, total = ?4, balance = ?5, status = ?6,
              payment_status = ?7, notes = ?8, amount_cup = ?9,
              exchange_rate_snapshot = COALESCE(?10, exchange_rate_snapshot),
-             payment_currency = COALESCE(?11, payment_currency),
-             total_usd = ?12, balance_usd = ?13, due_usd = ?14, due_cup = ?15, amount_usd = ?13
-         WHERE id = ?16",
+             payment_method = ?11,
+             payment_currency = ?12,
+             total_usd = ?13, balance_usd = ?14, due_usd = ?15, due_cup = ?16, amount_usd = ?14
+         WHERE id = ?17",
         params![
             payload.client_id,
             date_trim,
@@ -1328,14 +1605,8 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
             notes,
             total.max(0.0),
             if rate > 0.0 { Some(rate) } else { None::<f64> },
-            payload.payment_currency.as_deref().map(|c| {
-                let t = c.trim().to_lowercase();
-                match t.as_str() {
-                    "usd" => "USD".to_string(),
-                    "mixto" => "mixto".to_string(),
-                    _ => "CUP".to_string(),
-                }
-            }),
+            payment_method,
+            payment_currency,
             total_usd,
             balance_usd,
             due_usd,
@@ -1352,6 +1623,52 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
     }
 
     crate::commands::inventory::recompute_invoice_resource_flags(&tx, payload.id)?;
+
+    tx.commit().map_err(|e| e.to_string())?;
+    invoices_get_detail(payload.id).map(|d| d.invoice)
+}
+
+/// Actualiza método/moneda/tasa/due de un pedido que aún no tiene cobros.
+#[tauri::command]
+pub fn invoices_update_payment_config(
+    payload: UpdateInvoicePaymentConfigPayload,
+) -> Result<InvoiceHeaderDto, String> {
+    let method = normalize_payment_method(&payload.payment_method)?;
+    let currency = normalize_payment_currency(&method, &payload.payment_currency)?;
+    let rate = payload.exchange_rate_snapshot.max(0.0);
+
+    let mut conn = db::open_connection()?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let cancelled: Option<String> = tx
+        .query_row(
+            "SELECT cancelled_at FROM invoices WHERE id = ?1 AND deleted_at IS NULL",
+            params![payload.id],
+            |row| row.get(0),
+        )
+        .map_err(|_| "Pedido no encontrado".to_string())?;
+    if cancelled.is_some() {
+        return Err("No se puede cambiar la forma de pago de un pedido anulado".to_string());
+    }
+
+    apply_payment_config_unpaid(
+        &tx,
+        payload.id,
+        &method,
+        &currency,
+        rate,
+        payload.due_usd,
+        payload.due_cup,
+    )?;
+
+    let client_id: i64 = tx
+        .query_row(
+            "SELECT client_id FROM invoices WHERE id = ?1",
+            params![payload.id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    recalc_client_balance(&tx, client_id)?;
 
     tx.commit().map_err(|e| e.to_string())?;
     invoices_get_detail(payload.id).map(|d| d.invoice)
