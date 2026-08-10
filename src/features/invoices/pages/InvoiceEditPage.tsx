@@ -15,6 +15,16 @@ import { fetchFormats, fetchPrices } from "@/db/queries/prices";
 import { OrderHeaderSection } from "@/features/invoices/components/OrderHeaderSection";
 import { OrderLineModal } from "@/features/invoices/components/OrderLineModal";
 import { OrderLinesTable } from "@/features/invoices/components/OrderLinesTable";
+import {
+  isMixtoSplitValid,
+  OrderPaymentSection,
+  resolveDueSplit,
+  type OrderPaymentState,
+} from "@/features/invoices/components/OrderPaymentSection";
+import {
+  isInvoiceUnpaid,
+  paymentStateFromInvoice,
+} from "@/features/invoices/lib/invoice-payment";
 import { invoiceItemsToDraftLines } from "@/features/invoices/lib/invoice-to-draft";
 import {
   draftLineSubtotal,
@@ -31,7 +41,8 @@ import { pedidosListSearch } from "@/lib/pedidos-search";
 
 /**
  * Edición de un pedido aún sin trabajo de producción registrado.
- * No modifica cobros ya hechos; recalcula totales y saldo.
+ * Si no hay cobros, permite cambiar método/moneda/tasa/due; si ya hay cobros,
+ * la forma de pago queda bloqueada.
  *
  * @returns Página de edición de pedido.
  */
@@ -85,7 +96,7 @@ export function InvoiceEditPage() {
   const [clientId, setClientId] = useState(0);
   const [date, setDate] = useState("");
   const [notes, setNotes] = useState("");
-  const [orderRate, setOrderRate] = useState("");
+  const [payment, setPayment] = useState<OrderPaymentState | null>(null);
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [lineModalOpen, setLineModalOpen] = useState(false);
@@ -105,10 +116,7 @@ export function InvoiceEditPage() {
     setClientId(detail.invoice.clientId);
     setDate(detail.invoice.date.slice(0, 10));
     setNotes(detail.invoice.notes ?? "");
-    const snap = detail.invoice.exchangeRateSnapshot;
-    setOrderRate(
-      snap && snap > 0 ? String(snap) : usdExchangeRate > 0 ? String(usdExchangeRate) : "",
-    );
+    setPayment(paymentStateFromInvoice(detail.invoice, usdExchangeRate));
     setLines(invoiceItemsToDraftLines(detail.items, inventoryItems ?? []));
     setHydrated(true);
   }, [
@@ -132,8 +140,10 @@ export function InvoiceEditPage() {
   }, [formatsQuery.data]);
 
   const inv = detailQuery.data?.invoice;
+  const canChangePayment = inv ? isInvoiceUnpaid(inv) : false;
+
   const displayRate =
-    Number.parseFloat(orderRate.replace(",", ".")) ||
+    Number.parseFloat((payment?.exchangeRate ?? "").replace(",", ".")) ||
     (inv?.exchangeRateSnapshot && inv.exchangeRateSnapshot > 0
       ? inv.exchangeRateSnapshot
       : usdExchangeRate);
@@ -143,19 +153,46 @@ export function InvoiceEditPage() {
     [lines, displayRate],
   );
 
+  const linesTotalUsd = useMemo(
+    () =>
+      lines.reduce((sum, line) => {
+        const qty = Number.parseInt(line.quantity, 10) || 0;
+        const usd = line.services.reduce((s, svc) => {
+          const u = Number.parseFloat((svc.unitPriceUsd ?? "").replace(",", "."));
+          if (Number.isFinite(u) && u >= 0) return s + u;
+          const cup = Number.parseFloat(svc.unitPrice.replace(",", "."));
+          return Number.isFinite(cup) && displayRate > 0 ? s + cup / displayRate : s;
+        }, 0);
+        return sum + qty * usd;
+      }, 0),
+    [lines, displayRate],
+  );
+
   const advanceNum = inv?.advancePayment ?? 0;
   const paidNum = inv?.paid ?? 0;
   const orderTotal = Math.max(linesSubtotal - advanceNum, 0);
   const pendingBalance = Math.max(orderTotal - paidNum, 0);
   const linesValid = lines.length > 0 && lines.every(isDraftLineValid);
-  const canSave = clientId > 0 && linesValid && Boolean(detailQuery.data?.canEdit);
+  const canSave = clientId > 0 && linesValid && Boolean(detailQuery.data?.canEdit) && payment != null;
 
-  const handleRateChange = (raw: string) => {
-    setOrderRate(raw);
-    const n = Number.parseFloat(raw.replace(",", ".")) || 0;
-    if (n > 0) {
-      setLines((prev) => recalculateDraftLinesForRate(prev, n));
-    }
+  const orderDue = payment
+    ? resolveDueSplit(
+        payment.paymentMethod === "transferencia" ? "CUP" : payment.paymentCurrency,
+        linesTotalUsd,
+        orderTotal,
+        payment.dueUsd,
+        payment.dueCup,
+      )
+    : { dueUsd: 0, dueCup: 0 };
+
+  const handlePaymentChange = (next: OrderPaymentState) => {
+    if (!canChangePayment) return;
+    setPayment(next);
+  };
+
+  const handleRateCommit = (rate: number) => {
+    if (!canChangePayment || !(rate > 0)) return;
+    setLines((prev) => recalculateDraftLinesForRate(prev, rate));
   };
 
   const editingLine = editingLineKey
@@ -188,8 +225,22 @@ export function InvoiceEditPage() {
 
   const handleSubmit = () => {
     setFormError(null);
-    if (!canSave) {
+    if (!canSave || !payment) {
       setFormError("Completa cliente y líneas válidas.");
+      return;
+    }
+    if (canChangePayment && displayRate <= 0) {
+      setFormError("Indica una tasa USD→CUP válida.");
+      return;
+    }
+    if (
+      canChangePayment &&
+      payment.paymentCurrency === "mixto" &&
+      !isMixtoSplitValid(orderDue.dueUsd, orderDue.dueCup, displayRate, orderTotal)
+    ) {
+      setFormError(
+        "En modo Mixto, due USD × tasa + due CUP debe coincidir con el total del pedido.",
+      );
       return;
     }
     const items = lines.flatMap((line) =>
@@ -206,9 +257,18 @@ export function InvoiceEditPage() {
       date,
       notes: notes.trim() || null,
       exchangeRateSnapshot: displayRate > 0 ? displayRate : null,
-      paymentCurrency: (inv?.paymentCurrency as "CUP" | "USD" | "mixto" | null) ?? null,
-      dueUsd: inv?.dueUsd ?? null,
-      dueCup: inv?.dueCup ?? null,
+      paymentMethod: canChangePayment
+        ? payment.paymentMethod === "transferencia"
+          ? "transferencia"
+          : "efectivo"
+        : null,
+      paymentCurrency: canChangePayment
+        ? payment.paymentMethod === "transferencia"
+          ? "CUP"
+          : payment.paymentCurrency
+        : null,
+      dueUsd: canChangePayment ? orderDue.dueUsd : null,
+      dueCup: canChangePayment ? orderDue.dueCup : null,
       items,
     });
   };
@@ -254,8 +314,9 @@ export function InvoiceEditPage() {
 
       <div className="alert alert-info text-sm">
         <span>
-          Los cobros ya registrados no se modifican. Si reduces el total por debajo de lo pagado, no
-          se permitirá guardar. El anticipo ({formatMoney(advanceNum)}) se mantiene.
+          {canChangePayment
+            ? "Aún no hay cobros: puedes cambiar método, moneda, tasa y split Mixto. Al cambiar la tasa se recalculan los precios CUP."
+            : `Ya hay cobros o anticipo (${formatMoney(paidNum + advanceNum)}). La forma de pago no se puede modificar; solo líneas y datos del encabezado.`}
         </span>
       </div>
 
@@ -275,19 +336,48 @@ export function InvoiceEditPage() {
         onNotesChange={setNotes}
       />
 
-      <label className="form-control max-w-xs">
-        <span className="label-text text-xs">Tasa del pedido (1 USD = CUP)</span>
-        <input
-          type="number"
-          className="input input-bordered input-sm"
-          value={orderRate}
-          onChange={(e) => handleRateChange(e.target.value)}
+      {payment && canChangePayment && (
+        <OrderPaymentSection
+          title="Forma de pago del pedido"
+          totalCup={orderTotal}
+          totalUsd={linesTotalUsd}
+          value={payment}
+          onChange={handlePaymentChange}
+          onExchangeRateCommit={handleRateCommit}
         />
-        <span className="label-text-alt text-base-content/60">
-          Al cambiar la tasa se recalculan los precios CUP desde USD.
-          {inv?.paymentCurrency ? ` Moneda: ${inv.paymentCurrency}.` : ""}
-        </span>
-      </label>
+      )}
+
+      {payment && !canChangePayment && (
+        <div className="rounded-lg border border-base-300 bg-base-100 p-3 text-sm">
+          <p className="font-medium">Forma de pago (bloqueada)</p>
+          <dl className="mt-1 grid gap-1 text-xs sm:grid-cols-2">
+            <div className="flex justify-between gap-2">
+              <dt className="text-base-content/60">Método</dt>
+              <dd className="capitalize">{payment.paymentMethod}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-base-content/60">Moneda</dt>
+              <dd>{payment.paymentCurrency}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-base-content/60">Tasa</dt>
+              <dd>{displayRate > 0 ? formatMoney(displayRate, "CUP") : "—"}</dd>
+            </div>
+            {payment.paymentCurrency === "mixto" && (
+              <>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-base-content/60">Due USD</dt>
+                  <dd>{formatMoney(orderDue.dueUsd, "USD")}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-base-content/60">Due CUP</dt>
+                  <dd>{formatMoney(orderDue.dueCup, "CUP")}</dd>
+                </div>
+              </>
+            )}
+          </dl>
+        </div>
+      )}
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
