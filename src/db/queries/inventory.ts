@@ -63,13 +63,13 @@ export async function fetchInventoryMovements(itemId: number): Promise<Inventory
 }
 
 /**
- * Lists inventory movements for the current day (`hoy`) or month (`mes`).
+ * Lists inventory movements for the current day (`hoy`), month (`mes`) or all (`todos`).
  *
  * @param period - Periodo del listado.
  * @returns Movimientos ordenados del más reciente al más antiguo.
  */
 export async function fetchInventoryMovementsList(
-  period: "hoy" | "mes",
+  period: "hoy" | "mes" | "todos",
 ): Promise<InventoryMovementListDto[]> {
   return invoke<InventoryMovementListDto[]>("inventory_movements_list", { period });
 }

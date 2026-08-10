@@ -1251,7 +1251,7 @@ fn classify_movement_method(
     }
 }
 
-/// Lists inventory movements for the current day or month (local calendar).
+/// Lists inventory movements for the current day, month, or all (local calendar).
 #[tauri::command]
 pub fn inventory_movements_list(period: String) -> Result<Vec<InventoryMovementListDto>, String> {
     let period = period.trim().to_lowercase();
@@ -1261,8 +1261,9 @@ pub fn inventory_movements_list(period: String) -> Result<Vec<InventoryMovementL
             "date(m.date) >= date('now', 'localtime', 'start of month')
              AND date(m.date) < date('now', 'localtime', 'start of month', '+1 month')"
         }
+        "todos" => "1 = 1",
         _ => {
-            return Err("Periodo inválido. Use «hoy» o «mes».".to_string());
+            return Err("Periodo inválido. Use «hoy», «mes» o «todos».".to_string());
         }
     };
 

@@ -4,15 +4,16 @@ import { useState } from "react";
 import { fetchInventoryMovementsList } from "@/db/queries/inventory";
 import { formatDate } from "@/lib/format-date";
 
-type MovementPeriod = "hoy" | "mes";
+type MovementPeriod = "hoy" | "mes" | "todos";
 
 const PERIOD_OPTIONS: { id: MovementPeriod; label: string }[] = [
   { id: "hoy", label: "Día actual" },
   { id: "mes", label: "Mes actual" },
+  { id: "todos", label: "Todos" },
 ];
 
 /**
- * Sección de movimientos globales de inventario con filtro Día/Mes.
+ * Sección de movimientos globales de inventario con filtro Día/Mes/Todos.
  *
  * @returns Bloque de UI para la pantalla principal de Inventario.
  */
