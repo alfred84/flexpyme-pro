@@ -114,6 +114,8 @@ const EMBEDDED_EMPLOYEE_PAYMENT_CASH_LINK_SCHEMA: &str =
     include_str!("../../src/db/migrations/0029_employee_payment_cash_link.sql");
 const EMBEDDED_DUAL_CURRENCY_ORDERS_SCHEMA: &str =
     include_str!("../../src/db/migrations/0030_dual_currency_orders.sql");
+const EMBEDDED_CASH_PHYSICAL_AMOUNTS_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0031_cash_physical_amounts.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -427,6 +429,40 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             "0030_dual_currency_orders",
         )?;
     }
+    // Data-only: idempotent cleanup of USD→CUP equivalents wrongly stored in amount_cup.
+    if !settings_flag_set(conn, "migration_0031_cash_physical_amounts") {
+        execute_migration(
+            conn,
+            EMBEDDED_CASH_PHYSICAL_AMOUNTS_SCHEMA,
+            "0031_cash_physical_amounts",
+        )?;
+        set_settings_flag(conn, "migration_0031_cash_physical_amounts")?;
+    }
+    Ok(())
+}
+
+/// True if `settings.key` exists with a non-empty value.
+fn settings_flag_set(conn: &Connection, key: &str) -> bool {
+    conn.query_row(
+        "SELECT COUNT(*) FROM settings WHERE key = ?1 AND TRIM(value) != ''",
+        params![key],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|count| count > 0)
+    .unwrap_or(false)
+}
+
+/// Marks a one-shot data migration as applied.
+fn set_settings_flag(conn: &Connection, key: &str) -> Result<(), String> {
+    if !table_exists(conn, "settings") {
+        return Ok(());
+    }
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?1, '1')
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![key],
+    )
+    .map_err(|e| format!("No se pudo registrar la migración {}: {}", key, e))?;
     Ok(())
 }
 
