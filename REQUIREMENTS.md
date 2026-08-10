@@ -124,13 +124,14 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
   - **Transferencia**: con referencia/concepto
 - Denominaciones CUP disponibles: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000
 - Denominaciones USD disponibles: 100, 50, 20, 10, 5, 2, 1
-- Soporte para USD con tasa de conversión a CUP (se almacena la tasa en cada operación)
-- Balance actual de caja (CUP y USD por separado)
+- Cajeros físicos independientes: `amount_cup` y `amount_usd` en `cash_transactions` son flujo real de cada moneda (no se escribe el equivalente convertido en la otra). La tasa se guarda por operación solo para auditoría
+- Balance actual de caja (CUP y USD por separado); ingresos/egresos/neto también duales
 - Módulo de cobro de facturas: ingresa billetes → exceso como **vuelto** (desglose; neto caja = recibido − vuelto) o como **saldo a favor** del cliente (ingreso completo en caja)
 - **Anticipo de pedido**: CUP o USD, efectivo (con denominaciones) o transferencia; se registra como ingreso en caja
-- **KPIs (v2.5)**: flujo neto del día actual y flujo neto de los últimos 30 días (más serie diaria del mismo período)
-- Historial de movimientos con filtros por fecha, tipo, concepto
-- Resumen diario/mensual
+- **KPIs**: flujo neto del día y de los últimos 30 días en CUP y USD (más serie diaria dual)
+- Historial de movimientos con filtros por fecha, tipo, concepto, moneda (CUP/USD/Mixto) y método; columnas CUP, USD y tasa
+- Resumen diario/mensual por moneda
+- Movimientos manuales y Otros gastos en USD afectan solo el cajón USD (`amount_cup = 0`)
 
 ### 3.7 Configuración
 - Datos del negocio (nombre, dirección, teléfono, logo)
@@ -433,6 +434,7 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - Crédito de cliente sigue en CUP; deuda espejo de cliente = equivalente CUP de saldos duales abiertos.
 - Transferencia sigue cobrando en CUP. Sin crédito USD ni reescritura histórica forzada (backfill `unit_price / rate`).
 - **Clientes (listado/detalle)**: balances e históricos duales por moneda de cobro; estado por posición neta convertida.
+- **Flujo de caja**: UI y agregados duales; escritores (movimiento manual / otros gastos) no contaminan `amount_cup` con USD×tasa; migración `0031` limpia histórico USD-solo.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
