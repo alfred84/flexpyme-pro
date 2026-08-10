@@ -122,17 +122,21 @@ export function OtherExpenseDetailPage() {
                 <dd className="capitalize">{expense.paymentMethod}</dd>
               </div>
               <div>
-                <dt className="text-xs uppercase text-base-content/60">{moneyHeading("Importe")}</dt>
+                <dt className="text-xs uppercase text-base-content/60">
+                  {moneyHeading("Importe", "CUP")}
+                </dt>
                 <dd className="font-mono font-semibold text-error">
-                  {formatAmount(expense.amountCup)}
+                  {expense.amountCup > 0.001 ? formatAmount(expense.amountCup) : "—"}
                 </dd>
               </div>
-              {expense.amountUsd > 0.001 && (
-                <div>
-                  <dt className="text-xs uppercase text-base-content/60">{moneyHeading("Importe", "USD")}</dt>
-                  <dd className="font-mono">{formatAmount(expense.amountUsd)}</dd>
-                </div>
-              )}
+              <div>
+                <dt className="text-xs uppercase text-base-content/60">
+                  {moneyHeading("Importe", "USD")}
+                </dt>
+                <dd className="font-mono font-semibold text-error">
+                  {expense.amountUsd > 0.001 ? formatAmount(expense.amountUsd) : "—"}
+                </dd>
+              </div>
               <div>
                 <dt className="text-xs uppercase text-base-content/60">Registrado</dt>
                 <dd className="text-sm">{formatDateTime(expense.createdAt)}</dd>

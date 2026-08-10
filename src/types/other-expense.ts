@@ -43,11 +43,13 @@ export interface OtherExpenseDto {
 }
 
 /**
- * Totales netos de otros gastos (día y mes en curso).
+ * Totales netos de otros gastos (día y mes en curso, por moneda física).
  */
 export interface OtherExpenseSummaryDto {
   todayCup: number;
   monthCup: number;
+  todayUsd: number;
+  monthUsd: number;
 }
 
 /**

@@ -99,7 +99,15 @@ export function OtherExpensesPage() {
     () => filterExpensesByPeriod(expenses, period),
     [expenses, period],
   );
-  const periodTotal = filteredExpenses.reduce((acc, e) => acc + e.amountCup, 0);
+  const periodTotals = useMemo(() => {
+    let cup = 0;
+    let usd = 0;
+    for (const e of filteredExpenses) {
+      cup += e.amountCup;
+      usd += e.amountUsd;
+    }
+    return { cup, usd };
+  }, [filteredExpenses]);
 
   const deleteMutation = useMutation({
     mutationFn: deleteOtherExpense,
@@ -140,24 +148,41 @@ export function OtherExpensesPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <div className="card bg-base-200">
           <div className="card-body p-4">
-            <p className="text-xs uppercase text-base-content/60">{moneyHeading("Gasto de hoy")}</p>
-            <p className="text-2xl font-semibold text-error">
+            <p className="mb-2 text-xs uppercase text-base-content/60">Gasto de hoy</p>
+            <p className="text-xs text-base-content/50">{moneyHeading("Gasto", "CUP")}</p>
+            <p className="text-xl font-semibold tabular-nums text-error">
               {formatAmount(summary?.todayCup ?? 0)}
             </p>
-          </div>
-        </div>
-        <div className="card bg-base-200">
-          <div className="card-body p-4">
-            <p className="text-xs uppercase text-base-content/60">{moneyHeading("Gasto del mes")}</p>
-            <p className="text-2xl font-semibold text-error">
-              {formatAmount(summary?.monthCup ?? 0)}
+            <p className="mt-1 text-xs text-base-content/50">{moneyHeading("Gasto", "USD")}</p>
+            <p className="text-xl font-semibold tabular-nums text-error">
+              {formatAmount(summary?.todayUsd ?? 0)}
             </p>
           </div>
         </div>
         <div className="card bg-base-200">
           <div className="card-body p-4">
-            <p className="text-xs uppercase text-base-content/60">{moneyHeading(periodTotalLabel(period))}</p>
-            <p className="text-2xl font-semibold">{formatAmount(periodTotal)}</p>
+            <p className="mb-2 text-xs uppercase text-base-content/60">Gasto del mes</p>
+            <p className="text-xs text-base-content/50">{moneyHeading("Gasto", "CUP")}</p>
+            <p className="text-xl font-semibold tabular-nums text-error">
+              {formatAmount(summary?.monthCup ?? 0)}
+            </p>
+            <p className="mt-1 text-xs text-base-content/50">{moneyHeading("Gasto", "USD")}</p>
+            <p className="text-xl font-semibold tabular-nums text-error">
+              {formatAmount(summary?.monthUsd ?? 0)}
+            </p>
+          </div>
+        </div>
+        <div className="card bg-base-200">
+          <div className="card-body p-4">
+            <p className="mb-2 text-xs uppercase text-base-content/60">{periodTotalLabel(period)}</p>
+            <p className="text-xs text-base-content/50">{moneyHeading("Total", "CUP")}</p>
+            <p className="text-xl font-semibold tabular-nums">
+              {formatAmount(periodTotals.cup)}
+            </p>
+            <p className="mt-1 text-xs text-base-content/50">{moneyHeading("Total", "USD")}</p>
+            <p className="text-xl font-semibold tabular-nums">
+              {formatAmount(periodTotals.usd)}
+            </p>
           </div>
         </div>
       </div>
@@ -202,7 +227,8 @@ export function OtherExpensesPage() {
               <th>Tipo</th>
               <th>Empleado</th>
               <th>Método</th>
-              <th className="text-right">{moneyHeading("Importe")}</th>
+              <th className="text-right">{moneyHeading("Importe", "CUP")}</th>
+              <th className="text-right">{moneyHeading("Importe", "USD")}</th>
               <th className="text-right">Acciones</th>
             </tr>
           </thead>
@@ -222,7 +248,12 @@ export function OtherExpensesPage() {
                 <td>{exp.expenseType}</td>
                 <td>{exp.employeeName ?? "—"}</td>
                 <td className="capitalize">{exp.paymentMethod}</td>
-                <td className="text-right font-mono">{formatAmount(exp.amountCup)}</td>
+                <td className="text-right tabular-nums">
+                  {exp.amountCup > 0.001 ? formatAmount(exp.amountCup) : "—"}
+                </td>
+                <td className="text-right tabular-nums">
+                  {exp.amountUsd > 0.001 ? formatAmount(exp.amountUsd) : "—"}
+                </td>
                 <td className="text-right">
                   <div className="flex justify-end gap-1">
                     <Link
@@ -258,7 +289,7 @@ export function OtherExpensesPage() {
             ))}
             {expensesQuery.isSuccess && filteredExpenses.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-base-content/60">
+                <td colSpan={8} className="py-8 text-center text-base-content/60">
                   {expenses.length === 0 ? (
                     <>
                       <p>Sin gastos registrados.</p>

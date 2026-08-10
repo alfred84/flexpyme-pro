@@ -25,12 +25,14 @@ pub struct OtherExpenseDto {
     pub created_at: String,
 }
 
-/// Net expense totals for the current day and month.
+/// Net expense totals for the current day and month (physical drawers).
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OtherExpenseSummaryDto {
     pub today_cup: f64,
     pub month_cup: f64,
+    pub today_usd: f64,
+    pub month_usd: f64,
 }
 
 /// Payload for registering an "other expense".
@@ -120,29 +122,33 @@ pub fn other_expense_get_by_id(id: i64) -> Result<OtherExpenseDto, String> {
         .map_err(|_| "Gasto no encontrado".to_string())
 }
 
-/// Net "other expense" totals for the current day and month (CUP).
+/// Net "other expense" totals for the current day and month (CUP and USD).
 #[tauri::command]
 pub fn other_expenses_summary() -> Result<OtherExpenseSummaryDto, String> {
     let conn = db::open_connection()?;
-    let today_cup: f64 = conn
+    let (today_cup, today_usd): (f64, f64) = conn
         .query_row(
-            "SELECT COALESCE(SUM(amount_cup), 0) FROM other_expenses
+            "SELECT COALESCE(SUM(amount_cup), 0), COALESCE(SUM(amount_usd), 0)
+             FROM other_expenses
              WHERE date(date) = date('now', 'localtime')",
             [],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .map_err(|e| e.to_string())?;
-    let month_cup: f64 = conn
+    let (month_cup, month_usd): (f64, f64) = conn
         .query_row(
-            "SELECT COALESCE(SUM(amount_cup), 0) FROM other_expenses
+            "SELECT COALESCE(SUM(amount_cup), 0), COALESCE(SUM(amount_usd), 0)
+             FROM other_expenses
              WHERE strftime('%Y-%m', date) = strftime('%Y-%m', 'now', 'localtime')",
             [],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .map_err(|e| e.to_string())?;
     Ok(OtherExpenseSummaryDto {
         today_cup,
         month_cup,
+        today_usd,
+        month_usd,
     })
 }
 

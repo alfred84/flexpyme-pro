@@ -11,7 +11,6 @@ import {
   serializeDenominationBreakdown,
   sumDenominationCounts,
 } from "@/lib/cash-counts";
-import { useAppSettings } from "@/hooks/use-app-settings";
 import { todayIso } from "@/lib/format-date";
 import { pushFlashMessage } from "@/lib/flash-message";
 
@@ -24,7 +23,6 @@ import { pushFlashMessage } from "@/lib/flash-message";
 export function OtherExpenseNewPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const settings = useAppSettings();
 
   const [date, setDate] = useState(() => todayIso());
   const [concept, setConcept] = useState("");
@@ -95,16 +93,13 @@ export function OtherExpenseNewPage() {
       return;
     }
 
-    let amountCup = value;
+    // Cajón físico: gasto USD no escribe equivalente en amount_cup.
+    let amountCup = 0;
     let amountUsd = 0;
     if (currency === "USD") {
-      const rate = settings.usdExchangeRate || 0;
-      if (rate <= 0) {
-        setError("Configura la tasa USD → CUP antes de registrar gastos en USD.");
-        return;
-      }
       amountUsd = value;
-      amountCup = value * rate;
+    } else {
+      amountCup = value;
     }
 
     const denominationBreakdown = isCash
