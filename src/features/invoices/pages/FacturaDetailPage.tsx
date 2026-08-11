@@ -1,17 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { useState } from "react";
-import { DualMoneyText } from "@/components/common/DualMoneyText";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import {
   cancelInvoice,
   fetchInvoiceDetail,
   fetchInvoicePaymentHistory,
 } from "@/db/queries/invoices";
-import { useAppSettings } from "@/hooks/use-app-settings";
-import type { SaleCurrency } from "@/lib/currency";
+import {
+  formatInvoiceAmountOrDash,
+  hasInvoiceAmount,
+  resolveInvoiceDualAmounts,
+} from "@/features/invoices/lib/invoice-dual-amounts";
 import { formatDate } from "@/lib/format-date";
-import { formatMoney, moneyHeading } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 import {
   invoiceFinancialBadgeClass,
   invoiceFinancialLabel,
@@ -19,7 +21,7 @@ import {
 } from "@/lib/invoice-financial-status";
 
 /**
- * Detalle contable de una factura con historial de pagos y anulación.
+ * Detalle contable de una factura con montos reales CUP/USD e historial de pagos.
  *
  * @returns Página de detalle financiero de factura.
  */
@@ -27,7 +29,6 @@ export function FacturaDetailPage() {
   const params = useParams({ strict: false }) as { invoiceId?: string };
   const invoiceId = Number(params.invoiceId);
   const queryClient = useQueryClient();
-  const { usdExchangeRate } = useAppSettings();
   const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
 
@@ -49,25 +50,19 @@ export function FacturaDetailPage() {
       await queryClient.invalidateQueries({ queryKey: ["invoices"] });
       await queryClient.invalidateQueries({ queryKey: ["clients"] });
       await queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      await queryClient.invalidateQueries({ queryKey: ["cashflow"] });
     },
   });
 
   const inv = detailQuery.data?.invoice;
   const fin = inv
-    ? invoiceFinancialStatus(inv.balance, inv.paid, inv.status === "anulada" || Boolean(inv.cancelledAt))
+    ? invoiceFinancialStatus(
+        inv.balance,
+        inv.paid,
+        inv.status === "anulada" || Boolean(inv.cancelledAt),
+      )
     : "pendiente";
-
-  const paymentCurrencyNorm = (inv?.paymentCurrency ?? "").toLowerCase();
-  const displayPrimary: SaleCurrency =
-    inv?.paymentMethod === "transferencia" ||
-    paymentCurrencyNorm === "cup" ||
-    paymentCurrencyNorm === "mixto"
-      ? "CUP"
-      : "USD";
-  const displayRate =
-    inv?.exchangeRateSnapshot && inv.exchangeRateSnapshot > 0
-      ? inv.exchangeRateSnapshot
-      : usdExchangeRate;
+  const dual = inv ? resolveInvoiceDualAmounts(inv) : null;
 
   if (!Number.isFinite(invoiceId) || invoiceId <= 0) {
     return <div className="alert alert-warning">Identificador de factura no válido.</div>;
@@ -82,17 +77,29 @@ export function FacturaDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           {inv && fin !== "anulada" && fin !== "cobrada" && (
-            <button type="button" className="btn btn-error btn-outline btn-sm" onClick={() => setShowCancel(true)}>
+            <button
+              type="button"
+              className="btn btn-error btn-outline btn-sm"
+              onClick={() => setShowCancel(true)}
+            >
               Anular
             </button>
           )}
           {inv && inv.balance > 1e-6 && fin !== "anulada" && (
-            <Link className="btn btn-primary btn-sm" to="/facturas/$invoiceId/pago" params={{ invoiceId: String(inv.id) }}>
+            <Link
+              className="btn btn-primary btn-sm"
+              to="/facturas/$invoiceId/pago"
+              params={{ invoiceId: String(inv.id) }}
+            >
               Registrar pago
             </Link>
           )}
           {inv && (
-            <Link className="btn btn-outline btn-sm" to="/facturas/$invoiceId/imprimir" params={{ invoiceId: String(inv.id) }}>
+            <Link
+              className="btn btn-outline btn-sm"
+              to="/facturas/$invoiceId/imprimir"
+              params={{ invoiceId: String(inv.id) }}
+            >
               Imprimir
             </Link>
           )}
@@ -103,13 +110,20 @@ export function FacturaDetailPage() {
       </div>
 
       {detailQuery.isLoading && <p>Cargando...</p>}
-      {inv && (
+      {inv && dual && (
         <>
           <div className="card bg-base-100 shadow">
-            <div className="card-body space-y-2">
+            <div className="card-body space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm text-base-content/60">Estado:</span>
-                <span className={`badge ${invoiceFinancialBadgeClass(fin)}`}>{invoiceFinancialLabel(fin)}</span>
+                <span className={`badge ${invoiceFinancialBadgeClass(fin)}`}>
+                  {invoiceFinancialLabel(fin)}
+                </span>
+                {inv.paymentCurrency && (
+                  <span className="badge badge-ghost badge-sm uppercase">
+                    Cobro {inv.paymentCurrency}
+                  </span>
+                )}
               </div>
               <p>
                 <span className="text-base-content/60">Cliente:</span> {inv.clientName}
@@ -117,63 +131,72 @@ export function FacturaDetailPage() {
               <p>
                 <span className="text-base-content/60">Fecha:</span> {formatDate(inv.date)}
               </p>
+              {dual.rate > 0 && (
+                <p className="text-sm text-base-content/60">
+                  Tasa del pedido: {formatAmount(dual.rate)} CUP / USD (auditoría)
+                </p>
+              )}
               {inv.cancelledReason && (
                 <p className="text-error text-sm">Motivo anulación: {inv.cancelledReason}</p>
               )}
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <div>
-                  <p className="text-xs text-base-content/60">
-                    {moneyHeading("Subtotal", displayPrimary)}
-                  </p>
-                  <p className="font-medium">
-                    <DualMoneyText
-                      amountCup={inv.subtotal}
-                      rate={displayRate}
-                      primary={displayPrimary}
-                      className="items-start"
-                    />
-                  </p>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-base-300 p-3">
+                  <p className="text-xs uppercase text-base-content/60">Total facturado</p>
+                  <div className="mt-1 flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs text-base-content/50">{moneyHeading("Total", "CUP")}</p>
+                      <p className="text-lg font-semibold tabular-nums">
+                        {formatInvoiceAmountOrDash(dual.dueCup, formatAmount)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-base-content/50">{moneyHeading("Total", "USD")}</p>
+                      <p className="text-lg font-semibold tabular-nums">
+                        {formatInvoiceAmountOrDash(dual.dueUsd, formatAmount)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-base-content/60">
-                    {moneyHeading("Total", displayPrimary)}
-                  </p>
-                  <p className="font-medium">
-                    <DualMoneyText
-                      amountCup={inv.total}
-                      rate={displayRate}
-                      primary={displayPrimary}
-                      className="items-start"
-                    />
-                  </p>
+                <div className="rounded-lg border border-base-300 p-3">
+                  <p className="text-xs uppercase text-base-content/60">Pagado</p>
+                  <div className="mt-1 flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs text-base-content/50">{moneyHeading("Pagado", "CUP")}</p>
+                      <p className="text-lg font-semibold tabular-nums text-success">
+                        {formatInvoiceAmountOrDash(dual.paidCup, formatAmount)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-base-content/50">{moneyHeading("Pagado", "USD")}</p>
+                      <p className="text-lg font-semibold tabular-nums text-success">
+                        {formatInvoiceAmountOrDash(dual.paidUsd, formatAmount)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-base-content/60">
-                    {moneyHeading("Pagado", displayPrimary)}
-                  </p>
-                  <p className="font-medium">
-                    <DualMoneyText
-                      amountCup={inv.paid}
-                      rate={displayRate}
-                      primary={displayPrimary}
-                      className="items-start"
-                    />
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-base-content/60">
-                    {moneyHeading("Saldo", displayPrimary)}
-                  </p>
-                  <p className="font-semibold">
-                    <DualMoneyText
-                      amountCup={inv.balance}
-                      rate={displayRate}
-                      primary={displayPrimary}
-                      className="items-start"
-                    />
-                  </p>
+                <div className="rounded-lg border border-base-300 p-3">
+                  <p className="text-xs uppercase text-base-content/60">Saldo</p>
+                  <div className="mt-1 flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs text-base-content/50">{moneyHeading("Saldo", "CUP")}</p>
+                      <p className="text-lg font-semibold tabular-nums text-warning">
+                        {formatInvoiceAmountOrDash(dual.balanceCup, formatAmount)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-base-content/50">{moneyHeading("Saldo", "USD")}</p>
+                      <p className="text-lg font-semibold tabular-nums text-warning">
+                        {formatInvoiceAmountOrDash(dual.balanceUsd, formatAmount)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
+              <p className="text-xs text-base-content/60">
+                Los importes reflejan el split de cobro del pedido (CUP, USD o Mixto), no la
+                conversión de un solo total.
+              </p>
             </div>
           </div>
 
@@ -186,8 +209,9 @@ export function FacturaDetailPage() {
                     <tr>
                       <th>Descripción</th>
                       <th>Cant.</th>
-                      <th className="text-right">{moneyHeading("Precio", displayPrimary)}</th>
-                      <th className="text-right">{moneyHeading("Subtotal", displayPrimary)}</th>
+                      <th className="text-right">{moneyHeading("Precio", "USD")}</th>
+                      <th className="text-right">{moneyHeading("Precio", "CUP")}</th>
+                      <th className="text-right">{moneyHeading("Subtotal", "CUP")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -199,19 +223,14 @@ export function FacturaDetailPage() {
                           {line.service ? ` · ${line.service}` : ""}
                         </td>
                         <td>{line.quantity}</td>
-                        <td className="text-right">
-                          <DualMoneyText
-                            amountCup={line.unitPrice}
-                            rate={displayRate}
-                            primary={displayPrimary}
-                          />
+                        <td className="text-right tabular-nums">
+                          {formatInvoiceAmountOrDash(line.unitPriceUsd, formatAmount)}
                         </td>
-                        <td className="text-right">
-                          <DualMoneyText
-                            amountCup={line.subtotal}
-                            rate={displayRate}
-                            primary={displayPrimary}
-                          />
+                        <td className="text-right tabular-nums">
+                          {formatInvoiceAmountOrDash(line.unitPrice, formatAmount)}
+                        </td>
+                        <td className="text-right tabular-nums">
+                          {formatAmount(line.subtotal)}
                         </td>
                       </tr>
                     ))}
@@ -227,16 +246,38 @@ export function FacturaDetailPage() {
               {(paymentsQuery.data ?? []).length === 0 ? (
                 <p className="text-sm text-base-content/60">Sin pagos registrados.</p>
               ) : (
-                <ul className="space-y-2 text-sm">
-                  {paymentsQuery.data?.map((p) => (
-                    <li key={p.id} className="rounded border border-base-300 px-3 py-2">
-                      {formatDate(p.date)} · {p.concept} ·{" "}
-                      {p.amountUsd > 0
-                        ? `${formatMoney(p.amountUsd, "USD")} (${formatMoney(p.amountCup, "CUP")})`
-                        : formatMoney(p.amountCup, "CUP")}
-                    </li>
-                  ))}
-                </ul>
+                <div className="overflow-x-auto">
+                  <table className="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Concepto</th>
+                        <th>Método</th>
+                        <th className="text-right">{moneyHeading("Importe", "CUP")}</th>
+                        <th className="text-right">{moneyHeading("Importe", "USD")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paymentsQuery.data?.map((p) => (
+                        <tr key={p.id}>
+                          <td className="text-xs whitespace-nowrap">{formatDate(p.date)}</td>
+                          <td>{p.concept}</td>
+                          <td className="capitalize">{p.paymentMethod}</td>
+                          <td className="text-right tabular-nums text-success">
+                            {hasInvoiceAmount(p.amountCup)
+                              ? `+${formatAmount(p.amountCup)}`
+                              : "—"}
+                          </td>
+                          <td className="text-right tabular-nums text-success">
+                            {hasInvoiceAmount(p.amountUsd)
+                              ? `+${formatAmount(p.amountUsd)}`
+                              : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
@@ -246,37 +287,44 @@ export function FacturaDetailPage() {
       {showCancel && (
         <ModalPortal>
           <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg">Anular factura</h3>
-            <p className="py-2 text-sm">
-              Se revertirán los cobros en caja y las salidas de inventario del pedido. Indica el
-              motivo.
-            </p>
-            <textarea
-              className="textarea textarea-bordered w-full"
-              rows={3}
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="Motivo de anulación"
-            />
-            {cancelMutation.isError && (
-              <p className="mt-2 text-sm text-error">{(cancelMutation.error as Error).message}</p>
-            )}
-            <div className="modal-action">
-              <button type="button" className="btn" onClick={() => setShowCancel(false)}>
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="btn btn-error"
-                disabled={!cancelReason.trim() || cancelMutation.isPending}
-                onClick={() => void cancelMutation.mutateAsync()}
-              >
-                Confirmar anulación
-              </button>
+            <div className="modal-box">
+              <h3 className="text-lg font-bold">Anular factura</h3>
+              <p className="py-2 text-sm">
+                Se revertirán los cobros en caja y las salidas de inventario del pedido. Indica el
+                motivo.
+              </p>
+              <textarea
+                className="textarea textarea-bordered w-full"
+                rows={3}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Motivo de anulación"
+              />
+              {cancelMutation.isError && (
+                <p className="mt-2 text-sm text-error">
+                  {(cancelMutation.error as Error).message}
+                </p>
+              )}
+              <div className="modal-action">
+                <button type="button" className="btn" onClick={() => setShowCancel(false)}>
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-error"
+                  disabled={!cancelReason.trim() || cancelMutation.isPending}
+                  onClick={() => void cancelMutation.mutateAsync()}
+                >
+                  Confirmar anulación
+                </button>
+              </div>
             </div>
-          </div>
-          <button type="button" className="modal-backdrop bg-transparent" aria-label="Cerrar" onClick={() => setShowCancel(false)} />
+            <button
+              type="button"
+              className="modal-backdrop bg-transparent"
+              aria-label="Cerrar"
+              onClick={() => setShowCancel(false)}
+            />
           </dialog>
         </ModalPortal>
       )}

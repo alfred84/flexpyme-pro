@@ -2,10 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Eye, Printer } from "lucide-react";
-import { DualMoneyText } from "@/components/common/DualMoneyText";
 import { fetchInvoiceMetrics, fetchInvoicesFinancial } from "@/db/queries/invoices";
-import { useAppSettings } from "@/hooks/use-app-settings";
-import { cupToUsd } from "@/lib/currency";
+import {
+  formatInvoiceAmountOrDash,
+  resolveInvoiceDualAmounts,
+} from "@/features/invoices/lib/invoice-dual-amounts";
 import { formatDate } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import {
@@ -17,13 +18,61 @@ import {
 
 type FacturaFilter = "todas" | InvoiceFinancialStatus;
 
+interface DualKpiPanelProps {
+  /** Título del panel. */
+  title: string;
+  /** Importe CUP. */
+  amountCup: number;
+  /** Importe USD. */
+  amountUsd: number;
+  /** Cantidad de facturas. */
+  count: number;
+  /** Clase del valor (p. ej. text-success). */
+  valueClassName?: string;
+  /** Si está cargando. */
+  loading?: boolean;
+}
+
 /**
- * Vista financiera/contable de facturas (misma tabla `invoices`, enfoque de cobro).
+ * Panel KPI de Facturas con CUP a la izquierda y USD a la derecha (montos reales).
+ *
+ * @param props - Título, importes y conteo.
+ * @returns Bloque compacto dual.
+ */
+function DualKpiPanel(props: DualKpiPanelProps) {
+  const { title, amountCup, amountUsd, count, valueClassName = "", loading } = props;
+  return (
+    <div className="rounded-lg border border-base-300 bg-base-100 p-3">
+      <p className="text-xs uppercase text-base-content/60">{title}</p>
+      {loading ? (
+        <span className="loading loading-spinner loading-sm mt-2" />
+      ) : (
+        <div className="mt-1 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs text-base-content/50">{moneyHeading("Importe", "CUP")}</p>
+            <p className={`text-xl font-semibold tabular-nums ${valueClassName}`}>
+              {formatAmount(amountCup)}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-base-content/50">{moneyHeading("Importe", "USD")}</p>
+            <p className={`text-xl font-semibold tabular-nums ${valueClassName}`}>
+              {formatAmount(amountUsd)}
+            </p>
+          </div>
+        </div>
+      )}
+      <p className="mt-1 text-xs text-base-content/60">{count} facturas</p>
+    </div>
+  );
+}
+
+/**
+ * Vista financiera de facturas con KPIs de cobro real CUP/USD (sin conversión).
  *
  * @returns Página del módulo Facturas.
  */
 export function FacturasPage() {
-  const { usdExchangeRate } = useAppSettings();
   const [filter, setFilter] = useState<FacturaFilter>("todas");
   const [search, setSearch] = useState("");
 
@@ -45,13 +94,15 @@ export function FacturasPage() {
   }, [listQuery.data, filter, search]);
 
   const m = metricsQuery.data;
-  const rate = usdExchangeRate;
-  /** Sin tasa no se puede convertir; los KPI siguen en CUP del libro. */
-  const kpiPrimary = rate > 0 ? ("USD" as const) : ("CUP" as const);
 
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-bold">Facturas</h1>
+      <div>
+        <h1 className="text-2xl font-bold">Facturas</h1>
+        <p className="text-sm text-base-content/70">
+          Importes reales a cobrar o cobrados en cada moneda (no conversión por tasa).
+        </p>
+      </div>
 
       {metricsQuery.isError && (
         <div className="alert alert-error py-2 text-sm">
@@ -60,70 +111,37 @@ export function FacturasPage() {
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">{moneyHeading("Total", kpiPrimary)}</div>
-          <div className="stat-value text-xl !whitespace-normal">
-            {metricsQuery.isLoading ? (
-              <span className="loading loading-spinner loading-sm" />
-            ) : (
-              <DualMoneyText
-                amountCup={m?.totalAmount ?? 0}
-                rate={rate}
-                primary="USD"
-                className="items-start"
-              />
-            )}
-          </div>
-          <div className="stat-desc">{m?.totalCount ?? 0} facturas</div>
-        </div>
-        <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">{moneyHeading("Cobradas", kpiPrimary)}</div>
-          <div className="stat-value text-xl text-success !whitespace-normal">
-            {metricsQuery.isLoading ? (
-              <span className="loading loading-spinner loading-sm" />
-            ) : (
-              <DualMoneyText
-                amountCup={m?.cobradasAmount ?? 0}
-                rate={rate}
-                primary="USD"
-                className="items-start"
-              />
-            )}
-          </div>
-          <div className="stat-desc">{m?.cobradasCount ?? 0} facturas</div>
-        </div>
-        <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">{moneyHeading("Parciales", kpiPrimary)}</div>
-          <div className="stat-value text-xl text-info !whitespace-normal">
-            {metricsQuery.isLoading ? (
-              <span className="loading loading-spinner loading-sm" />
-            ) : (
-              <DualMoneyText
-                amountCup={m?.parcialesAmount ?? 0}
-                rate={rate}
-                primary="USD"
-                className="items-start"
-              />
-            )}
-          </div>
-          <div className="stat-desc">{m?.parcialesCount ?? 0} facturas</div>
-        </div>
-        <div className="stat rounded-lg border border-base-300 bg-base-100 py-3">
-          <div className="stat-title text-xs">{moneyHeading("Pendientes", kpiPrimary)}</div>
-          <div className="stat-value text-xl text-warning !whitespace-normal">
-            {metricsQuery.isLoading ? (
-              <span className="loading loading-spinner loading-sm" />
-            ) : (
-              <DualMoneyText
-                amountCup={m?.pendientesAmount ?? 0}
-                rate={rate}
-                primary="USD"
-                className="items-start"
-              />
-            )}
-          </div>
-          <div className="stat-desc">{m?.pendientesCount ?? 0} facturas</div>
-        </div>
+        <DualKpiPanel
+          title="Total facturado"
+          amountCup={m?.totalAmountCup ?? 0}
+          amountUsd={m?.totalAmountUsd ?? 0}
+          count={m?.totalCount ?? 0}
+          loading={metricsQuery.isLoading}
+        />
+        <DualKpiPanel
+          title="Cobradas"
+          amountCup={m?.cobradasAmountCup ?? 0}
+          amountUsd={m?.cobradasAmountUsd ?? 0}
+          count={m?.cobradasCount ?? 0}
+          valueClassName="text-success"
+          loading={metricsQuery.isLoading}
+        />
+        <DualKpiPanel
+          title="Parciales (saldo)"
+          amountCup={m?.parcialesAmountCup ?? 0}
+          amountUsd={m?.parcialesAmountUsd ?? 0}
+          count={m?.parcialesCount ?? 0}
+          valueClassName="text-info"
+          loading={metricsQuery.isLoading}
+        />
+        <DualKpiPanel
+          title="Pendientes (saldo)"
+          amountCup={m?.pendientesAmountCup ?? 0}
+          amountUsd={m?.pendientesAmountUsd ?? 0}
+          count={m?.pendientesCount ?? 0}
+          valueClassName="text-warning"
+          loading={metricsQuery.isLoading}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -175,29 +193,20 @@ export function FacturasPage() {
             )}
             {rows.map((row) => {
               const fin = invoiceFinancialStatus(row.balance, row.paid, row.status === "anulada");
-              const snapshotRate = row.exchangeRateSnapshot;
-              const rowRate =
-                snapshotRate && snapshotRate > 0 ? snapshotRate : rate;
-              const cur = (row.paymentCurrency ?? "").toLowerCase();
-              const showCup = cur === "cup" || cur === "mixto";
-              const showUsd = cur === "usd" || cur === "mixto" || cur === "";
-              const totalUsd =
-                row.totalUsd != null && row.totalUsd > 0
-                  ? row.totalUsd
-                  : cupToUsd(row.total, rowRate);
+              const dual = resolveInvoiceDualAmounts(row);
               return (
                 <tr key={row.id}>
                   <td className="font-mono text-xs">{row.invoiceNumber}</td>
                   <td>{row.clientName}</td>
                   <td>{formatDate(row.date)}</td>
                   <td className="text-right tabular-nums">
-                    {showUsd ? formatAmount(totalUsd) : "—"}
+                    {formatInvoiceAmountOrDash(dual.dueUsd, formatAmount)}
                   </td>
                   <td className="text-right tabular-nums">
-                    {showCup ? formatAmount(row.total) : "—"}
+                    {formatInvoiceAmountOrDash(dual.dueCup, formatAmount)}
                   </td>
                   <td className="text-right tabular-nums">
-                    {snapshotRate && snapshotRate > 0 ? formatAmount(snapshotRate) : "—"}
+                    {dual.rate > 0 ? formatAmount(dual.rate) : "—"}
                   </td>
                   <td>
                     <span className={`badge badge-sm ${invoiceFinancialBadgeClass(fin)}`}>

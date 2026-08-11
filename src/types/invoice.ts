@@ -79,16 +79,20 @@ export interface InvoicePaymentHistoryRow {
 }
 
 /**
- * KPIs del módulo Facturas.
+ * KPIs del módulo Facturas (montos reales de cobro por moneda).
  */
 export interface InvoiceMetricsDto {
-  totalAmount: number;
+  totalAmountCup: number;
+  totalAmountUsd: number;
   totalCount: number;
-  cobradasAmount: number;
+  cobradasAmountCup: number;
+  cobradasAmountUsd: number;
   cobradasCount: number;
-  parcialesAmount: number;
+  parcialesAmountCup: number;
+  parcialesAmountUsd: number;
   parcialesCount: number;
-  pendientesAmount: number;
+  pendientesAmountCup: number;
+  pendientesAmountUsd: number;
   pendientesCount: number;
   anuladasCount: number;
 }

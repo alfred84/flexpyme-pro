@@ -1,26 +1,34 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useParams, useRouterState } from "@tanstack/react-router";
+import { invoke } from "@tauri-apps/api/core";
+import { Building2 } from "lucide-react";
+import { BusinessLogo } from "@/components/common/BusinessLogo";
 import { fetchInvoiceDetail } from "@/db/queries/invoices";
 import { fetchAllSettings, fetchCompanySettings } from "@/db/queries/settings";
-import { invoke } from "@tauri-apps/api/core";
-import { BusinessLogo } from "@/components/common/BusinessLogo";
-import { Building2 } from "lucide-react";
+import {
+  formatInvoiceAmountOrDash,
+  resolveInvoiceDualAmounts,
+} from "@/features/invoices/lib/invoice-dual-amounts";
 import { pushFlashMessage } from "@/lib/flash-message";
 import { formatDate } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
-
-function statusLabel(status: string): string {
-  if (status === "paid") return "Pagado";
-  if (status === "partial") return "Parcial";
-  return "Pendiente";
-}
+import {
+  invoiceFinancialLabel,
+  invoiceFinancialStatus,
+} from "@/lib/invoice-financial-status";
 
 /**
- * Printable invoice layout; uses the browser print dialog (Tauri webview).
+ * Vista imprimible del pedido/factura; el botón Imprimir usa `window.print()`.
+ *
+ * Muestra montos reales CUP/USD de cobro (sin conversión por tasa de app).
+ *
+ * @returns Página de impresión.
  */
 export function InvoicePrintPage() {
   const params = useParams({ strict: false }) as { invoiceId?: string };
   const invoiceId = Number(params.invoiceId);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const fromFacturas = pathname.includes("/facturas/");
 
   const detailQuery = useQuery({
     queryKey: ["invoices", "detail", invoiceId],
@@ -58,14 +66,41 @@ export function InvoicePrintPage() {
       co.companyRnc.trim() ||
       co.companyPhone.trim() ||
       co.companyAddress.trim());
+  const dual = inv ? resolveInvoiceDualAmounts(inv) : null;
+  const fin = inv
+    ? invoiceFinancialStatus(
+        inv.balance,
+        inv.paid,
+        inv.status === "anulada" || Boolean(inv.cancelledAt),
+      )
+    : null;
 
   return (
     <div className="invoice-print-root">
       <div className="mb-4 flex flex-wrap gap-2 print:hidden">
-        <Link to="/pedidos/$invoiceId" params={{ invoiceId: String(invoiceId) }} className="btn btn-ghost btn-sm">
-          Volver a factura
-        </Link>
-        <button type="button" className="btn btn-primary btn-sm" onClick={() => window.print()} disabled={!inv}>
+        {fromFacturas ? (
+          <Link
+            to="/facturas/$invoiceId"
+            params={{ invoiceId: String(invoiceId) }}
+            className="btn btn-ghost btn-sm"
+          >
+            Volver a factura
+          </Link>
+        ) : (
+          <Link
+            to="/pedidos/$invoiceId"
+            params={{ invoiceId: String(invoiceId) }}
+            className="btn btn-ghost btn-sm"
+          >
+            Volver al pedido
+          </Link>
+        )}
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={() => window.print()}
+          disabled={!inv}
+        >
           Imprimir
         </button>
         <button
@@ -89,7 +124,7 @@ export function InvoicePrintPage() {
         </div>
       )}
 
-      {inv && (
+      {inv && dual && (
         <article className="invoice-print-sheet rounded-lg border border-base-300 bg-base-100 p-6 shadow-sm print:border-0 print:bg-white print:p-0 print:shadow-none">
           <header className="mb-6 border-b border-base-300 pb-4 print:mb-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -104,24 +139,34 @@ export function InvoicePrintPage() {
                   />
                 )}
                 <div>
-                {hasCompanyHeader && co ? (
-                  <div className="mb-2 space-y-0.5 print:text-black">
-                    {co.companyName.trim() && <p className="text-xl font-bold">{co.companyName.trim()}</p>}
-                    {co.companyRnc.trim() && (
-                      <p className="text-sm text-base-content/80 print:text-gray-700">RNC: {co.companyRnc.trim()}</p>
-                    )}
-                    {co.companyPhone.trim() && (
-                      <p className="text-sm text-base-content/80 print:text-gray-700">Tel: {co.companyPhone.trim()}</p>
-                    )}
-                    {co.companyAddress.trim() && (
-                      <p className="whitespace-pre-wrap text-sm text-base-content/80 print:text-gray-700">{co.companyAddress.trim()}</p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm text-base-content/70 print:text-gray-600">FlexPyme Pro</p>
-                )}
-                <h1 className="text-2xl font-bold print:text-black">Pedido</h1>
-                <p className="font-mono text-lg print:text-black">{inv.invoiceNumber}</p>
+                  {hasCompanyHeader && co ? (
+                    <div className="mb-2 space-y-0.5 print:text-black">
+                      {co.companyName.trim() && (
+                        <p className="text-xl font-bold">{co.companyName.trim()}</p>
+                      )}
+                      {co.companyRnc.trim() && (
+                        <p className="text-sm text-base-content/80 print:text-gray-700">
+                          RNC: {co.companyRnc.trim()}
+                        </p>
+                      )}
+                      {co.companyPhone.trim() && (
+                        <p className="text-sm text-base-content/80 print:text-gray-700">
+                          Tel: {co.companyPhone.trim()}
+                        </p>
+                      )}
+                      {co.companyAddress.trim() && (
+                        <p className="whitespace-pre-wrap text-sm text-base-content/80 print:text-gray-700">
+                          {co.companyAddress.trim()}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-base-content/70 print:text-gray-600">FlexPyme Pro</p>
+                  )}
+                  <h1 className="text-2xl font-bold print:text-black">
+                    {fromFacturas ? "Factura" : "Pedido"}
+                  </h1>
+                  <p className="font-mono text-lg print:text-black">{inv.invoiceNumber}</p>
                 </div>
               </div>
               <div className="text-right text-sm print:text-black">
@@ -129,8 +174,21 @@ export function InvoicePrintPage() {
                   <span className="text-base-content/60">Fecha:</span> {formatDate(inv.date)}
                 </p>
                 <p>
-                  <span className="text-base-content/60">Estado:</span> {statusLabel(inv.status)}
+                  <span className="text-base-content/60">Estado:</span>{" "}
+                  {fin ? invoiceFinancialLabel(fin) : inv.paymentStatus}
                 </p>
+                {inv.paymentCurrency && (
+                  <p>
+                    <span className="text-base-content/60">Cobro:</span>{" "}
+                    <span className="uppercase">{inv.paymentCurrency}</span>
+                  </p>
+                )}
+                {dual.rate > 0 && (
+                  <p>
+                    <span className="text-base-content/60">Tasa:</span> {formatAmount(dual.rate)}{" "}
+                    CUP / USD
+                  </p>
+                )}
               </div>
             </div>
           </header>
@@ -150,32 +208,44 @@ export function InvoicePrintPage() {
             </div>
             <div>
               <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-base-content/60 print:text-gray-600">
-                Totales
+                Totales (cobro real)
               </h2>
-              <dl className="space-y-1 text-sm">
+              <dl className="space-y-1.5 text-sm">
                 <div className="flex justify-between gap-4">
-                  <dt>{moneyHeading("Subtotal líneas")}</dt>
-                  <dd>{formatAmount(inv.subtotal)}</dd>
+                  <dt>{moneyHeading("Total", "CUP")}</dt>
+                  <dd className="tabular-nums">
+                    {formatInvoiceAmountOrDash(dual.dueCup, formatAmount)}
+                  </dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt>{moneyHeading("Deuda anterior")}</dt>
-                  <dd>{formatAmount(inv.previousDebt)}</dd>
+                  <dt>{moneyHeading("Total", "USD")}</dt>
+                  <dd className="tabular-nums">
+                    {formatInvoiceAmountOrDash(dual.dueUsd, formatAmount)}
+                  </dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt>{moneyHeading("Anticipado")}</dt>
-                  <dd>{formatAmount(inv.advancePayment)}</dd>
+                  <dt>{moneyHeading("Pagado", "CUP")}</dt>
+                  <dd className="tabular-nums">
+                    {formatInvoiceAmountOrDash(dual.paidCup, formatAmount)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt>{moneyHeading("Pagado", "USD")}</dt>
+                  <dd className="tabular-nums">
+                    {formatInvoiceAmountOrDash(dual.paidUsd, formatAmount)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4 border-t border-base-300 pt-2 font-semibold print:border-gray-300">
+                  <dt>{moneyHeading("Pendiente", "CUP")}</dt>
+                  <dd className="tabular-nums">
+                    {formatInvoiceAmountOrDash(dual.balanceCup, formatAmount)}
+                  </dd>
                 </div>
                 <div className="flex justify-between gap-4 font-semibold">
-                  <dt>{moneyHeading("Total")}</dt>
-                  <dd>{formatAmount(inv.total)}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt>{moneyHeading("Pagado")}</dt>
-                  <dd>{formatAmount(inv.paid)}</dd>
-                </div>
-                <div className="flex justify-between gap-4 border-t border-base-300 pt-2 print:border-gray-300">
-                  <dt className="font-semibold">{moneyHeading("Pendiente")}</dt>
-                  <dd className="font-semibold">{formatAmount(inv.balance)}</dd>
+                  <dt>{moneyHeading("Pendiente", "USD")}</dt>
+                  <dd className="tabular-nums">
+                    {formatInvoiceAmountOrDash(dual.balanceUsd, formatAmount)}
+                  </dd>
                 </div>
               </dl>
             </div>
@@ -190,8 +260,9 @@ export function InvoicePrintPage() {
                   <th className="text-left">Tipo de trabajo</th>
                   <th className="text-left">Acabado</th>
                   <th className="text-right">Cant.</th>
-                  <th className="text-right">{moneyHeading("P. unit.")}</th>
-                  <th className="text-right">{moneyHeading("Subtotal")}</th>
+                  <th className="text-right">{moneyHeading("P. unit.", "USD")}</th>
+                  <th className="text-right">{moneyHeading("P. unit.", "CUP")}</th>
+                  <th className="text-right">{moneyHeading("Subtotal", "CUP")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -202,8 +273,13 @@ export function InvoicePrintPage() {
                     <td>{line.service ?? "—"}</td>
                     <td>{line.finish ?? "—"}</td>
                     <td className="text-right">{line.quantity}</td>
-                    <td className="text-right">{formatAmount(line.unitPrice)}</td>
-                    <td className="text-right">{formatAmount(line.subtotal)}</td>
+                    <td className="text-right tabular-nums">
+                      {formatInvoiceAmountOrDash(line.unitPriceUsd, formatAmount)}
+                    </td>
+                    <td className="text-right tabular-nums">
+                      {formatInvoiceAmountOrDash(line.unitPrice, formatAmount)}
+                    </td>
+                    <td className="text-right tabular-nums">{formatAmount(line.subtotal)}</td>
                   </tr>
                 ))}
               </tbody>

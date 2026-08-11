@@ -1700,16 +1700,65 @@ pub async fn export_invoice_pdf(app: tauri::AppHandle, id: i64) -> Result<String
     let layer = doc.get_page(page1).get_layer(layer1);
 
     let mut y = 280.0_f32;
-    let header_lines = [
-        format!("PEDIDO {}", inv.invoice_number),
+    let mut due_usd = inv.due_usd;
+    let mut due_cup = inv.due_cup;
+    let paid_usd = inv.paid_usd;
+    let bal_usd = inv.balance_usd;
+    let rate = inv.exchange_rate_snapshot.unwrap_or(0.0);
+    let currency = inv
+        .payment_currency
+        .as_deref()
+        .unwrap_or("cup")
+        .to_lowercase();
+    if due_usd <= EPS && due_cup <= EPS {
+        if currency == "usd" {
+            due_usd = if inv.total_usd > EPS {
+                inv.total_usd
+            } else if rate > EPS {
+                inv.total / rate
+            } else {
+                0.0
+            };
+            due_cup = 0.0;
+        } else {
+            due_cup = inv.total;
+            due_usd = 0.0;
+        }
+    }
+    let paid_cup = if rate > EPS {
+        (inv.paid - paid_usd * rate).max(0.0)
+    } else if currency == "usd" {
+        0.0
+    } else {
+        inv.paid
+    };
+    let bal_cup = if rate > EPS {
+        (inv.balance - bal_usd * rate).max(0.0)
+    } else if currency == "usd" {
+        0.0
+    } else {
+        inv.balance
+    };
+
+    let mut header_lines = vec![
+        format!("FACTURA {}", inv.invoice_number),
         format!("Cliente: {}", inv.client_name),
         format!("Fecha: {}", inv.date),
         format!("Produccion: {}", inv.production_status),
         format!("Cobro: {}", inv.payment_status),
-        format!("Total: {:.2} CUP", inv.total),
-        format!("Pagado: {:.2} CUP", inv.paid),
-        format!("Pendiente: {:.2} CUP", inv.balance),
     ];
+    if let Some(ref cur) = inv.payment_currency {
+        header_lines.push(format!("Moneda cobro: {}", cur));
+    }
+    if rate > EPS {
+        header_lines.push(format!("Tasa: {:.2} CUP/USD", rate));
+    }
+    header_lines.push(format!("Total CUP: {:.2}", due_cup));
+    header_lines.push(format!("Total USD: {:.2}", due_usd));
+    header_lines.push(format!("Pagado CUP: {:.2}", paid_cup));
+    header_lines.push(format!("Pagado USD: {:.2}", paid_usd));
+    header_lines.push(format!("Pendiente CUP: {:.2}", bal_cup));
+    header_lines.push(format!("Pendiente USD: {:.2}", bal_usd));
     for line in header_lines {
         layer.use_text(&line, 11.0, Mm(15.0), Mm(y), &font);
         y -= 7.0;
@@ -1724,8 +1773,8 @@ pub async fn export_invoice_pdf(app: tauri::AppHandle, id: i64) -> Result<String
             .or(item.service.as_deref())
             .unwrap_or("-");
         let line = format!(
-            "{} x{} @ {:.2} = {:.2}",
-            label, item.quantity, item.unit_price, item.subtotal
+            "{} x{} @ {:.2} USD / {:.2} CUP = {:.2} CUP",
+            label, item.quantity, item.unit_price_usd, item.unit_price, item.subtotal
         );
         layer.use_text(&line, 9.0, Mm(15.0), Mm(y), &font);
         y -= 6.0;
@@ -1754,17 +1803,21 @@ pub struct InvoicePaymentHistoryRow {
     pub payment_method: String,
 }
 
-/// KPI metrics for the invoices module.
+/// KPI metrics for the invoices module (physical CUP/USD collection amounts).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InvoiceMetricsDto {
-    pub total_amount: f64,
+    pub total_amount_cup: f64,
+    pub total_amount_usd: f64,
     pub total_count: i64,
-    pub cobradas_amount: f64,
+    pub cobradas_amount_cup: f64,
+    pub cobradas_amount_usd: f64,
     pub cobradas_count: i64,
-    pub parciales_amount: f64,
+    pub parciales_amount_cup: f64,
+    pub parciales_amount_usd: f64,
     pub parciales_count: i64,
-    pub pendientes_amount: f64,
+    pub pendientes_amount_cup: f64,
+    pub pendientes_amount_usd: f64,
     pub pendientes_count: i64,
     pub anuladas_count: i64,
 }
@@ -1797,33 +1850,80 @@ pub fn get_invoice_payment_history(invoice_id: i64) -> Result<Vec<InvoicePayment
 }
 
 /// Aggregated financial metrics for invoice list KPI cards.
+///
+/// Importes reales de cobro: `due_*` (facturado), `paid_*` (cobrado) y saldos duales
+/// pendientes — sin convertir USD↔CUP con la tasa de la app.
 #[tauri::command]
 pub fn get_invoice_metrics() -> Result<InvoiceMetricsDto, String> {
     let conn = db::open_connection()?;
+    // Parte CUP pendiente: balance − balance_usd × tasa del pedido (mín. 0).
+    // Pagado CUP físico: paid − paid_usd × tasa (mín. 0).
+    // Due CUP con fallback para pedidos legacy sin due_cup.
     conn.query_row(
         "SELECT
-            COALESCE(SUM(CASE WHEN cancelled_at IS NULL THEN total ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL THEN
+                COALESCE(due_cup, CASE
+                    WHEN LOWER(COALESCE(payment_currency, 'cup')) = 'usd' THEN 0
+                    ELSE total
+                END)
+            ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL THEN COALESCE(due_usd, 0) ELSE 0 END), 0),
             COALESCE(SUM(CASE WHEN cancelled_at IS NULL THEN 1 ELSE 0 END), 0),
-            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND balance <= ?1 THEN total ELSE 0 END), 0),
+
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND balance <= ?1 THEN
+                CASE
+                    WHEN COALESCE(exchange_rate_snapshot, 0) > 0
+                    THEN MAX(0, paid - COALESCE(paid_usd, 0) * exchange_rate_snapshot)
+                    WHEN LOWER(COALESCE(payment_currency, 'cup')) = 'usd' THEN 0
+                    ELSE paid
+                END
+            ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND balance <= ?1
+                THEN COALESCE(paid_usd, 0) ELSE 0 END), 0),
             COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND balance <= ?1 THEN 1 ELSE 0 END), 0),
-            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND balance > ?1 AND paid > ?1 THEN balance ELSE 0 END), 0),
+
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND balance > ?1 AND paid > ?1 THEN
+                CASE
+                    WHEN COALESCE(exchange_rate_snapshot, 0) > 0
+                    THEN MAX(0, balance - COALESCE(balance_usd, 0) * exchange_rate_snapshot)
+                    WHEN LOWER(COALESCE(payment_currency, 'cup')) = 'usd' THEN 0
+                    ELSE balance
+                END
+            ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND balance > ?1 AND paid > ?1
+                THEN COALESCE(balance_usd, 0) ELSE 0 END), 0),
             COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND balance > ?1 AND paid > ?1 THEN 1 ELSE 0 END), 0),
-            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND paid <= ?1 AND balance > ?1 THEN balance ELSE 0 END), 0),
+
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND paid <= ?1 AND balance > ?1 THEN
+                CASE
+                    WHEN COALESCE(exchange_rate_snapshot, 0) > 0
+                    THEN MAX(0, balance - COALESCE(balance_usd, 0) * exchange_rate_snapshot)
+                    WHEN LOWER(COALESCE(payment_currency, 'cup')) = 'usd' THEN 0
+                    ELSE balance
+                END
+            ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND paid <= ?1 AND balance > ?1
+                THEN COALESCE(balance_usd, 0) ELSE 0 END), 0),
             COALESCE(SUM(CASE WHEN cancelled_at IS NULL AND paid <= ?1 AND balance > ?1 THEN 1 ELSE 0 END), 0),
+
             COALESCE(SUM(CASE WHEN cancelled_at IS NOT NULL THEN 1 ELSE 0 END), 0)
          FROM invoices WHERE deleted_at IS NULL",
         params![EPS],
         |row| {
             Ok(InvoiceMetricsDto {
-                total_amount: row.get(0)?,
-                total_count: row.get(1)?,
-                cobradas_amount: row.get(2)?,
-                cobradas_count: row.get(3)?,
-                parciales_amount: row.get(4)?,
-                parciales_count: row.get(5)?,
-                pendientes_amount: row.get(6)?,
-                pendientes_count: row.get(7)?,
-                anuladas_count: row.get(8)?,
+                total_amount_cup: row.get(0)?,
+                total_amount_usd: row.get(1)?,
+                total_count: row.get(2)?,
+                cobradas_amount_cup: row.get(3)?,
+                cobradas_amount_usd: row.get(4)?,
+                cobradas_count: row.get(5)?,
+                parciales_amount_cup: row.get(6)?,
+                parciales_amount_usd: row.get(7)?,
+                parciales_count: row.get(8)?,
+                pendientes_amount_cup: row.get(9)?,
+                pendientes_amount_usd: row.get(10)?,
+                pendientes_count: row.get(11)?,
+                anuladas_count: row.get(12)?,
             })
         },
     )
