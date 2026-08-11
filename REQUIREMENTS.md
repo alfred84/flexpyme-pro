@@ -153,8 +153,8 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 
 ### 3.9 Módulo Facturas (v2.2)
 - Vista financiera/contable sobre la misma tabla `invoices` (1 pedido = 1 factura)
-- KPIs por estado: cobrada, parcial, pendiente, anulada
-- Detalle con historial de pagos (`cash_transactions`)
+- KPIs por estado con importes reales CUP y USD (`due_*` / cobrado / saldos duales; sin conversión por tasa de app)
+- Detalle con total/pagado/saldo dual e historial de pagos físicos (`cash_transactions`)
 - Anulación con motivo y reverso en caja (sin borrado físico)
 - Rutas `/facturas`, impresión y registro de pago
 
@@ -413,7 +413,7 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.15 — UI Pedidos en USD con equivalente CUP (2026-08)
 - Listado, resumen, líneas y cobro/anticipo muestran venta en USD (+ CUP según tasa); si el pago es CUP, el orden se invierte.
-- Listado de pedidos y Facturas: columnas **Total (USD)** y **Total (CUP)**; CUP solo muestra importe si `payment_currency = CUP` (si es USD queda `—`). Indicadores de Facturas en USD (+ equivalente CUP).
+- Listado de pedidos y Facturas: columnas **Total (USD)** y **Total (CUP)** con montos reales de cobro (`due_usd` / `due_cup`, sin conversión). KPIs de Facturas duales (facturado / cobrado / saldos) por moneda física.
 - Clientes: **Balance** y **Total histórico** en USD y CUP por moneda de cobro (listado, Ver/Editar e historial); estado por posición neta convertida con la tasa.
 - Inicio: KPIs monetarios, gráfico de ingresos y totales de pedidos recientes en USD (+ CUP donde corresponda).
 - Precios de tipo de trabajo editables en USD con equivalente CUP; tarifas de empleados permanecen en CUP.
@@ -435,6 +435,7 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - Transferencia sigue cobrando en CUP. Sin crédito USD ni reescritura histórica forzada (backfill `unit_price / rate`).
 - **Clientes (listado/detalle)**: balances e históricos duales por moneda de cobro; estado por posición neta convertida.
 - **Flujo de caja**: UI y agregados duales; escritores (movimiento manual / otros gastos) no contaminan `amount_cup` con USD×tasa; migración `0031` limpia histórico USD-solo.
+- **Facturas**: KPIs y detalle con importes reales CUP/USD (`due_*`, `paid_*`, saldos duales); sin DualMoneyText por tasa de app.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
