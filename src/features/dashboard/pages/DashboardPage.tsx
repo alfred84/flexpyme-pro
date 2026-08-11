@@ -109,7 +109,7 @@ export function DashboardPage() {
   const invoices = invoicesQuery.data ?? [];
 
   const recentInvoices = useMemo(
-    () => [...invoices].sort((a, b) => b.id - a.id).slice(0, 10),
+    () => [...invoices].sort((a, b) => b.id - a.id).slice(0, 5),
     [invoices],
   );
   const unpaidCount = invoices.filter((inv) => inv.balance > 0).length;
