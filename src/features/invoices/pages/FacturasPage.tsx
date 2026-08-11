@@ -2,11 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Eye, Printer } from "lucide-react";
+import { TablePagination } from "@/components/common/TablePagination";
 import { fetchInvoiceMetrics, fetchInvoicesFinancial } from "@/db/queries/invoices";
 import {
   formatInvoiceAmountOrDash,
   resolveInvoiceDualAmounts,
 } from "@/features/invoices/lib/invoice-dual-amounts";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 import { formatDate } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import {
@@ -92,6 +94,17 @@ export function FacturasPage() {
       );
     });
   }, [listQuery.data, filter, search]);
+
+  const paginationResetKey = `${filter}|${search.trim().toLowerCase()}`;
+  const { pagination, onPaginationChange } = useClientPagination({
+    resetKey: paginationResetKey,
+    itemCount: rows.length,
+  });
+
+  const pageRows = useMemo(() => {
+    const start = pagination.pageIndex * pagination.pageSize;
+    return rows.slice(start, start + pagination.pageSize);
+  }, [rows, pagination.pageIndex, pagination.pageSize]);
 
   const m = metricsQuery.data;
 
@@ -191,7 +204,7 @@ export function FacturasPage() {
                 </td>
               </tr>
             )}
-            {rows.map((row) => {
+            {pageRows.map((row) => {
               const fin = invoiceFinancialStatus(row.balance, row.paid, row.status === "anulada");
               const dual = resolveInvoiceDualAmounts(row);
               return (
@@ -237,6 +250,21 @@ export function FacturasPage() {
           </tbody>
         </table>
       </div>
+
+      {!listQuery.isLoading && (
+        <TablePagination
+          pageIndex={pagination.pageIndex}
+          pageSize={pagination.pageSize}
+          totalItems={rows.length}
+          onPageChange={(pageIndex) =>
+            onPaginationChange((prev) => ({ ...prev, pageIndex }))
+          }
+          onPageSizeChange={(pageSize) =>
+            onPaginationChange((prev) => ({ ...prev, pageSize, pageIndex: 0 }))
+          }
+          label="Paginación de facturas"
+        />
+      )}
     </section>
   );
 }
