@@ -24,6 +24,8 @@ export interface InventoryItemDto {
   quantity: number;
   minStock: number;
   costPerUnit: number;
+  /** Costo unitario opcional en USD (0 = sin establecer). */
+  costPerUnitUsd: number;
   supplier: string | null;
   notes: string | null;
   lowStock: boolean;
@@ -85,6 +87,7 @@ export interface CreateItemPayload {
   quantity: number;
   minStock: number;
   costPerUnit: number;
+  costPerUnitUsd: number;
   supplier: string | null;
   notes: string | null;
 }
@@ -101,6 +104,7 @@ export interface UpdateItemPayload {
   unit?: string | null;
   minStock: number;
   costPerUnit: number;
+  costPerUnitUsd: number;
   supplier: string | null;
   notes: string | null;
 }

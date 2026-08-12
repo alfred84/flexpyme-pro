@@ -18,7 +18,7 @@ function formatMinStock(minStock: number): string {
 /**
  * Formatea costo unitario opcional.
  *
- * @param cost - Costo en CUP.
+ * @param cost - Costo (CUP o USD).
  * @returns Texto para UI.
  */
 function formatCost(cost: number): string {
@@ -124,6 +124,7 @@ export function InventoryCategoryPage() {
                 <th>Unidad</th>
                 <th className="text-right">Stock mín.</th>
                 <th className="text-right">{moneyHeading("Costo unit.")}</th>
+                <th className="text-right">{moneyHeading("Costo unit.", "USD")}</th>
                 <th>Estado</th>
                 <th />
               </tr>
@@ -148,6 +149,7 @@ export function InventoryCategoryPage() {
                   <td>{item.unit}</td>
                   <td className="text-right">{formatMinStock(item.minStock)}</td>
                   <td className="text-right">{formatCost(item.costPerUnit)}</td>
+                  <td className="text-right">{formatCost(item.costPerUnitUsd)}</td>
                   <td>
                     {demand ? (
                       <span className="badge badge-sm badge-warning">Pedido en espera</span>

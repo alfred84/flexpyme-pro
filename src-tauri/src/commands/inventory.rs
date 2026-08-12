@@ -21,6 +21,7 @@ pub struct InventoryItemDto {
     pub quantity: f64,
     pub min_stock: f64,
     pub cost_per_unit: f64,
+    pub cost_per_unit_usd: f64,
     pub supplier: Option<String>,
     pub notes: Option<String>,
     pub low_stock: bool,
@@ -80,6 +81,7 @@ pub struct CreateItemPayload {
     pub quantity: f64,
     pub min_stock: f64,
     pub cost_per_unit: f64,
+    pub cost_per_unit_usd: f64,
     pub supplier: Option<String>,
     pub notes: Option<String>,
 }
@@ -96,6 +98,7 @@ pub struct UpdateItemPayload {
     pub unit: Option<String>,
     pub min_stock: f64,
     pub cost_per_unit: f64,
+    pub cost_per_unit_usd: f64,
     pub supplier: Option<String>,
     pub notes: Option<String>,
 }
@@ -204,8 +207,9 @@ fn map_item_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<InventoryItemDto> {
         quantity,
         min_stock,
         cost_per_unit: row.get(10)?,
-        supplier: row.get(11)?,
-        notes: row.get(12)?,
+        cost_per_unit_usd: row.get(11)?,
+        supplier: row.get(12)?,
+        notes: row.get(13)?,
         low_stock: is_low_stock(quantity, min_stock),
         deficit: quantity < 0.0,
     })
@@ -213,7 +217,7 @@ fn map_item_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<InventoryItemDto> {
 
 const ITEM_SELECT: &str = "SELECT ii.id, ii.name, ii.category, ii.material_category_id, mc.name,
         ii.unit_id, ii.unit_snapshot, ii.quantity, ii.min_stock, ii.unit,
-        ii.cost_per_unit, ii.supplier, ii.notes
+        ii.cost_per_unit, ii.cost_per_unit_usd, ii.supplier, ii.notes
      FROM inventory_items ii
      LEFT JOIN inventory_material_categories mc ON mc.id = ii.material_category_id";
 
@@ -1073,8 +1077,8 @@ pub fn inventory_item_create(payload: CreateItemPayload) -> Result<i64, String> 
     let category_label = normalize_optional(payload.category).or(Some(cat_name));
     conn.execute(
         "INSERT INTO inventory_items
-            (name, category, material_category_id, unit_id, unit_snapshot, unit, quantity, min_stock, cost_per_unit, supplier, notes, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, datetime('now'))",
+            (name, category, material_category_id, unit_id, unit_snapshot, unit, quantity, min_stock, cost_per_unit, cost_per_unit_usd, supplier, notes, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, datetime('now'))",
         params![
             name,
             category_label,
@@ -1085,6 +1089,7 @@ pub fn inventory_item_create(payload: CreateItemPayload) -> Result<i64, String> 
             payload.quantity,
             payload.min_stock.max(0.0),
             payload.cost_per_unit.max(0.0),
+            payload.cost_per_unit_usd.max(0.0),
             normalize_optional(payload.supplier),
             normalize_optional(payload.notes)
         ],
@@ -1109,8 +1114,8 @@ pub fn inventory_item_update(payload: UpdateItemPayload) -> Result<(), String> {
         .execute(
             "UPDATE inventory_items
              SET name = ?1, category = ?2, material_category_id = ?3, unit_id = ?4, unit_snapshot = ?5, unit = ?6,
-                 min_stock = ?7, cost_per_unit = ?8, supplier = ?9, notes = ?10, updated_at = datetime('now')
-             WHERE id = ?11",
+                 min_stock = ?7, cost_per_unit = ?8, cost_per_unit_usd = ?9, supplier = ?10, notes = ?11, updated_at = datetime('now')
+             WHERE id = ?12",
             params![
                 name,
                 category_label,
@@ -1120,6 +1125,7 @@ pub fn inventory_item_update(payload: UpdateItemPayload) -> Result<(), String> {
                 unit_label,
                 payload.min_stock.max(0.0),
                 payload.cost_per_unit.max(0.0),
+                payload.cost_per_unit_usd.max(0.0),
                 normalize_optional(payload.supplier),
                 normalize_optional(payload.notes),
                 payload.id

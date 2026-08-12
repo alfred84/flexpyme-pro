@@ -506,6 +506,8 @@ export const inventoryItems = sqliteTable("inventory_items", {
   quantity: real("quantity").notNull().default(0),
   minStock: real("min_stock").notNull().default(0),
   costPerUnit: real("cost_per_unit").notNull().default(0),
+  /** Costo unitario opcional en USD (independiente del CUP). */
+  costPerUnitUsd: real("cost_per_unit_usd").notNull().default(0),
   supplier: text("supplier"),
   notes: text("notes"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),

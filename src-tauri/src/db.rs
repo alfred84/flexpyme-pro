@@ -116,6 +116,8 @@ const EMBEDDED_DUAL_CURRENCY_ORDERS_SCHEMA: &str =
     include_str!("../../src/db/migrations/0030_dual_currency_orders.sql");
 const EMBEDDED_CASH_PHYSICAL_AMOUNTS_SCHEMA: &str =
     include_str!("../../src/db/migrations/0031_cash_physical_amounts.sql");
+const EMBEDDED_INVENTORY_COST_USD_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0032_inventory_cost_usd.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -437,6 +439,13 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             "0031_cash_physical_amounts",
         )?;
         set_settings_flag(conn, "migration_0031_cash_physical_amounts")?;
+    }
+    if !column_exists(conn, "inventory_items", "cost_per_unit_usd") {
+        execute_migration(
+            conn,
+            EMBEDDED_INVENTORY_COST_USD_SCHEMA,
+            "0032_inventory_cost_usd",
+        )?;
     }
     Ok(())
 }

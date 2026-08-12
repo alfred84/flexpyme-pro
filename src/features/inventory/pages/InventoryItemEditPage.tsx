@@ -35,6 +35,7 @@ export function InventoryItemEditPage() {
   const [unitId, setUnitId] = useState<number | null>(null);
   const [minStock, setMinStock] = useState("");
   const [costPerUnit, setCostPerUnit] = useState("");
+  const [costPerUnitUsd, setCostPerUnitUsd] = useState("");
   const [supplier, setSupplier] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +51,7 @@ export function InventoryItemEditPage() {
     setUnitId(item.unitId);
     setMinStock(item.minStock > 0 ? String(item.minStock) : "");
     setCostPerUnit(item.costPerUnit > 0 ? String(item.costPerUnit) : "");
+    setCostPerUnitUsd(item.costPerUnitUsd > 0 ? String(item.costPerUnitUsd) : "");
     setSupplier(item.supplier ?? "");
     setNotes(item.notes ?? "");
     setHydrated(true);
@@ -118,12 +120,17 @@ export function InventoryItemEditPage() {
     }
     const min = minStock.trim() === "" ? 0 : Number(minStock);
     const cost = costPerUnit.trim() === "" ? 0 : Number(costPerUnit);
+    const costUsd = costPerUnitUsd.trim() === "" ? 0 : Number(costPerUnitUsd);
     if (!Number.isFinite(min) || min < 0) {
       setError("El stock mínimo no es válido.");
       return;
     }
     if (!Number.isFinite(cost) || cost < 0) {
-      setError("El costo unitario no es válido.");
+      setError("El costo unitario CUP no es válido.");
+      return;
+    }
+    if (!Number.isFinite(costUsd) || costUsd < 0) {
+      setError("El costo unitario USD no es válido.");
       return;
     }
     await mutation.mutateAsync({
@@ -133,6 +140,7 @@ export function InventoryItemEditPage() {
       unitId,
       minStock: min,
       costPerUnit: cost,
+      costPerUnitUsd: costUsd,
       supplier: supplier.trim() || null,
       notes: notes.trim() || null,
     });
@@ -281,6 +289,25 @@ export function InventoryItemEditPage() {
               value={costPerUnit}
               onChange={(e) => setCostPerUnit(e.target.value)}
             />
+          </div>
+
+          <div className="form-control">
+            <label className="label" htmlFor="edit-inv-cost-usd">
+              <span className="label-text">Costo unitario USD (opcional)</span>
+            </label>
+            <input
+              id="edit-inv-cost-usd"
+              type="number"
+              min="0"
+              step="any"
+              className="input input-bordered"
+              placeholder="Sin establecer"
+              value={costPerUnitUsd}
+              onChange={(e) => setCostPerUnitUsd(e.target.value)}
+            />
+            <span className="label-text-alt text-base-content/50">
+              Independiente del costo en CUP; no se convierte automáticamente.
+            </span>
           </div>
 
           <div className="form-control sm:col-span-2">

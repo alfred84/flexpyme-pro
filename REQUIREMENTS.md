@@ -108,7 +108,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 ### 3.5 Inventario
 - Gestión de materiales/insumos del taller
 - **Categorías de material** (CRUD del usuario): obligatorias antes de dar de alta ítems; se gestionan desde la opción **Categorías** en Inventario (modal); el listado agrupa ítems en acordeón por categoría
-- Campos del ítem: categoría (obligatoria), nombre, unidad, stock; **stock mínimo, costo unitario y proveedor opcionales**; descripción/apuntes; **edición** de datos del ítem (el stock solo cambia con movimientos)
+- Campos del ítem: categoría (obligatoria), nombre, unidad, stock; **stock mínimo, costo unitario (CUP y/o USD, independientes) y proveedor opcionales**; descripción/apuntes; **edición** de datos del ítem (el stock solo cambia con movimientos)
 - Stock mínimo `0` o vacío = **Sin establecer** (sin alertas de stock bajo). Alertas solo si mínimo &gt; 0 y cantidad ≤ mínimo
 - Listado: mosaico compacto por categoría de material; al entrar, tabla de ítems y alta de ítem; sección **Movimientos** (día/mes) con método Manual vs Rebaja por Pedido; **salida manual** (sin pedido) con **motivo obligatorio**; **normas** desde la opción **Normas** (modal)
 - Historial de movimientos por ítem (salidas con motivo obligatorio)
