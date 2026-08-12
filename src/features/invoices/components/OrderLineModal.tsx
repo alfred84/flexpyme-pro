@@ -18,6 +18,7 @@ import {
 } from "@/features/invoices/lib/order-draft";
 import { DualMoneyText } from "@/components/common/DualMoneyText";
 import { SalePriceInput } from "@/features/invoices/components/SalePriceInput";
+import { formatInventoryMaterialOptionLabel } from "@/features/inventory/lib/inventory-item-label";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { moneyHeading } from "@/lib/format-money";
 import type {
@@ -952,7 +953,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
                             ) : (
                               itemsInCat.map((invItem) => (
                                 <option key={invItem.id} value={invItem.id}>
-                                  {invItem.name} ({invItem.quantity} {invItem.unit})
+                                  {formatInventoryMaterialOptionLabel(invItem)}
                                 </option>
                               ))
                             )}
