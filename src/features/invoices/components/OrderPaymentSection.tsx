@@ -31,12 +31,12 @@ interface OrderPaymentSectionProps {
  * Estado inicial de pago del pedido.
  *
  * @param rate - Tasa USD→CUP inicial.
- * @returns Estado por defecto (efectivo CUP).
+ * @returns Estado por defecto (efectivo USD).
  */
 export function emptyOrderPaymentState(rate = 0): OrderPaymentState {
   return {
     paymentMethod: "efectivo",
-    paymentCurrency: "CUP",
+    paymentCurrency: "USD",
     exchangeRate: rate > 0 ? String(rate) : "",
     transferConcept: "",
     dueUsd: "",
