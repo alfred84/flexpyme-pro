@@ -15,6 +15,7 @@ import { fetchFormats, fetchPrices } from "@/db/queries/prices";
 import { OrderHeaderSection } from "@/features/invoices/components/OrderHeaderSection";
 import { OrderLineModal } from "@/features/invoices/components/OrderLineModal";
 import { OrderLinesTable } from "@/features/invoices/components/OrderLinesTable";
+import { OrderMermasSection } from "@/features/invoices/components/OrderMermasSection";
 import {
   isMixtoSplitValid,
   OrderPaymentSection,
@@ -167,6 +168,18 @@ export function InvoiceEditPage() {
       }, 0),
     [lines, displayRate],
   );
+
+  const orderMaterialIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const line of lines) {
+      for (const mat of line.materials ?? []) {
+        if (mat.inventoryItemId > 0) {
+          ids.add(mat.inventoryItemId);
+        }
+      }
+    }
+    return Array.from(ids);
+  }, [lines]);
 
   const advanceNum = inv?.advancePayment ?? 0;
   const paidNum = inv?.paid ?? 0;
@@ -405,6 +418,15 @@ export function InvoiceEditPage() {
           onRemove={(key) => setLines((prev) => prev.filter((l) => l.key !== key))}
         />
       </div>
+
+      {Number.isFinite(invoiceId) && invoiceId > 0 && (
+        <OrderMermasSection
+          invoiceId={invoiceId}
+          canRegister
+          inventoryItems={inventoryItemsQuery.data ?? []}
+          orderMaterialIds={orderMaterialIds}
+        />
+      )}
 
       <div className="rounded-lg border border-base-300 bg-base-100 p-4 text-sm">
         <div className="flex justify-between gap-2">

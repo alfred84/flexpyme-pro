@@ -10,6 +10,7 @@ import {
   fetchInvoicePaymentHistory,
 } from "@/db/queries/invoices";
 import { ConfirmCompleteWorkModal } from "@/features/invoices/components/ConfirmCompleteWorkModal";
+import { OrderMermasSection } from "@/features/invoices/components/OrderMermasSection";
 import {
   OrderWorkTypeSummary,
   aggregateWorkTypeSummary,
@@ -367,6 +368,15 @@ export function InvoiceDetailPage() {
               </span>
             </div>
           )}
+
+          <OrderMermasSection
+            invoiceId={inv.id}
+            canRegister={!isCancelled}
+            orderMaterialIds={(detailQuery.data?.items ?? []).flatMap((line) =>
+              (line.materials ?? []).map((m) => m.inventoryItemId),
+            )}
+            collapseList
+          />
 
           <div className="overflow-x-auto rounded-lg border border-base-300 bg-base-100">
             <table className="table table-sm">

@@ -103,6 +103,8 @@ export function InventoryMovementsSection() {
                       <span className="badge badge-sm badge-ghost">{mov.method}</span>
                     ) : mov.method === "Rebaja por Pedido" ? (
                       <span className="badge badge-sm badge-info">{mov.method}</span>
+                    ) : mov.method === "Merma" ? (
+                      <span className="badge badge-sm badge-warning">{mov.method}</span>
                     ) : (
                       <span className="text-base-content/50">{mov.method}</span>
                     )}

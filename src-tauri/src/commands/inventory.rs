@@ -114,6 +114,45 @@ pub struct MovementPayload {
     pub notes: Option<String>,
 }
 
+/// Línea de merma a registrar sobre un pedido.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceMaterialWasteLinePayload {
+    pub inventory_item_id: i64,
+    pub quantity: f64,
+    pub reason_code: String,
+    pub notes: Option<String>,
+}
+
+/// Payload para registrar una o más mermas de un pedido.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterInvoiceMaterialWastePayload {
+    pub invoice_id: i64,
+    pub items: Vec<InvoiceMaterialWasteLinePayload>,
+}
+
+/// Merma persistida de un pedido (con snapshot de costo).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceMaterialWasteDto {
+    pub id: i64,
+    pub invoice_id: i64,
+    pub inventory_item_id: i64,
+    pub item_name: String,
+    pub unit: String,
+    pub quantity: f64,
+    pub reason_code: String,
+    pub reason_label: String,
+    pub notes: Option<String>,
+    pub cost_per_unit_cup: f64,
+    pub cost_per_unit_usd: f64,
+    pub cost_cup: f64,
+    pub cost_usd: f64,
+    pub inventory_movement_id: Option<i64>,
+    pub created_at: String,
+}
+
 /// Production consumption recipe row.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -553,7 +592,7 @@ fn apply_inventory_movement(
     reason: Option<&str>,
     reference_id: Option<i64>,
     notes: Option<&str>,
-) -> Result<(), String> {
+) -> Result<i64, String> {
     if quantity <= 0.0 {
         return Err("La cantidad debe ser mayor que cero".to_string());
     }
@@ -609,13 +648,14 @@ fn apply_inventory_movement(
         ],
     )
     .map_err(|e| e.to_string())?;
+    let movement_id = tx.last_insert_rowid();
 
     tx.execute(
         "UPDATE inventory_items SET quantity = ?1, updated_at = datetime('now') WHERE id = ?2",
         params![new_quantity, item_id],
     )
     .map_err(|e| e.to_string())?;
-    Ok(())
+    Ok(movement_id)
 }
 
 /// Revierte salidas de inventario vinculadas a un pedido anulado (entrada compensatoria).
@@ -631,6 +671,11 @@ pub fn reverse_inventory_for_cancelled_invoice(
                  FROM inventory_movements
                  WHERE reference_id = ?1 AND type = 'salida'
                    AND COALESCE(notes, '') NOT LIKE 'Reverso anulación%'
+                   AND COALESCE(notes, '') != 'Merma de producción'
+                   AND id NOT IN (
+                     SELECT inventory_movement_id FROM invoice_material_wastes
+                     WHERE inventory_movement_id IS NOT NULL
+                   )
                  GROUP BY item_id
                  HAVING SUM(quantity) > 0",
             )
@@ -1233,7 +1278,7 @@ pub fn inventory_movements_for_item(item_id: i64) -> Result<Vec<InventoryMovemen
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
-/// Clasifica el método de un movimiento de salida (`Manual` o `Rebaja por Pedido`).
+/// Clasifica el método de un movimiento de salida (`Manual`, `Rebaja por Pedido` o `Merma`).
 fn classify_movement_method(
     movement_type: &str,
     reference_id: Option<i64>,
@@ -1243,13 +1288,18 @@ fn classify_movement_method(
     if movement_type != "salida" {
         return "—".to_string();
     }
+    let notes_l = notes.map(|n| n.to_lowercase()).unwrap_or_default();
+    let reason_l = reason.map(|r| r.trim().to_lowercase()).unwrap_or_default();
+    if notes_l == "merma de producción"
+        || notes_l == "merma de produccion"
+        || reason_l.starts_with("merma ")
+    {
+        return "Merma".to_string();
+    }
     let from_pedido = reference_id.is_some()
-        || notes
-            .map(|n| n.to_lowercase().contains("línea concluida") || n.to_lowercase().contains("linea concluida"))
-            .unwrap_or(false)
-        || reason
-            .map(|r| r.trim().to_lowercase().starts_with("pedido "))
-            .unwrap_or(false);
+        || notes_l.contains("línea concluida")
+        || notes_l.contains("linea concluida")
+        || reason_l.starts_with("pedido ");
     if from_pedido {
         "Rebaja por Pedido".to_string()
     } else {
@@ -1432,4 +1482,149 @@ pub fn inventory_recipe_reactivate(id: i64) -> Result<InventoryRecipeDto, String
     let sql = format!("{} WHERE r.id = ?1", RECIPE_SELECT);
     conn.query_row(&sql, params![id], map_recipe_row)
         .map_err(|e| e.to_string())
+}
+
+const MERMA_MOVEMENT_NOTES: &str = "Merma de producción";
+
+/// Etiqueta de motivo de merma (snapshot para el historial).
+fn merma_reason_label(code: &str) -> Result<&'static str, String> {
+    match code.trim().to_lowercase().as_str() {
+        "error_impresion" => Ok("Error de impresión"),
+        "material_defectuoso" => Ok("Material defectuoso"),
+        "error_corte" => Ok("Error de corte"),
+        "otro" => Ok("Otro"),
+        _ => Err("Motivo de merma no válido".to_string()),
+    }
+}
+
+/// Lista las mermas registradas de un pedido (más recientes primero).
+#[tauri::command]
+pub fn invoice_material_wastes_list(invoice_id: i64) -> Result<Vec<InvoiceMaterialWasteDto>, String> {
+    let conn = db::open_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT w.id, w.invoice_id, w.inventory_item_id, ii.name,
+                    COALESCE(ii.unit_snapshot, ii.unit, ''),
+                    w.quantity, w.reason_code, w.reason_label, w.notes,
+                    w.cost_per_unit_cup, w.cost_per_unit_usd, w.cost_cup, w.cost_usd,
+                    w.inventory_movement_id, w.created_at
+             FROM invoice_material_wastes w
+             INNER JOIN inventory_items ii ON ii.id = w.inventory_item_id
+             WHERE w.invoice_id = ?1
+             ORDER BY w.created_at DESC, w.id DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![invoice_id], |row| {
+            Ok(InvoiceMaterialWasteDto {
+                id: row.get(0)?,
+                invoice_id: row.get(1)?,
+                inventory_item_id: row.get(2)?,
+                item_name: row.get(3)?,
+                unit: row.get(4)?,
+                quantity: row.get(5)?,
+                reason_code: row.get(6)?,
+                reason_label: row.get(7)?,
+                notes: row.get(8)?,
+                cost_per_unit_cup: row.get(9)?,
+                cost_per_unit_usd: row.get(10)?,
+                cost_cup: row.get(11)?,
+                cost_usd: row.get(12)?,
+                inventory_movement_id: row.get(13)?,
+                created_at: row.get(14)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+/// Registra mermas de un pedido: descuenta almacén y guarda costo snapshot.
+/// No modifica totales ni precio de venta del pedido.
+#[tauri::command]
+pub fn invoice_material_waste_register(
+    payload: RegisterInvoiceMaterialWastePayload,
+) -> Result<Vec<InvoiceMaterialWasteDto>, String> {
+    if payload.items.is_empty() {
+        return Err("Añade al menos un material merma.".to_string());
+    }
+
+    let mut conn = db::open_connection()?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let (invoice_number, cancelled_at, deleted_at): (String, Option<String>, Option<String>) = tx
+        .query_row(
+            "SELECT invoice_number, cancelled_at, deleted_at FROM invoices WHERE id = ?1",
+            params![payload.invoice_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .map_err(|_| "Pedido no encontrado".to_string())?;
+    if deleted_at.is_some() {
+        return Err("El pedido está eliminado.".to_string());
+    }
+    if cancelled_at.is_some() {
+        return Err("No se puede registrar merma en un pedido anulado.".to_string());
+    }
+
+    for line in &payload.items {
+        let reason_code = line.reason_code.trim().to_lowercase();
+        let reason_label = merma_reason_label(&reason_code)?;
+        let notes = normalize_optional(line.notes.clone());
+        if reason_code == "otro" && notes.is_none() {
+            return Err("Indica el detalle del motivo «Otro».".to_string());
+        }
+        if line.inventory_item_id <= 0 {
+            return Err("Selecciona un material.".to_string());
+        }
+        if line.quantity <= 0.0 {
+            return Err("La cantidad de merma debe ser mayor que cero.".to_string());
+        }
+
+        let (cost_per_unit_cup, cost_per_unit_usd): (f64, f64) = tx
+            .query_row(
+                "SELECT cost_per_unit, cost_per_unit_usd FROM inventory_items WHERE id = ?1",
+                params![line.inventory_item_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|_| "Ítem de inventario no encontrado".to_string())?;
+        let cost_cup = (cost_per_unit_cup.max(0.0) * line.quantity).max(0.0);
+        let cost_usd = (cost_per_unit_usd.max(0.0) * line.quantity).max(0.0);
+
+        let movement_reason = format!("Merma {} — {}", invoice_number, reason_label);
+        let movement_id = apply_inventory_movement(
+            &tx,
+            line.inventory_item_id,
+            "salida",
+            line.quantity,
+            Some(&movement_reason),
+            Some(payload.invoice_id),
+            Some(MERMA_MOVEMENT_NOTES),
+        )?;
+
+        tx.execute(
+            "INSERT INTO invoice_material_wastes
+                (invoice_id, inventory_item_id, quantity, reason_code, reason_label, notes,
+                 cost_per_unit_cup, cost_per_unit_usd, cost_cup, cost_usd, inventory_movement_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                payload.invoice_id,
+                line.inventory_item_id,
+                line.quantity,
+                reason_code,
+                reason_label,
+                notes,
+                cost_per_unit_cup.max(0.0),
+                cost_per_unit_usd.max(0.0),
+                cost_cup,
+                cost_usd,
+                movement_id
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    recompute_open_invoices_resource_flags(&tx)?;
+    tx.commit().map_err(|e| e.to_string())?;
+
+    invoice_material_wastes_list(payload.invoice_id)
 }

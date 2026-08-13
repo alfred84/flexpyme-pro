@@ -573,6 +573,32 @@ export const inventoryMovements = sqliteTable("inventory_movements", {
 });
 
 /**
+ * Mermas de material registradas sobre un pedido (producción).
+ * El costo es snapshot del costo unitario del ítem; no modifica el precio al cliente.
+ */
+export const invoiceMaterialWastes = sqliteTable("invoice_material_wastes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  invoiceId: integer("invoice_id")
+    .notNull()
+    .references(() => invoices.id),
+  inventoryItemId: integer("inventory_item_id")
+    .notNull()
+    .references(() => inventoryItems.id),
+  quantity: real("quantity").notNull(),
+  reasonCode: text("reason_code").notNull(),
+  reasonLabel: text("reason_label").notNull(),
+  notes: text("notes"),
+  costPerUnitCup: real("cost_per_unit_cup").notNull().default(0),
+  costPerUnitUsd: real("cost_per_unit_usd").notNull().default(0),
+  costCup: real("cost_cup").notNull().default(0),
+  costUsd: real("cost_usd").notNull().default(0),
+  inventoryMovementId: integer("inventory_movement_id").references(
+    () => inventoryMovements.id,
+  ),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
+/**
  * Flujo de caja general. Toda operación de dinero del taller.
  * Importes principales en CUP; USD opcional con tasa almacenada por operación.
  */

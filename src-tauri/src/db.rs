@@ -118,6 +118,8 @@ const EMBEDDED_CASH_PHYSICAL_AMOUNTS_SCHEMA: &str =
     include_str!("../../src/db/migrations/0031_cash_physical_amounts.sql");
 const EMBEDDED_INVENTORY_COST_USD_SCHEMA: &str =
     include_str!("../../src/db/migrations/0032_inventory_cost_usd.sql");
+const EMBEDDED_INVOICE_MATERIAL_WASTES_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0033_invoice_material_wastes.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -445,6 +447,13 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             conn,
             EMBEDDED_INVENTORY_COST_USD_SCHEMA,
             "0032_inventory_cost_usd",
+        )?;
+    }
+    if !table_exists(conn, "invoice_material_wastes") {
+        execute_migration(
+            conn,
+            EMBEDDED_INVOICE_MATERIAL_WASTES_SCHEMA,
+            "0033_invoice_material_wastes",
         )?;
     }
     Ok(())

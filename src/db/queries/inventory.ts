@@ -11,6 +11,8 @@ import type {
   MovementPayload,
   UpdateItemPayload,
   UpdateRecipePayload,
+  InvoiceMaterialWasteDto,
+  RegisterMermaPayload,
 } from "@/types/inventory";
 
 /**
@@ -158,4 +160,29 @@ export async function deactivateInventoryRecipe(id: number): Promise<void> {
  */
 export async function reactivateInventoryRecipe(id: number): Promise<InventoryRecipeDto> {
   return invoke<InventoryRecipeDto>("inventory_recipe_reactivate", { id });
+}
+
+/**
+ * Lista las mermas de material registradas en un pedido.
+ *
+ * @param invoiceId - Id del pedido.
+ * @returns Mermas más recientes primero.
+ */
+export async function fetchInvoiceMaterialWastes(
+  invoiceId: number,
+): Promise<InvoiceMaterialWasteDto[]> {
+  return invoke<InvoiceMaterialWasteDto[]>("invoice_material_wastes_list", { invoiceId });
+}
+
+/**
+ * Registra mermas de un pedido: descuenta almacén y guarda costo snapshot.
+ * No modifica el precio de venta del pedido.
+ *
+ * @param payload - Pedido y líneas de merma.
+ * @returns Listado actualizado de mermas del pedido.
+ */
+export async function registerInvoiceMaterialWaste(
+  payload: RegisterMermaPayload,
+): Promise<InvoiceMaterialWasteDto[]> {
+  return invoke<InvoiceMaterialWasteDto[]>("invoice_material_waste_register", { payload });
 }

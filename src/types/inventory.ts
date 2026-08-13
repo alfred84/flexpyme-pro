@@ -71,7 +71,7 @@ export interface InventoryMovementListDto {
   date: string;
   notes: string | null;
   referenceId: number | null;
-  /** `Manual` | `Rebaja por Pedido` | `—` */
+  /** `Manual` | `Rebaja por Pedido` | `Merma` | `—` */
   method: string;
 }
 
@@ -170,4 +170,50 @@ export interface InvoiceItemMaterialInput {
   quantityPerUnit: number;
   source?: string | null;
   recipeId?: number | null;
+}
+
+/** Motivos de merma de producción (códigos persistidos). */
+export type MermaReasonCode =
+  | "error_impresion"
+  | "material_defectuoso"
+  | "error_corte"
+  | "otro";
+
+/**
+ * Línea de merma a registrar sobre un pedido.
+ */
+export interface RegisterMermaLinePayload {
+  inventoryItemId: number;
+  quantity: number;
+  reasonCode: MermaReasonCode;
+  notes: string | null;
+}
+
+/**
+ * Payload para registrar mermas de un pedido.
+ */
+export interface RegisterMermaPayload {
+  invoiceId: number;
+  items: RegisterMermaLinePayload[];
+}
+
+/**
+ * Merma persistida de un pedido (costo snapshot; no altera el precio al cliente).
+ */
+export interface InvoiceMaterialWasteDto {
+  id: number;
+  invoiceId: number;
+  inventoryItemId: number;
+  itemName: string;
+  unit: string;
+  quantity: number;
+  reasonCode: MermaReasonCode;
+  reasonLabel: string;
+  notes: string | null;
+  costPerUnitCup: number;
+  costPerUnitUsd: number;
+  costCup: number;
+  costUsd: number;
+  inventoryMovementId: number | null;
+  createdAt: string;
 }
