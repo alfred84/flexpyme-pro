@@ -9,8 +9,64 @@ import {
   formatSignedCashAmount,
   hasCashAmount,
 } from "@/features/cashflow/lib/cash-amount-display";
-import { formatDateTime } from "@/lib/format-date";
+import { formatDateTime, todayIso } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
+
+interface DualCashKpiPanelProps {
+  /** Título del panel. */
+  title: string;
+  /** Importe CUP. */
+  amountCup: number;
+  /** Importe USD. */
+  amountUsd: number;
+  /** Clase de los importes (ingresos/egresos). */
+  valueClassName?: string;
+  /** Si true, formatea como neto con signo. */
+  asNet?: boolean;
+}
+
+/**
+ * Panel compacto de caja: CUP a la izquierda y USD a la derecha.
+ *
+ * @param props - Título e importes físicos.
+ * @returns Bloque KPI dual.
+ */
+function DualCashKpiPanel(props: DualCashKpiPanelProps) {
+  const { title, amountCup, amountUsd, valueClassName = "", asNet = false } = props;
+  const cupNet = asNet ? formatCashNet(amountCup) : null;
+  const usdNet = asNet ? formatCashNet(amountUsd) : null;
+  return (
+    <div className="rounded-lg border border-base-300 bg-base-100 p-3">
+      <p className="text-xs uppercase text-base-content/60">{title}</p>
+      <div className="mt-1 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs text-base-content/50">{moneyHeading(title, "CUP")}</p>
+          <p
+            className={
+              cupNet
+                ? `text-xl ${cupNet.className}`
+                : `text-xl font-semibold tabular-nums ${valueClassName}`
+            }
+          >
+            {cupNet ? cupNet.text : formatAmount(amountCup)}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-base-content/50">{moneyHeading(title, "USD")}</p>
+          <p
+            className={
+              usdNet
+                ? `text-xl ${usdNet.className}`
+                : `text-xl font-semibold tabular-nums ${valueClassName}`
+            }
+          >
+            {usdNet ? usdNet.text : formatAmount(amountUsd)}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Historial de caja con filtros y totales duales CUP/USD del período.
@@ -18,7 +74,7 @@ import { formatAmount, moneyHeading } from "@/lib/format-money";
  * @returns Página de historial de caja.
  */
 export function CashflowHistoryPage() {
-  const [dateFrom, setDateFrom] = useState("");
+  const [dateFrom, setDateFrom] = useState(todayIso);
   const [dateTo, setDateTo] = useState("");
   const [type, setType] = useState("");
   const [concept, setConcept] = useState("");
@@ -71,9 +127,6 @@ export function CashflowHistoryPage() {
       netUsd: incomeUsd - expenseUsd,
     };
   }, [transactions]);
-
-  const netCupDisplay = formatCashNet(totals.netCup);
-  const netUsdDisplay = formatCashNet(totals.netUsd);
 
   return (
     <section className="space-y-4">
@@ -176,35 +229,24 @@ export function CashflowHistoryPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-base-300 bg-base-100 p-3">
-          <p className="text-xs uppercase text-base-content/60">Ingresos</p>
-          <p className="text-sm text-base-content/50">{moneyHeading("Ingresos", "CUP")}</p>
-          <p className="text-lg font-semibold tabular-nums text-success">
-            {formatAmount(totals.incomeCup)}
-          </p>
-          <p className="mt-1 text-sm text-base-content/50">{moneyHeading("Ingresos", "USD")}</p>
-          <p className="text-lg font-semibold tabular-nums text-success">
-            {formatAmount(totals.incomeUsd)}
-          </p>
-        </div>
-        <div className="rounded-lg border border-base-300 bg-base-100 p-3">
-          <p className="text-xs uppercase text-base-content/60">Egresos</p>
-          <p className="text-sm text-base-content/50">{moneyHeading("Egresos", "CUP")}</p>
-          <p className="text-lg font-semibold tabular-nums text-error">
-            {formatAmount(totals.expenseCup)}
-          </p>
-          <p className="mt-1 text-sm text-base-content/50">{moneyHeading("Egresos", "USD")}</p>
-          <p className="text-lg font-semibold tabular-nums text-error">
-            {formatAmount(totals.expenseUsd)}
-          </p>
-        </div>
-        <div className="rounded-lg border border-base-300 bg-base-100 p-3">
-          <p className="text-xs uppercase text-base-content/60">Neto</p>
-          <p className="text-sm text-base-content/50">{moneyHeading("Neto", "CUP")}</p>
-          <p className={`text-lg ${netCupDisplay.className}`}>{netCupDisplay.text}</p>
-          <p className="mt-1 text-sm text-base-content/50">{moneyHeading("Neto", "USD")}</p>
-          <p className={`text-lg ${netUsdDisplay.className}`}>{netUsdDisplay.text}</p>
-        </div>
+        <DualCashKpiPanel
+          title="Ingresos"
+          amountCup={totals.incomeCup}
+          amountUsd={totals.incomeUsd}
+          valueClassName="text-success"
+        />
+        <DualCashKpiPanel
+          title="Egresos"
+          amountCup={totals.expenseCup}
+          amountUsd={totals.expenseUsd}
+          valueClassName="text-error"
+        />
+        <DualCashKpiPanel
+          title="Neto"
+          amountCup={totals.netCup}
+          amountUsd={totals.netUsd}
+          asNet
+        />
       </div>
 
       {txQuery.isLoading && <p className="text-sm text-base-content/60">Cargando…</p>}
