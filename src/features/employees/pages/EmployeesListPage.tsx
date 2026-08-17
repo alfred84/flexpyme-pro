@@ -6,11 +6,13 @@ import {
   deactivateEmployee,
   fetchDestajoPendingForDate,
   fetchEmployees,
+  fetchMonthlySalaryStatusForDate,
   fetchPayrollDaily,
   fetchUnpaidBatchesForDate,
   payWorkBatchesMany,
   reactivateEmployee,
   reverseEmployeePayment,
+  scheduleMonthlySalary,
   setDestajoDailySalary,
   type UnpaidBatchDto,
 } from "@/db/queries/employees";
@@ -61,6 +63,11 @@ export function EmployeesListPage() {
     queryFn: () => fetchDestajoPendingForDate(today),
   });
 
+  const monthlyStatusQuery = useQuery({
+    queryKey: ["employees", "monthly-status", payrollDate],
+    queryFn: () => fetchMonthlySalaryStatusForDate(payrollDate),
+  });
+
   const deactivateMutation = useMutation({
     mutationFn: deactivateEmployee,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employees"] }),
@@ -77,6 +84,24 @@ export function EmployeesListPage() {
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       await queryClient.invalidateQueries({ queryKey: ["payroll-daily"] });
       pushFlashMessage({ kind: "success", text: "Destajo del día registrado." });
+    },
+  });
+
+  const scheduleMonthlyMutation = useMutation({
+    mutationFn: scheduleMonthlySalary,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["employees"] });
+      await queryClient.invalidateQueries({ queryKey: ["payroll-daily"] });
+      pushFlashMessage({
+        kind: "success",
+        text: `Salario mensual habilitado para el ${formatDate(payrollDate)}.`,
+      });
+    },
+    onError: (e: unknown) => {
+      pushFlashMessage({
+        kind: "error",
+        text: e instanceof Error ? e.message : "No se pudo habilitar el salario mensual.",
+      });
     },
   });
 
@@ -118,6 +143,20 @@ export function EmployeesListPage() {
     }
     return map;
   }, [destajoTodayQuery.data]);
+
+  const monthlyByEmployee = useMemo(() => {
+    const map = new Map<
+      number,
+      { scheduledDate: string | null; isPaid: boolean }
+    >();
+    for (const row of monthlyStatusQuery.data ?? []) {
+      map.set(row.employeeId, {
+        scheduledDate: row.scheduledDate,
+        isPaid: row.isPaid,
+      });
+    }
+    return map;
+  }, [monthlyStatusQuery.data]);
 
   const payItems = useMemo(() => {
     if (!payTarget) {
@@ -167,6 +206,55 @@ export function EmployeesListPage() {
         <span className="badge badge-info badge-sm">
           Fijo {formatMoney(fixedCup)}/día
         </span>
+      );
+    }
+    if (payMode === "monthly") {
+      const monthly = monthlyByEmployee.get(employeeId);
+      const scheduledDate = monthly?.scheduledDate ?? null;
+      const paidThisMonth = Boolean(monthly?.isPaid);
+      const enabledForSelectedDay =
+        scheduledDate != null && scheduledDate === payrollDate && !paidThisMonth;
+      return (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="badge badge-accent badge-sm">
+            Fijo {formatMoney(fixedCup)}/mes
+          </span>
+          {paidThisMonth ? (
+            <span className="badge badge-success badge-sm">
+              Pagado{scheduledDate ? ` ${formatDate(scheduledDate)}` : ""}
+            </span>
+          ) : enabledForSelectedDay ? (
+            <span className="badge badge-info badge-sm">En nómina</span>
+          ) : (
+            <>
+              {scheduledDate && (
+                <span className="badge badge-ghost badge-sm">
+                  {formatDate(scheduledDate)}
+                </span>
+              )}
+              <button
+                type="button"
+                className="btn btn-outline btn-xs"
+                disabled={!isActive || scheduleMonthlyMutation.isPending}
+                title={
+                  scheduledDate
+                    ? `Mover a la nómina del ${formatDate(payrollDate)}`
+                    : `Habilitar pago en la nómina del ${formatDate(payrollDate)}`
+                }
+                onClick={() => {
+                  void scheduleMonthlyMutation.mutateAsync({
+                    employeeId,
+                    date: payrollDate,
+                  });
+                }}
+              >
+                {scheduledDate
+                  ? `Mover al ${formatDate(payrollDate)}`
+                  : `Habilitar ${formatDate(payrollDate)}`}
+              </button>
+            </>
+          )}
+        </div>
       );
     }
     if (payMode === "destajo") {
@@ -224,7 +312,16 @@ export function EmployeesListPage() {
         <h1 className="flex items-center gap-2 text-2xl font-bold">
           <UserCog className="h-6 w-6" /> Empleados
         </h1>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-base-content/70">Fecha de nómina</span>
+            <input
+              type="date"
+              className="input input-bordered input-sm"
+              value={payrollDate}
+              onChange={(e) => setPayrollDate(e.target.value || today)}
+            />
+          </label>
           <Link to="/empleados/nuevo" className="btn btn-primary btn-sm gap-1">
             <UserPlus className="h-4 w-4" /> Nuevo empleado
           </Link>
@@ -273,7 +370,9 @@ export function EmployeesListPage() {
                   <td className="text-xs">
                     {renderSalaryCell(
                       emp.payMode,
-                      emp.fixedDailySalaryCup,
+                      emp.payMode === "monthly"
+                        ? emp.fixedMonthlySalaryCup
+                        : emp.fixedDailySalaryCup,
                       emp.id,
                       emp.name,
                       emp.isActive,
@@ -339,14 +438,15 @@ export function EmployeesListPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="card-title flex items-center gap-2 text-base">
               <CalendarDays className="h-5 w-5" /> Nómina diaria
+              <span className="font-normal text-sm text-base-content/60">
+                {formatDate(payrollDate)}
+              </span>
             </h2>
-            <input
-              type="date"
-              className="input input-bordered input-sm"
-              value={payrollDate}
-              onChange={(e) => setPayrollDate(e.target.value || today)}
-            />
           </div>
+          <p className="text-xs text-base-content/60">
+            El salario fijo mensual no aparece solo: habilítalo en la tabla de empleados para esta
+            fecha y luego págalo aquí.
+          </p>
           {payrollQuery.isLoading ? (
             <p className="py-6 text-center text-sm text-base-content/60">Cargando nómina...</p>
           ) : payrollRows.length === 0 ? (
@@ -496,6 +596,7 @@ export function EmployeesListPage() {
             denominationBreakdown: data.denominationBreakdown,
             amountCup: data.amountCup,
             amountUsd: data.amountUsd,
+            date: payrollDate,
           });
           await invalidateAfterPay();
           pushFlashMessage({

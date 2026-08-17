@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.16 | Última actualización: 2026-08-06
+### Versión: 2.20 | Última actualización: 2026-08-17
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -98,7 +98,8 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
   - **Por producción**: cobra según tarifas de trabajo
   - **Salario fijo diario**: importe CUP predefinido; se genera cada día y se paga desde la nómina diaria (botón Pagar por empleado)
   - **Salario por destajo diario**: importe CUP editable en alta/edición (igual que el fijo); debe quedar definido cada día (botón **Definir** en el listado o al guardar el empleado) antes de pagar
-  - Los lotes de trabajo de empleados fijo/destajo se registran con costo 0 para no duplicar el pago
+  - **Salario fijo mensual**: importe CUP predefinido; **no** entra solo en la nómina. Desde el listado se habilita el pago para el día elegido (selector de fecha) y entonces aparece como pendiente ese día. Un cobro por mes calendario. **Deshacer** solo el día en que se pagó
+  - Los lotes de trabajo de empleados fijo/destajo/mensual se registran con costo 0 para no duplicar el pago
 - Historial de pagos al empleado
 - Dar de baja (soft delete, no eliminar)
 - **Multi-rol (v2.5)**: cada empleado tiene un rol principal (`employees.role_id`) y puede tener roles adicionales (`employee_extra_roles`) para cuando cubre otra Área
@@ -252,7 +253,7 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 
 1. Un pedido siempre está asociado a un cliente
 2. Los precios se toman de la lista de precios configurada (no se hardcodean). Cada fila puede ofrecer USD, CUP o ambas; en pedidos/facturas el unitario se resuelve en **CUP** (prioridad **USD activo** → `precio_usd × tasa`; si solo CUP, precio CUP)
-3. Los pagos a empleados usan las **tarifas de pago** en CUP (distintas a precios de VENTA), salvo empleados con **salario fijo diario** o **salario por destajo diario**
+3. Los pagos a empleados usan las **tarifas de pago** en CUP (distintas a precios de VENTA), salvo empleados con **salario fijo diario**, **salario por destajo diario** o **salario fijo mensual**
 4. La deuda anterior del cliente **no** se incluye en el total del pedido; al guardar se actualiza `clients.balance` (deuda abierta). El saldo a favor vive en `clients.credit_balance` y se puede aplicar al pedido/cobro
 5. El flujo de caja registra TODA operación de dinero (cobros a clientes, anticipos de pedido, pagos a empleados, gastos)
 6. Los empleados dados de baja no aparecen en nuevas asignaciones pero su historial se conserva
@@ -443,6 +444,15 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - **Registrar merma** en editar y detalle de pedido (no en anulados). Motivos: Error de impresión, Material defectuoso, Error de corte, Otro.
 - Descuento de almacén en la misma transacción; el precio de venta del pedido no cambia.
 - Historial de mermas en el pedido cuando ya hay registros. Salidas de inventario con método **Merma**. Al anular, no se restaura el stock merma.
+
+### v2.19 — Salario fijo mensual de empleados (2026-08)
+- `employees.pay_mode`: `production` | `fixed` | `destajo` | `monthly`; `fixed_monthly_salary_cup`.
+- Un cobro por mes calendario (`employee_daily_salaries.kind = monthly`).
+- Lotes de producción de esos empleados con costo 0. **Deshacer** solo el día del pago.
+
+### v2.20 — Habilitar salario mensual en nómina (2026-08)
+- El salario mensual **no** aparece por defecto en la nómina diaria.
+- Desde el listado de empleados se habilita el pago para el día seleccionado; solo entonces figura como pendiente ese día.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

@@ -60,7 +60,9 @@ export function EmployeeDetailPage() {
                 ? ` · Salario fijo ${formatMoney(emp.fixedDailySalaryCup)}/día`
                 : emp.payMode === "destajo"
                   ? ` · Destajo ${formatMoney(emp.fixedDailySalaryCup)}/día`
-                  : " · Pago por producción"}
+                  : emp.payMode === "monthly"
+                    ? ` · Salario fijo ${formatMoney(emp.fixedMonthlySalaryCup)}/mes`
+                    : " · Pago por producción"}
             </p>
           )}
         </div>

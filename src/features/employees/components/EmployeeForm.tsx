@@ -35,6 +35,7 @@ export function EmployeeForm(props: EmployeeFormProps) {
       extraRoleIds: defaultValues?.extraRoleIds ?? [],
       payMode: defaultValues?.payMode ?? "production",
       fixedDailySalaryCup: defaultValues?.fixedDailySalaryCup ?? 0,
+      fixedMonthlySalaryCup: defaultValues?.fixedMonthlySalaryCup ?? 0,
     },
   });
 
@@ -156,7 +157,7 @@ export function EmployeeForm(props: EmployeeFormProps) {
           <span className="label-text font-medium">Forma de salario</span>
         </legend>
         <p className="text-xs text-base-content/60">
-          Elige cómo se calcula el pago diario. Las opciones son excluyentes.
+          Elige cómo se calcula el pago. Las opciones son excluyentes.
         </p>
         <Controller
           control={form.control}
@@ -172,6 +173,7 @@ export function EmployeeForm(props: EmployeeFormProps) {
                   onChange={() => {
                     field.onChange("production");
                     form.setValue("fixedDailySalaryCup", 0, { shouldValidate: true });
+                    form.setValue("fixedMonthlySalaryCup", 0, { shouldValidate: true });
                   }}
                 />
                 <span className="label-text">
@@ -187,7 +189,10 @@ export function EmployeeForm(props: EmployeeFormProps) {
                   className="radio radio-sm radio-primary"
                   disabled={isSubmitting}
                   checked={field.value === "fixed"}
-                  onChange={() => field.onChange("fixed")}
+                  onChange={() => {
+                    field.onChange("fixed");
+                    form.setValue("fixedMonthlySalaryCup", 0, { shouldValidate: true });
+                  }}
                 />
                 <span className="label-text">
                   <span className="font-medium">Salario fijo diario</span>
@@ -202,12 +207,33 @@ export function EmployeeForm(props: EmployeeFormProps) {
                   className="radio radio-sm radio-primary"
                   disabled={isSubmitting}
                   checked={field.value === "destajo"}
-                  onChange={() => field.onChange("destajo")}
+                  onChange={() => {
+                    field.onChange("destajo");
+                    form.setValue("fixedMonthlySalaryCup", 0, { shouldValidate: true });
+                  }}
                 />
                 <span className="label-text">
                   <span className="font-medium">Salario por destajo diario</span>
                   <span className="mt-0.5 block text-xs text-base-content/60">
                     Importe diario editable; debe quedar definido cada día para poder pagar.
+                  </span>
+                </span>
+              </label>
+              <label className="label cursor-pointer justify-start gap-3 py-1">
+                <input
+                  type="radio"
+                  className="radio radio-sm radio-primary"
+                  disabled={isSubmitting}
+                  checked={field.value === "monthly"}
+                  onChange={() => {
+                    field.onChange("monthly");
+                    form.setValue("fixedDailySalaryCup", 0, { shouldValidate: true });
+                  }}
+                />
+                <span className="label-text">
+                  <span className="font-medium">Salario fijo mensual</span>
+                  <span className="mt-0.5 block text-xs text-base-content/60">
+                    Un cobro al mes. Se habilita desde el listado para el día elegido y luego se paga en la nómina.
                   </span>
                 </span>
               </label>
@@ -234,6 +260,28 @@ export function EmployeeForm(props: EmployeeFormProps) {
             {form.formState.errors.fixedDailySalaryCup && (
               <span className="label-text-alt text-error">
                 {form.formState.errors.fixedDailySalaryCup.message}
+              </span>
+            )}
+          </div>
+        )}
+        {payMode === "monthly" && (
+          <div className="form-control w-full">
+            <label className="label" htmlFor="employee-monthly-salary">
+              <span className="label-text">Importe mensual (CUP)</span>
+            </label>
+            <input
+              id="employee-monthly-salary"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              className="input input-bordered w-full"
+              disabled={isSubmitting}
+              {...form.register("fixedMonthlySalaryCup", { valueAsNumber: true })}
+            />
+            {form.formState.errors.fixedMonthlySalaryCup && (
+              <span className="label-text-alt text-error">
+                {form.formState.errors.fixedMonthlySalaryCup.message}
               </span>
             )}
           </div>

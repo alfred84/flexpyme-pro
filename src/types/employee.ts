@@ -3,8 +3,9 @@
  * - `production`: tarifas por trabajo realizado
  * - `fixed`: salario fijo diario predefinido
  * - `destajo`: importe a definir obligatoriamente cada día
+ * - `monthly`: salario fijo mensual (se habilita en el listado para un día del mes)
  */
-export type EmployeePayMode = "production" | "fixed" | "destajo";
+export type EmployeePayMode = "production" | "fixed" | "destajo" | "monthly";
 
 /**
  * Empleado del taller.
@@ -21,6 +22,8 @@ export interface EmployeeDto {
   hasFixedDailySalary: boolean;
   /** Importe CUP del salario diario (modo `fixed` o `destajo`). */
   fixedDailySalaryCup: number;
+  /** Importe CUP del salario mensual (modo `monthly`). */
+  fixedMonthlySalaryCup: number;
   isActive: boolean;
   createdAt: string;
   /** Nombres de roles adicionales (listado/detalle). */
@@ -40,6 +43,7 @@ export interface CreateEmployeePayload {
   extraRoleIds: number[];
   payMode: EmployeePayMode;
   fixedDailySalaryCup: number;
+  fixedMonthlySalaryCup: number;
 }
 
 /**
@@ -60,6 +64,21 @@ export interface DestajoPendingDto {
   dailySalaryId: number | null;
   currentAmountCup: number | null;
   /** `true` si el destajo del día ya está pagado. */
+  isPaid: boolean;
+}
+
+/**
+ * Estado del salario mensual de un empleado en el mes de una fecha.
+ */
+export interface MonthlySalaryStatusDto {
+  employeeId: number;
+  employeeName: string;
+  date: string;
+  /** Fecha del registro mensual en ese mes, si ya se habilitó o pagó. */
+  scheduledDate: string | null;
+  dailySalaryId: number | null;
+  amountCup: number;
+  /** `true` si el salario de ese mes ya está pagado. */
   isPaid: boolean;
 }
 

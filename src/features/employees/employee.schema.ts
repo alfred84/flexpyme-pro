@@ -14,8 +14,9 @@ export const employeeFormSchema = z
     phone: z.string().trim().max(50, "El teléfono es demasiado largo"),
     notes: z.string().trim().max(2000, "Las notas son demasiado largas"),
     extraRoleIds: z.array(z.number().int().positive()),
-    payMode: z.enum(["production", "fixed", "destajo"]),
+    payMode: z.enum(["production", "fixed", "destajo", "monthly"]),
     fixedDailySalaryCup: z.number().finite().min(0, "El salario no puede ser negativo"),
+    fixedMonthlySalaryCup: z.number().finite().min(0, "El salario no puede ser negativo"),
   })
   .superRefine((values, ctx) => {
     if (values.extraRoleIds.includes(values.roleId)) {
@@ -36,6 +37,13 @@ export const employeeFormSchema = z
           values.payMode === "destajo"
             ? "Indica un importe de destajo mayor que cero"
             : "Indica un salario fijo diario mayor que cero",
+      });
+    }
+    if (values.payMode === "monthly" && values.fixedMonthlySalaryCup <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["fixedMonthlySalaryCup"],
+        message: "Indica un salario fijo mensual mayor que cero",
       });
     }
   });

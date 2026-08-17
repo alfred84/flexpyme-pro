@@ -120,6 +120,10 @@ const EMBEDDED_INVENTORY_COST_USD_SCHEMA: &str =
     include_str!("../../src/db/migrations/0032_inventory_cost_usd.sql");
 const EMBEDDED_INVOICE_MATERIAL_WASTES_SCHEMA: &str =
     include_str!("../../src/db/migrations/0033_invoice_material_wastes.sql");
+const EMBEDDED_EMPLOYEE_MONTHLY_SALARY_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0034_employee_monthly_salary.sql");
+const EMBEDDED_MONTHLY_SALARY_OPT_IN_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0035_monthly_salary_opt_in.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -455,6 +459,21 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             EMBEDDED_INVOICE_MATERIAL_WASTES_SCHEMA,
             "0033_invoice_material_wastes",
         )?;
+    }
+    if !column_exists(conn, "employees", "fixed_monthly_salary_cup") {
+        execute_migration(
+            conn,
+            EMBEDDED_EMPLOYEE_MONTHLY_SALARY_SCHEMA,
+            "0034_employee_monthly_salary",
+        )?;
+    }
+    if !settings_flag_set(conn, "migration_0035_monthly_salary_opt_in") {
+        execute_migration(
+            conn,
+            EMBEDDED_MONTHLY_SALARY_OPT_IN_SCHEMA,
+            "0035_monthly_salary_opt_in",
+        )?;
+        set_settings_flag(conn, "migration_0035_monthly_salary_opt_in")?;
     }
     Ok(())
 }

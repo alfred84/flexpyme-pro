@@ -157,6 +157,8 @@ pub fn run() {
             commands::employees::employee_payment_reverse,
             commands::employees::destajo_pending_for_date,
             commands::employees::set_destajo_daily_salary,
+            commands::employees::monthly_salary_status_for_date,
+            commands::employees::schedule_monthly_salary,
             commands::employees::employee_extra_roles_list,
             commands::employees::employee_extra_role_add,
             commands::employees::employee_extra_role_remove,

@@ -51,6 +51,7 @@ export function EmployeeNewPage() {
               values.payMode === "fixed" || values.payMode === "destajo"
                 ? values.fixedDailySalaryCup
                 : 0,
+            fixedMonthlySalaryCup: values.payMode === "monthly" ? values.fixedMonthlySalaryCup : 0,
           });
         }}
       />

@@ -2262,7 +2262,7 @@ pub fn invoice_item_mark_listo(payload: MarkInvoiceItemListoPayload) -> Result<I
     }
 
     for w in &payload.workers {
-        // Empleados con salario fijo no acumulan tarifa por producción.
+        // Empleados con salario fijo, destajo o mensual no acumulan tarifa por producción.
         let unit_cost = if crate::commands::employees::employee_has_fixed_daily_salary(
             &*tx,
             w.employee_id,

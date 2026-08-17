@@ -6,6 +6,7 @@ import type {
   EmployeeDto,
   EmployeeExtraRoleDto,
   InvoiceWorkBatchDto,
+  MonthlySalaryStatusDto,
   PayrollDailyRowDto,
   UpdateEmployeePayload,
   WorkBatchDto,
@@ -108,7 +109,7 @@ export interface UnpaidBatchDto {
   totalCost: number;
   paid: number;
   pending: number;
-  /** `true` si es salario fijo diario (no lote de producción). */
+  /** `true` si es salario fijo, destajo o mensual (no lote de producción). */
   isFixedSalary: boolean;
 }
 
@@ -145,9 +146,35 @@ export async function setDestajoDailySalary(payload: {
 }
 
 /**
+ * Estado del salario mensual en el mes de una fecha (por defecto hoy).
+ *
+ * @param date - Fecha ISO opcional.
+ */
+export async function fetchMonthlySalaryStatusForDate(
+  date?: string,
+): Promise<MonthlySalaryStatusDto[]> {
+  return invoke<MonthlySalaryStatusDto[]>("monthly_salary_status_for_date", {
+    date: date ?? null,
+  });
+}
+
+/**
+ * Habilita el salario mensual de un empleado en la nómina de una fecha.
+ *
+ * @param payload - Empleado y fecha ISO (día de la nómina).
+ * @returns Id del registro diario.
+ */
+export async function scheduleMonthlySalary(payload: {
+  employeeId: number;
+  date?: string;
+}): Promise<number> {
+  return invoke<number>("schedule_monthly_salary", { payload });
+}
+
+/**
  * Paga varios lotes en un solo egreso de caja.
  *
- * @param payload - Ids de lotes y desglose.
+ * @param payload - Ids de lotes, salarios, desglose y fecha de nómina opcional.
  */
 export async function payWorkBatchesMany(payload: {
   batchIds: number[];
@@ -157,6 +184,7 @@ export async function payWorkBatchesMany(payload: {
   denominationBreakdown?: string | null;
   amountCup?: number;
   amountUsd?: number;
+  date?: string;
 }): Promise<void> {
   return invoke<void>("work_batches_pay_many", { payload });
 }

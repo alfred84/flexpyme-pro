@@ -391,18 +391,21 @@ export const employees = sqliteTable("employees", {
   phone: text("phone"),
   notes: text("notes"),
   /**
-   * Modo de pago: `production` | `fixed` | `destajo`.
+   * Modo de pago: `production` | `fixed` | `destajo` | `monthly`.
    * - production: tarifas por trabajo
    * - fixed: salario fijo diario predefinido
    * - destajo: importe obligatorio a definir cada día
+   * - monthly: salario fijo mensual (se habilita en el listado para un día del mes)
    */
   payMode: text("pay_mode").notNull().default("production"),
   /** @deprecated Preferir payMode === 'fixed'; se mantiene sincronizado. */
   hasFixedDailySalary: integer("has_fixed_daily_salary", { mode: "boolean" })
     .notNull()
     .default(false),
-  /** Importe CUP del salario fijo diario (solo modo `fixed`). */
+  /** Importe CUP del salario diario (modos `fixed` o `destajo`). */
   fixedDailySalaryCup: real("fixed_daily_salary_cup").notNull().default(0),
+  /** Importe CUP del salario mensual (modo `monthly`). */
+  fixedMonthlySalaryCup: real("fixed_monthly_salary_cup").notNull().default(0),
   isActive: integer("is_active").notNull().default(1),
   deletedAt: text("deleted_at"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
@@ -410,7 +413,7 @@ export const employees = sqliteTable("employees", {
 });
 
 /**
- * Registro diario de salario fijo (pendiente/pagado) por empleado y fecha.
+ * Registro de salario fijo/destajo/mensual (pendiente/pagado) por empleado y fecha.
  */
 export const employeeDailySalaries = sqliteTable(
   "employee_daily_salaries",
@@ -423,7 +426,7 @@ export const employeeDailySalaries = sqliteTable(
     amountCup: real("amount_cup").notNull(),
     paid: real("paid").notNull().default(0),
     status: text("status").notNull().default("pendiente"),
-    /** `fixed` | `destajo` */
+    /** `fixed` | `destajo` | `monthly` */
     kind: text("kind").notNull().default("fixed"),
     /** Egreso de caja del pago (para reverso mismo día). */
     cashTransactionId: integer("cash_transaction_id"),

@@ -51,6 +51,7 @@ export function EmployeeEditPage() {
             extraRoleIds: employeeQuery.data.extraRoleIds ?? [],
             payMode: employeeQuery.data.payMode ?? "production",
             fixedDailySalaryCup: employeeQuery.data.fixedDailySalaryCup,
+            fixedMonthlySalaryCup: employeeQuery.data.fixedMonthlySalaryCup,
           }}
           onCancel={() => navigate({ to: "/empleados" })}
           onSubmit={async (values) => {
@@ -66,6 +67,8 @@ export function EmployeeEditPage() {
                 values.payMode === "fixed" || values.payMode === "destajo"
                   ? values.fixedDailySalaryCup
                   : 0,
+              fixedMonthlySalaryCup:
+                values.payMode === "monthly" ? values.fixedMonthlySalaryCup : 0,
             });
           }}
         />
