@@ -233,7 +233,7 @@ export function EmployeeForm(props: EmployeeFormProps) {
                 <span className="label-text">
                   <span className="font-medium">Salario fijo mensual</span>
                   <span className="mt-0.5 block text-xs text-base-content/60">
-                    Un cobro al mes. Se habilita desde el listado para el día elegido y luego se paga en la nómina.
+                    Un cobro al mes. Desde el listado, Habilitar abre un modal para elegir el día y luego se paga en la nómina.
                   </span>
                 </span>
               </label>

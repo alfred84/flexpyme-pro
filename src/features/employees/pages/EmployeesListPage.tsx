@@ -18,6 +18,7 @@ import {
 } from "@/db/queries/employees";
 import { DestajoDefineModal } from "@/features/employees/components/DestajoDefineModal";
 import { EmployeePayCashierModal } from "@/features/employees/components/EmployeePayCashierModal";
+import { MonthlyEnableModal } from "@/features/employees/components/MonthlyEnableModal";
 import { formatDate, todayIso } from "@/lib/format-date";
 import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
@@ -27,6 +28,13 @@ import type { EmployeePayMode } from "@/types/employee";
 interface PayEmployeeTarget {
   employeeId: number;
   employeeName: string;
+}
+
+/** Empleado seleccionado para habilitar el salario mensual. */
+interface MonthlyTarget {
+  employeeId: number;
+  employeeName: string;
+  scheduledDate: string | null;
 }
 
 /** Empleado seleccionado para definir destajo del día. */
@@ -45,6 +53,7 @@ export function EmployeesListPage() {
   const queryClient = useQueryClient();
   const [payTarget, setPayTarget] = useState<PayEmployeeTarget | null>(null);
   const [destajoTarget, setDestajoTarget] = useState<DestajoTarget | null>(null);
+  const [monthlyTarget, setMonthlyTarget] = useState<MonthlyTarget | null>(null);
   const today = todayIso();
   const [payrollDate, setPayrollDate] = useState(today);
 
@@ -64,8 +73,8 @@ export function EmployeesListPage() {
   });
 
   const monthlyStatusQuery = useQuery({
-    queryKey: ["employees", "monthly-status", payrollDate],
-    queryFn: () => fetchMonthlySalaryStatusForDate(payrollDate),
+    queryKey: ["employees", "monthly-status", today.slice(0, 7)],
+    queryFn: () => fetchMonthlySalaryStatusForDate(today),
   });
 
   const deactivateMutation = useMutation({
@@ -89,18 +98,14 @@ export function EmployeesListPage() {
 
   const scheduleMonthlyMutation = useMutation({
     mutationFn: scheduleMonthlySalary,
-    onSuccess: async () => {
+    onSuccess: async (_id, variables) => {
+      const date = variables.date ?? today;
+      setPayrollDate(date);
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       await queryClient.invalidateQueries({ queryKey: ["payroll-daily"] });
       pushFlashMessage({
         kind: "success",
-        text: `Salario mensual habilitado para el ${formatDate(payrollDate)}.`,
-      });
-    },
-    onError: (e: unknown) => {
-      pushFlashMessage({
-        kind: "error",
-        text: e instanceof Error ? e.message : "No se pudo habilitar el salario mensual.",
+        text: `Salario mensual habilitado para el ${formatDate(date)}.`,
       });
     },
   });
@@ -212,8 +217,12 @@ export function EmployeesListPage() {
       const monthly = monthlyByEmployee.get(employeeId);
       const scheduledDate = monthly?.scheduledDate ?? null;
       const paidThisMonth = Boolean(monthly?.isPaid);
-      const enabledForSelectedDay =
-        scheduledDate != null && scheduledDate === payrollDate && !paidThisMonth;
+      const openMonthlyModal = () =>
+        setMonthlyTarget({
+          employeeId,
+          employeeName,
+          scheduledDate,
+        });
       return (
         <div className="flex flex-wrap items-center gap-1">
           <span className="badge badge-accent badge-sm">
@@ -223,36 +232,26 @@ export function EmployeesListPage() {
             <span className="badge badge-success badge-sm">
               Pagado{scheduledDate ? ` ${formatDate(scheduledDate)}` : ""}
             </span>
-          ) : enabledForSelectedDay ? (
-            <span className="badge badge-info badge-sm">En nómina</span>
+          ) : scheduledDate ? (
+            <button
+              type="button"
+              className="badge badge-info badge-sm cursor-pointer"
+              disabled={!isActive}
+              title="Cambiar el día en la nómina"
+              onClick={openMonthlyModal}
+            >
+              En nómina {formatDate(scheduledDate)}
+            </button>
           ) : (
-            <>
-              {scheduledDate && (
-                <span className="badge badge-ghost badge-sm">
-                  {formatDate(scheduledDate)}
-                </span>
-              )}
-              <button
-                type="button"
-                className="btn btn-outline btn-xs"
-                disabled={!isActive || scheduleMonthlyMutation.isPending}
-                title={
-                  scheduledDate
-                    ? `Mover a la nómina del ${formatDate(payrollDate)}`
-                    : `Habilitar pago en la nómina del ${formatDate(payrollDate)}`
-                }
-                onClick={() => {
-                  void scheduleMonthlyMutation.mutateAsync({
-                    employeeId,
-                    date: payrollDate,
-                  });
-                }}
-              >
-                {scheduledDate
-                  ? `Mover al ${formatDate(payrollDate)}`
-                  : `Habilitar ${formatDate(payrollDate)}`}
-              </button>
-            </>
+            <button
+              type="button"
+              className="btn btn-outline btn-xs"
+              disabled={!isActive || scheduleMonthlyMutation.isPending}
+              title="Elegir el día del mes para pagar"
+              onClick={openMonthlyModal}
+            >
+              Habilitar
+            </button>
           )}
         </div>
       );
@@ -444,8 +443,8 @@ export function EmployeesListPage() {
             </h2>
           </div>
           <p className="text-xs text-base-content/60">
-            El salario fijo mensual no aparece solo: habilítalo en la tabla de empleados para esta
-            fecha y luego págalo aquí.
+            El salario fijo mensual no aparece solo: pulsa Habilitar en la tabla de empleados,
+            elige el día del mes y luego págalo aquí.
           </p>
           {payrollQuery.isLoading ? (
             <p className="py-6 text-center text-sm text-base-content/60">Cargando nómina...</p>
@@ -553,6 +552,23 @@ export function EmployeesListPage() {
           )}
         </div>
       </div>
+
+      <MonthlyEnableModal
+        open={monthlyTarget !== null}
+        employeeName={monthlyTarget?.employeeName ?? ""}
+        scheduledDate={monthlyTarget?.scheduledDate ?? null}
+        isSubmitting={scheduleMonthlyMutation.isPending}
+        onClose={() => setMonthlyTarget(null)}
+        onConfirm={async (dateIso) => {
+          if (!monthlyTarget) {
+            return;
+          }
+          await scheduleMonthlyMutation.mutateAsync({
+            employeeId: monthlyTarget.employeeId,
+            date: dateIso,
+          });
+        }}
+      />
 
       <DestajoDefineModal
         open={destajoTarget !== null}

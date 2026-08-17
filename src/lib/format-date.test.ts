@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatDateTime, todayIso } from "@/lib/format-date";
+import { formatDate, formatDateTime, monthEndIso, monthStartIso, todayIso } from "@/lib/format-date";
 
 describe("format-date", () => {
   it("formats an ISO date as dd/mm/aaaa", () => {
@@ -22,5 +22,12 @@ describe("format-date", () => {
 
   it("todayIso returns a YYYY-MM-DD string", () => {
     expect(todayIso()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("returns the first and last day of the month as ISO", () => {
+    expect(monthStartIso("2026-02-17")).toBe("2026-02-01");
+    expect(monthEndIso("2026-02-17")).toBe("2026-02-28");
+    expect(monthEndIso("2024-02-10")).toBe("2024-02-29");
+    expect(monthEndIso("2026-08-01")).toBe("2026-08-31");
   });
 });

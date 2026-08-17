@@ -98,7 +98,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
   - **Por producción**: cobra según tarifas de trabajo
   - **Salario fijo diario**: importe CUP predefinido; se genera cada día y se paga desde la nómina diaria (botón Pagar por empleado)
   - **Salario por destajo diario**: importe CUP editable en alta/edición (igual que el fijo); debe quedar definido cada día (botón **Definir** en el listado o al guardar el empleado) antes de pagar
-  - **Salario fijo mensual**: importe CUP predefinido; **no** entra solo en la nómina. Desde el listado se habilita el pago para el día elegido (selector de fecha) y entonces aparece como pendiente ese día. Un cobro por mes calendario. **Deshacer** solo el día en que se pagó
+  - **Salario fijo mensual**: importe CUP predefinido; **no** entra solo en la nómina. Desde el listado, **Habilitar** abre un modal para elegir el **día del mes**; entonces aparece como pendiente ese día. Un cobro por mes calendario. **Deshacer** solo el día en que se pagó
   - Los lotes de trabajo de empleados fijo/destajo/mensual se registran con costo 0 para no duplicar el pago
 - Historial de pagos al empleado
 - Dar de baja (soft delete, no eliminar)
@@ -452,7 +452,7 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.20 — Habilitar salario mensual en nómina (2026-08)
 - El salario mensual **no** aparece por defecto en la nómina diaria.
-- Desde el listado de empleados se habilita el pago para el día seleccionado; solo entonces figura como pendiente ese día.
+- Desde el listado, **Habilitar** abre un modal para elegir el día del mes en curso; solo entonces figura como pendiente ese día.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

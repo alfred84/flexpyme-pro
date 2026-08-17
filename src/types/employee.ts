@@ -3,7 +3,7 @@
  * - `production`: tarifas por trabajo realizado
  * - `fixed`: salario fijo diario predefinido
  * - `destajo`: importe a definir obligatoriamente cada día
- * - `monthly`: salario fijo mensual (se habilita en el listado para un día del mes)
+ * - `monthly`: salario fijo mensual (se habilita eligiendo el día del mes)
  */
 export type EmployeePayMode = "production" | "fixed" | "destajo" | "monthly";
 

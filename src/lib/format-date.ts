@@ -75,3 +75,35 @@ export function todayIso(): string {
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+
+/**
+ * Primer día del mes de una fecha ISO, como `YYYY-MM-DD`.
+ *
+ * @param isoDate - Fecha ISO (`YYYY-MM-DD` o con hora).
+ * @returns `YYYY-MM-01` del mismo mes, o la cadena recortada si no es válida.
+ */
+export function monthStartIso(isoDate: string): string {
+  const day = isoDate.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    return day;
+  }
+  return `${day.slice(0, 7)}-01`;
+}
+
+/**
+ * Último día del mes de una fecha ISO, como `YYYY-MM-DD`.
+ *
+ * @param isoDate - Fecha ISO (`YYYY-MM-DD` o con hora).
+ * @returns Último día del mismo mes, o la cadena recortada si no es válida.
+ */
+export function monthEndIso(isoDate: string): string {
+  const day = isoDate.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    return day;
+  }
+  const year = Number(day.slice(0, 4));
+  const month = Number(day.slice(5, 7));
+  const last = new Date(year, month, 0);
+  const lastDay = String(last.getDate()).padStart(2, "0");
+  return `${day.slice(0, 7)}-${lastDay}`;
+}
