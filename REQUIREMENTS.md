@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.21 | Última actualización: 2026-08-17
+### Versión: 2.22 | Última actualización: 2026-08-18
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -201,7 +201,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **UI de Pedidos**: en cobro USD muestra USD principal; en CUP/Mixto/transferencia, CUP principal (+ USD donde corresponda). Tarifas de pago a empleados siguen en CUP
 - **Cobros y anticipos en efectivo**: pueden ser USD, CUP o Mixto; transferencia en CUP
 - **Vuelto dual**: exceso validado como `change_cup + change_usd × tasa ≈ exceso_cup`; neto por moneda en caja = recibido − vuelto de esa moneda
-- **Crédito de cliente** (`clients.credit_balance`): solo en CUP; se aplica contra la parte CUP del saldo. La deuda espejo (`clients.balance`) sigue siendo el equivalente CUP de pedidos abiertos. **UI Clientes**: Balance USD = `Σ balance_usd` y Balance CUP = `Σ (balance − balance_usd × tasa_pedido)` (importes reales de cobro, no conversión de un solo total); Total histórico USD/CUP = `Σ due_usd` / `Σ due_cup`. El **Estado** netea ambas monedas con la tasa vigente de la app (`deuda_cup − crédito + deuda_usd × tasa`)
+- **Crédito de cliente** (`clients.credit_balance`): solo en CUP; se aplica contra la parte CUP del saldo. La deuda espejo (`clients.balance`) sigue siendo el equivalente CUP de pedidos abiertos. **UI Clientes (listado)**: Balance USD / CUP por cobros reales (no conversión). **Estado (USD)** según deuda USD abierta; **Estado (CUP)** según deuda CUP menos crédito. Los totales históricos se ven en el detalle del cliente, no en la tabla.
 - **Salarios / tarifas de pago / denominaciones de caja internas**: CUP
 - **Denominaciones de billetes CUP**: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000
 - **Denominaciones de billetes USD**: 100, 50, 20, 10, 5, 2, 1
@@ -457,6 +457,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.21 — Aviso de saldo a favor al cobrar (2026-08)
 - Al cobrar un pedido (alta o página de cobro), si el cliente ya tiene crédito o el cobro va a dejar saldo a favor, un modal informa importes antes de confirmar.
+
+### v2.22 — Listado de clientes: estado por moneda (2026-08)
+- Tabla de clientes: se ocultan Total histórico USD/CUP; **Estado (USD)** y **Estado (CUP)** sustituyen el estado neto único.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

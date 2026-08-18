@@ -16,21 +16,19 @@ import {
   clientBalanceStatusBadgeClass,
   clientBalanceStatusLabel,
   formatClientBalanceDisplay,
-  resolveDualClientBalanceStatus,
+  resolveClientBalanceStatus,
 } from "@/features/clients/lib/client-balance";
 import { fetchClients, fetchDeletedClients } from "@/db/queries/clients";
-import { useAppSettings } from "@/hooks/use-app-settings";
 import type { ClientDto } from "@/types/client";
-import { formatAmount, moneyHeading } from "@/lib/format-money";
+import { moneyHeading } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
 
 /**
- * Columnas de la tabla de clientes (balances duales por cobro y estado neto).
+ * Columnas de la tabla de clientes (balances y estado por moneda de cobro).
  *
- * @param usdExchangeRate - Tasa USD→CUP vigente (solo para el estado).
  * @returns Definición de columnas para TanStack Table.
  */
-function useClientColumns(usdExchangeRate: number): ColumnDef<ClientDto>[] {
+function useClientColumns(): ColumnDef<ClientDto>[] {
   return useMemo(
     () => [
       { accessorKey: "code", header: "Código", cell: (info) => info.getValue<string>() },
@@ -70,41 +68,27 @@ function useClientColumns(usdExchangeRate: number): ColumnDef<ClientDto>[] {
         },
       },
       {
-        id: "totalHistoricalUsd",
-        header: moneyHeading("Total histórico", "USD"),
-        accessorFn: (row) => row.totalHistoricalUsd ?? 0,
-        cell: ({ row }) => (
-          <span className="tabular-nums">
-            {formatAmount(row.original.totalHistoricalUsd ?? 0)}
-          </span>
-        ),
-      },
-      {
-        id: "totalHistoricalCup",
-        header: moneyHeading("Total histórico", "CUP"),
-        accessorFn: (row) => row.totalHistoricalCup ?? 0,
-        cell: ({ row }) => (
-          <span className="tabular-nums">
-            {formatAmount(row.original.totalHistoricalCup ?? 0)}
-          </span>
-        ),
-      },
-      {
-        id: "estado",
-        header: "Estado",
-        accessorFn: (row) =>
-          resolveDualClientBalanceStatus(
-            row.balanceUsd ?? 0,
-            row.balanceCup ?? 0,
-            row.creditBalance ?? 0,
-            usdExchangeRate,
-          ),
+        id: "estadoUsd",
+        header: "Estado (USD)",
+        accessorFn: (row) => resolveClientBalanceStatus(row.balanceUsd ?? 0, 0),
         cell: ({ row }) => {
-          const status = resolveDualClientBalanceStatus(
-            row.original.balanceUsd ?? 0,
+          const status = resolveClientBalanceStatus(row.original.balanceUsd ?? 0, 0);
+          return (
+            <span className={clientBalanceStatusBadgeClass(status)}>
+              {clientBalanceStatusLabel(status)}
+            </span>
+          );
+        },
+      },
+      {
+        id: "estadoCup",
+        header: "Estado (CUP)",
+        accessorFn: (row) =>
+          resolveClientBalanceStatus(row.balanceCup ?? 0, row.creditBalance ?? 0),
+        cell: ({ row }) => {
+          const status = resolveClientBalanceStatus(
             row.original.balanceCup ?? 0,
             row.original.creditBalance ?? 0,
-            usdExchangeRate,
           );
           return (
             <span className={clientBalanceStatusBadgeClass(status)}>
@@ -137,22 +121,21 @@ function useClientColumns(usdExchangeRate: number): ColumnDef<ClientDto>[] {
         ),
       },
     ],
-    [usdExchangeRate],
+    [],
   );
 }
 
 /**
- * Lista de clientes activos con búsqueda, balance dual y estado neto.
+ * Lista de clientes activos con búsqueda, balance y estado por moneda.
  *
  * @returns Página de tabla de clientes.
  */
 export function ClientsListPage() {
-  const { usdExchangeRate } = useAppSettings();
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [flash] = useState<FlashMessage | null>(() => popFlashMessage());
   const [showRestoreModal, setShowRestoreModal] = useState(false);
-  const columns = useClientColumns(usdExchangeRate);
+  const columns = useClientColumns();
   const clientsQuery = useQuery({
     queryKey: ["clients", "list"],
     queryFn: fetchClients,
@@ -183,8 +166,8 @@ export function ClientsListPage() {
         <div>
           <h1 className="text-2xl font-bold">Clientes</h1>
           <p className="text-sm text-base-content/70">
-            Balance USD y CUP según cobros de pedidos (no por conversión). El estado netea ambas
-            monedas con la tasa vigente: saldo a favor en verde y deuda en rojo.
+            Balance y estado por moneda de cobro (USD y CUP, sin conversión). El crédito a favor
+            solo afecta el estado CUP. Saldo a favor en verde y deuda en rojo.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
