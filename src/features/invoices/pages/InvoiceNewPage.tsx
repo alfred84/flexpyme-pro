@@ -47,6 +47,12 @@ import {
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { todayIso } from "@/lib/format-date";
 import { DualMoneyText } from "@/components/common/DualMoneyText";
+import { ClientCreditNoticeModal } from "@/features/invoices/components/ClientCreditNoticeModal";
+import {
+  mergeAdvanceCreditIntoNotice,
+  previewClientCreditNotice,
+  shouldShowClientCreditNotice,
+} from "@/features/invoices/lib/client-credit-notice";
 import { moneyHeading } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 import type { SaleCurrency } from "@/lib/currency";
@@ -117,6 +123,7 @@ export function InvoiceNewPage() {
   const [advanceCashier, setAdvanceCashier] = useState<OrderCashierState>(() =>
     emptyOrderCashierState(),
   );
+  const [creditNoticeOpen, setCreditNoticeOpen] = useState(false);
 
   const selectedClient = useMemo(
     () => (clientsQuery.data ?? []).find((c) => c.id === clientId) ?? null,
@@ -316,6 +323,32 @@ export function InvoiceNewPage() {
   const canCollectNow = hasAdvanceCollect || hasCheckoutCollect;
   const showCollectButton = canCheckout && (advanceNum > 1e-6 || orderTotal > 1e-6);
 
+  const creditNotice = useMemo(() => {
+    const checkout = previewClientCreditNotice({
+      existingCreditCup: clientCredit,
+      applyClientCredit: cashier.applyClientCredit,
+      balanceDueCup: collectDueCup,
+      receivedCupEquiv: hasCheckoutCollect ? received : 0,
+      overpaymentDisposition: cashier.overpaymentDisposition,
+    });
+    const advanceExtra =
+      registerAdvance && advanceCashier.overpaymentDisposition === "credit"
+        ? Math.max(0, advanceReceived - linesSubtotal)
+        : 0;
+    return mergeAdvanceCreditIntoNotice(checkout, advanceExtra);
+  }, [
+    clientCredit,
+    cashier.applyClientCredit,
+    cashier.overpaymentDisposition,
+    collectDueCup,
+    hasCheckoutCollect,
+    received,
+    registerAdvance,
+    advanceCashier.overpaymentDisposition,
+    advanceReceived,
+    linesSubtotal,
+  ]);
+
   const buildAdvanceDetail = (): AdvancePaymentPayload | null => {
     if (!registerAdvance || advanceReceived <= 1e-6) {
       return null;
@@ -502,11 +535,20 @@ export function InvoiceNewPage() {
     return true;
   };
 
-  const handleSave = (collectPayment: boolean) => {
+  const handleSave = (collectPayment: boolean, skipCreditNotice = false) => {
     saveMutation.reset();
     if (!validateBeforeSave()) {
       return;
     }
+    if (
+      collectPayment &&
+      !skipCreditNotice &&
+      shouldShowClientCreditNotice(creditNotice)
+    ) {
+      setCreditNoticeOpen(true);
+      return;
+    }
+    setCreditNoticeOpen(false);
     void saveMutation.mutateAsync(collectPayment);
   };
 
@@ -752,6 +794,15 @@ export function InvoiceNewPage() {
         orderExchangeRate={summaryRate}
         onClose={() => setLineModalOpen(false)}
         onSave={handleSaveLine}
+      />
+
+      <ClientCreditNoticeModal
+        open={creditNoticeOpen}
+        clientName={selectedClient?.name ?? "el cliente"}
+        notice={creditNotice}
+        isSubmitting={saveMutation.isPending}
+        onClose={() => setCreditNoticeOpen(false)}
+        onConfirm={() => handleSave(true, true)}
       />
     </section>
   );

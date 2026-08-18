@@ -26,6 +26,11 @@ import {
   paymentStateFromInvoice,
 } from "@/features/invoices/lib/invoice-payment";
 import { DualMoneyText } from "@/components/common/DualMoneyText";
+import { ClientCreditNoticeModal } from "@/features/invoices/components/ClientCreditNoticeModal";
+import {
+  previewClientCreditNotice,
+  shouldShowClientCreditNotice,
+} from "@/features/invoices/lib/client-credit-notice";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import type { SaleCurrency } from "@/lib/currency";
 import { formatDate } from "@/lib/format-date";
@@ -48,6 +53,7 @@ export function InvoiceCashierPage() {
   const [paymentDraft, setPaymentDraft] = useState<OrderPaymentState | null>(null);
   const [draftInvoiceId, setDraftInvoiceId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [creditNoticeOpen, setCreditNoticeOpen] = useState(false);
 
   const detailQuery = useQuery({
     queryKey: ["invoices", "detail", invoiceId],
@@ -253,6 +259,24 @@ export function InvoiceCashierPage() {
     ],
   );
 
+  const creditNotice = useMemo(
+    () =>
+      previewClientCreditNotice({
+        existingCreditCup: clientCredit,
+        applyClientCredit: cashier.applyClientCredit,
+        balanceDueCup: collectDueCup,
+        receivedCupEquiv: received,
+        overpaymentDisposition: cashier.overpaymentDisposition,
+      }),
+    [
+      clientCredit,
+      cashier.applyClientCredit,
+      cashier.overpaymentDisposition,
+      collectDueCup,
+      received,
+    ],
+  );
+
   const handlePaymentChange = (next: OrderPaymentState) => {
     if (!canChangePayment) return;
     const currencyChanged = next.paymentCurrency !== activePayment.paymentCurrency;
@@ -279,8 +303,13 @@ export function InvoiceCashierPage() {
     );
   }
 
-  function submit() {
+  function submit(skipCreditNotice = false) {
     setFeedback(null);
+    if (!skipCreditNotice && shouldShowClientCreditNotice(creditNotice)) {
+      setCreditNoticeOpen(true);
+      return;
+    }
+    setCreditNoticeOpen(false);
     void registerMutation.mutateAsync();
   }
 
@@ -433,6 +462,15 @@ export function InvoiceCashierPage() {
               )}
             </div>
           </div>
+
+          <ClientCreditNoticeModal
+            open={creditNoticeOpen}
+            clientName={inv.clientName}
+            notice={creditNotice}
+            isSubmitting={registerMutation.isPending}
+            onClose={() => setCreditNoticeOpen(false)}
+            onConfirm={() => submit(true)}
+          />
 
           <div className="card bg-base-100 shadow">
             <div className="card-body">

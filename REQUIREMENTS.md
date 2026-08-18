@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.20 | Última actualización: 2026-08-17
+### Versión: 2.21 | Última actualización: 2026-08-17
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -66,6 +66,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Status por línea** en Ver pedido: `En producción` | `Listo`; botón para confirmar Listo (modal con empleados, cantidades y tarifas editables → crea `production_batches`). Si todas las líneas están Listo, el pedido pasa a `production_status=listo`. **Marcar listo** en el listado aplica el mismo flujo a todas las líneas pendientes (requiere asignaciones)
 - Se eliminó **Registrar trabajo** del detalle; la asignación ocurre en crear/editar líneas
 - Historial de pedidos por cliente
+- **Aviso de saldo a favor al cobrar**: si el cliente ya tiene crédito o el cobro va a dejarlo, un modal informativo resume importes (existente, aplicado, nuevo y saldo resultante) antes de confirmar
 
 **Tipos de productos en un pedido (del taller):**
 - Fotos/Ampliaciones (formatos 5x7 → 24x60, servicios: Impresión / Laminado / Enmarcado)
@@ -453,6 +454,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 ### v2.20 — Habilitar salario mensual en nómina (2026-08)
 - El salario mensual **no** aparece por defecto en la nómina diaria.
 - Desde el listado, **Habilitar** abre un modal para elegir el día del mes en curso; solo entonces figura como pendiente ese día.
+
+### v2.21 — Aviso de saldo a favor al cobrar (2026-08)
+- Al cobrar un pedido (alta o página de cobro), si el cliente ya tiene crédito o el cobro va a dejar saldo a favor, un modal informa importes antes de confirmar.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
