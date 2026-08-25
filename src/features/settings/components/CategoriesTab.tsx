@@ -1,20 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Pencil, Plus, Power, RotateCcw, Settings2 } from "lucide-react";
-import { ModalPortal } from "@/components/common/ModalPortal";
-import {
-  createCategory,
-  deactivateCategory,
-  fetchCategories,
-  reactivateCategory,
-  updateCategory,
-} from "@/db/queries/categories";
+import { deactivateCategory, fetchCategories, reactivateCategory } from "@/db/queries/categories";
 import type { ProductCategoryDto } from "@/types/category";
 import { CategoryConfigModal } from "@/features/settings/components/CategoryConfigModal";
-import { CATEGORY_ICON_MAP, resolveCategoryIcon } from "@/lib/category-icons";
-import { slugify } from "@/lib/slugify";
-
-const ICON_OPTIONS = Object.keys(CATEGORY_ICON_MAP);
+import { CategoryFormModal } from "@/features/settings/components/CategoryFormModal";
+import { resolveCategoryIcon } from "@/lib/category-icons";
 
 /**
  * Tab de gestión de categorías de productos.
@@ -27,36 +18,9 @@ export function CategoriesTab() {
     queryKey: ["categories", "manage"],
     queryFn: () => fetchCategories(false),
   });
-  const [showModal, setShowModal] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [configuring, setConfiguring] = useState<ProductCategoryDto | null>(null);
   const [editing, setEditing] = useState<ProductCategoryDto | null>(null);
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [description, setDescription] = useState("");
-  const [icon, setIcon] = useState("Tag");
-  const [sortOrder, setSortOrder] = useState("10");
-  const [codeTouched, setCodeTouched] = useState(false);
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      const payload = {
-        name: name.trim(),
-        code: code.trim() || slugify(name),
-        description: description.trim() || null,
-        icon,
-        sortOrder: Number.parseInt(sortOrder, 10) || 10,
-      };
-      if (editing) {
-        return updateCategory(editing.id, payload);
-      }
-      return createCategory(payload);
-    },
-    onSuccess: async () => {
-      setShowModal(false);
-      setEditing(null);
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
-    },
-  });
 
   const deactivateMutation = useMutation({
     mutationFn: deactivateCategory,
@@ -76,24 +40,12 @@ export function CategoriesTab() {
 
   const openCreate = () => {
     setEditing(null);
-    setName("");
-    setCode("");
-    setDescription("");
-    setIcon("Tag");
-    setSortOrder("10");
-    setCodeTouched(false);
-    setShowModal(true);
+    setShowForm(true);
   };
 
   const openEdit = (row: ProductCategoryDto) => {
     setEditing(row);
-    setName(row.name);
-    setCode(row.code);
-    setDescription(row.description ?? "");
-    setIcon(row.icon ?? "Tag");
-    setSortOrder(String(row.sortOrder));
-    setCodeTouched(true);
-    setShowModal(true);
+    setShowForm(true);
   };
 
   const renderIcon = (iconName: string | null) => {
@@ -181,70 +133,8 @@ export function CategoriesTab() {
         </table>
       </div>
 
-      {showModal && (
-        <ModalPortal>
-          <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg">{editing ? "Editar categoría" : "Nueva categoría"}</h3>
-            <div className="mt-4 space-y-3">
-              <label className="form-control">
-                <span className="label-text">Nombre *</span>
-                <input
-                  className="input input-bordered"
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    if (!codeTouched) {
-                      setCode(slugify(e.target.value));
-                    }
-                  }}
-                />
-              </label>
-              <label className="form-control">
-                <span className="label-text">Código *</span>
-                <input
-                  className="input input-bordered font-mono"
-                  value={code}
-                  onChange={(e) => {
-                    setCodeTouched(true);
-                    setCode(e.target.value);
-                  }}
-                />
-              </label>
-              <label className="form-control">
-                <span className="label-text">Descripción</span>
-                <input className="input input-bordered" value={description} onChange={(e) => setDescription(e.target.value)} />
-              </label>
-              <label className="form-control">
-                <span className="label-text">Icono</span>
-                <select className="select select-bordered" value={icon} onChange={(e) => setIcon(e.target.value)}>
-                  {ICON_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="form-control">
-                <span className="label-text">Orden</span>
-                <input className="input input-bordered" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} />
-              </label>
-            </div>
-            {saveMutation.isError && (
-              <p className="mt-2 text-sm text-error">{(saveMutation.error as Error).message}</p>
-            )}
-            <div className="modal-action">
-              <button type="button" className="btn" onClick={() => setShowModal(false)}>
-                Cancelar
-              </button>
-              <button type="button" className="btn btn-primary" onClick={() => void saveMutation.mutateAsync()}>
-                Guardar categoría
-              </button>
-            </div>
-          </div>
-          <button type="button" className="modal-backdrop bg-transparent" aria-label="Cerrar" onClick={() => setShowModal(false)} />
-          </dialog>
-        </ModalPortal>
+      {showForm && (
+        <CategoryFormModal category={editing} onClose={() => setShowForm(false)} />
       )}
 
       {configuring && (

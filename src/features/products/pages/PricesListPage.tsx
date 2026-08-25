@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { ArrowLeft, Settings2 } from "lucide-react";
+import { ArrowLeft, Plus, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import {
@@ -24,6 +24,7 @@ import {
   type PriceTableRow,
 } from "@/features/products/lib/price-table-rows";
 import { CategoryConfigModal } from "@/features/settings/components/CategoryConfigModal";
+import { CategoryFormModal } from "@/features/settings/components/CategoryFormModal";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { categoryMosaicTone, resolveCategoryIcon } from "@/lib/category-icons";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
@@ -81,7 +82,8 @@ function parseDecimal(raw: string): number {
 /**
  * Precios: mosaico por categoría → tipos de trabajo → tabla con precios USD/CUP y tarifa de pago.
  * La categoría activa vive en `?categoria=` para que el sidebar vuelva siempre al mosaico.
- * Desde el detalle se abre el mismo modal de Configuración para tipos, formatos y acabados.
+ * Desde el mosaico se puede dar de alta una categoría; desde el detalle se abre el mismo
+ * modal de Configuración para tipos, formatos y acabados.
  * Por defecto las filas nuevas ofertan USD; CUP es opcional.
  *
  * @returns Pantalla de administración de precios.
@@ -93,6 +95,7 @@ export function PricesListPage() {
   const { usdExchangeRate } = useAppSettings();
 
   const [selectedWorkTypeId, setSelectedWorkTypeId] = useState<number | null>(null);
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const [configuring, setConfiguring] = useState<ProductCategoryDto | null>(null);
   const [includeInactive, setIncludeInactive] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
@@ -472,12 +475,22 @@ export function PricesListPage() {
   if (selectedCategory == null) {
     return (
       <section className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Precios</h1>
-          <p className="text-sm text-base-content/70">
-            Elige una categoría para gestionar precios de venta (CUP y/o USD) y tarifas de pago a
-            trabajadores.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">Precios</h1>
+            <p className="text-sm text-base-content/70">
+              Elige una categoría para gestionar precios de venta (CUP y/o USD) y tarifas de pago a
+              trabajadores.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm gap-2"
+            onClick={() => setCreatingCategory(true)}
+          >
+            <Plus className="h-4 w-4" />
+            Nueva categoría
+          </button>
         </div>
 
         {categoriesQuery.isLoading && <p>Cargando categorías...</p>}
@@ -487,11 +500,7 @@ export function PricesListPage() {
           </div>
         )}
 
-        {categoriesQuery.data && categories.length === 0 && (
-          <p className="text-sm text-base-content/60">No hay categorías activas.</p>
-        )}
-
-        {categories.length > 0 && (
+        {!categoriesQuery.isLoading && !categoriesQuery.isError && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {categories.map((category, index) => {
               const Icon = resolveCategoryIcon(category.icon);
@@ -507,7 +516,23 @@ export function PricesListPage() {
                 </button>
               );
             })}
+            <button
+              type="button"
+              className="flex min-h-28 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-base-300 bg-base-200/40 p-4 text-center text-base-content/70 transition hover:border-primary hover:bg-primary/10 hover:text-primary"
+              onClick={() => setCreatingCategory(true)}
+            >
+              <Plus className="h-8 w-8" aria-hidden />
+              <span className="text-sm font-semibold leading-tight">Nueva categoría</span>
+            </button>
           </div>
+        )}
+
+        {creatingCategory && (
+          <CategoryFormModal
+            category={null}
+            onClose={() => setCreatingCategory(false)}
+            onSaved={handleSelectCategory}
+          />
         )}
       </section>
     );
