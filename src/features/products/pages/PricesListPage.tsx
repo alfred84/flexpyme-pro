@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import {
@@ -23,6 +23,7 @@ import {
   buildPriceTableRows,
   type PriceTableRow,
 } from "@/features/products/lib/price-table-rows";
+import { CategoryConfigModal } from "@/features/settings/components/CategoryConfigModal";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { categoryMosaicTone, resolveCategoryIcon } from "@/lib/category-icons";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
@@ -80,6 +81,7 @@ function parseDecimal(raw: string): number {
 /**
  * Precios: mosaico por categoría → tipos de trabajo → tabla con precios USD/CUP y tarifa de pago.
  * La categoría activa vive en `?categoria=` para que el sidebar vuelva siempre al mosaico.
+ * Desde el detalle se abre el mismo modal de Configuración para tipos, formatos y acabados.
  * Por defecto las filas nuevas ofertan USD; CUP es opcional.
  *
  * @returns Pantalla de administración de precios.
@@ -91,6 +93,7 @@ export function PricesListPage() {
   const { usdExchangeRate } = useAppSettings();
 
   const [selectedWorkTypeId, setSelectedWorkTypeId] = useState<number | null>(null);
+  const [configuring, setConfiguring] = useState<ProductCategoryDto | null>(null);
   const [includeInactive, setIncludeInactive] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -349,9 +352,19 @@ export function PricesListPage() {
 
   const handleBackToMosaic = () => {
     setSelectedWorkTypeId(null);
+    setConfiguring(null);
     setGlobalFilter("");
     setEditing(null);
     void navigate({ search: { categoria: undefined } });
+  };
+
+  /**
+   * Cierra el modal de configuración de categoría y refresca precios
+   * para que aparezcan filas pendientes de formatos o tipos nuevos.
+   */
+  const handleCloseCategoryConfig = () => {
+    setConfiguring(null);
+    void queryClient.invalidateQueries({ queryKey: ["prices"] });
   };
 
   /**
@@ -522,15 +535,26 @@ export function PricesListPage() {
             </p>
           </div>
         </div>
-        <label className="label cursor-pointer justify-start gap-3 sm:justify-end">
-          <span className="label-text">Mostrar inactivos</span>
-          <input
-            type="checkbox"
-            className="toggle toggle-primary"
-            checked={includeInactive}
-            onChange={(e) => setIncludeInactive(e.target.checked)}
-          />
-        </label>
+        <div className="flex flex-col items-stretch gap-3 sm:items-end">
+          <button
+            type="button"
+            className="btn btn-outline btn-sm gap-1 self-start sm:self-end"
+            title="Configurar tipos de trabajo, formatos y acabados"
+            onClick={() => setConfiguring(selectedCategory)}
+          >
+            <Settings2 className="h-4 w-4" />
+            Configurar
+          </button>
+          <label className="label cursor-pointer justify-start gap-3 sm:justify-end">
+            <span className="label-text">Mostrar inactivos</span>
+            <input
+              type="checkbox"
+              className="toggle toggle-primary"
+              checked={includeInactive}
+              onChange={(e) => setIncludeInactive(e.target.checked)}
+            />
+          </label>
+        </div>
       </div>
 
       {workTypesQuery.isLoading && <p className="text-sm">Cargando tipos de trabajo...</p>}
@@ -543,8 +567,15 @@ export function PricesListPage() {
       {!workTypesQuery.isLoading && categoryWorkTypes.length === 0 && (
         <div className="alert alert-warning">
           <span>
-            Esta categoría no tiene tipos de trabajo asociados. Configúralos en Configuración →
-            Categorías.
+            Esta categoría no tiene tipos de trabajo asociados. Usa{" "}
+            <button
+              type="button"
+              className="link font-semibold"
+              onClick={() => setConfiguring(selectedCategory)}
+            >
+              Configurar
+            </button>{" "}
+            para asociarlos.
           </span>
         </div>
       )}
@@ -781,6 +812,10 @@ export function PricesListPage() {
           />
           </dialog>
         </ModalPortal>
+      )}
+
+      {configuring && (
+        <CategoryConfigModal category={configuring} onClose={handleCloseCategoryConfig} />
       )}
     </section>
   );
