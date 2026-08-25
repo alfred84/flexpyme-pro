@@ -55,7 +55,52 @@ export function invoiceItemsToDraftLines(
     });
   }
 
-  return Array.from(groups.values());
+  return Array.from(groups.values()).map(unifyDraftLineProductPrice);
+}
+
+/**
+ * Deja un único precio de producto en todos los tipos de la línea.
+ * Si los importes ya coinciden (o solo uno cobra), usa ese valor; si difieren
+ * (pedidos antiguos que sumaban tipos), conserva el total.
+ *
+ * @param line - Línea agrupada.
+ * @returns Línea con precios de venta unificados.
+ */
+function unifyDraftLineProductPrice(line: DraftLine): DraftLine {
+  if (line.services.length === 0) {
+    return line;
+  }
+  const cups = line.services.map((s) => {
+    const n = Number.parseFloat(s.unitPrice.replace(",", "."));
+    return Number.isFinite(n) ? n : 0;
+  });
+  const usds = line.services.map((s) => {
+    const n = Number.parseFloat((s.unitPriceUsd ?? "").replace(",", "."));
+    return Number.isFinite(n) ? n : 0;
+  });
+  const positiveCups = cups.filter((c) => c > 0);
+  const positiveUsds = usds.filter((u) => u > 0);
+  const cupsEqual =
+    positiveCups.length <= 1 ||
+    positiveCups.every((c) => Math.abs(c - (positiveCups[0] ?? 0)) < 0.0001);
+  const cup = cupsEqual
+    ? Math.max(0, ...(positiveCups.length > 0 ? positiveCups : [0]))
+    : positiveCups.reduce((sum, c) => sum + c, 0);
+  const usdsEqual =
+    positiveUsds.length <= 1 ||
+    positiveUsds.every((u) => Math.abs(u - (positiveUsds[0] ?? 0)) < 0.0001);
+  const usd = usdsEqual
+    ? Math.max(0, ...(positiveUsds.length > 0 ? positiveUsds : [0]))
+    : positiveUsds.reduce((sum, u) => sum + u, 0);
+
+  return {
+    ...line,
+    services: line.services.map((s) => ({
+      ...s,
+      unitPrice: cup > 0 ? String(cup) : s.unitPrice,
+      unitPriceUsd: usd > 0 ? String(usd) : s.unitPriceUsd,
+    })),
+  };
 }
 
 /**

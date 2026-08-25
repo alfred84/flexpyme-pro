@@ -12,6 +12,7 @@ import {
   hasInvoiceAmount,
   resolveInvoiceDualAmounts,
 } from "@/features/invoices/lib/invoice-dual-amounts";
+import { invoiceItemIsIncludedInProductCharge } from "@/features/invoices/lib/product-charge";
 import { formatDate } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import {
@@ -215,7 +216,12 @@ export function FacturaDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {detailQuery.data?.items.map((line) => (
+                    {detailQuery.data?.items.map((line) => {
+                      const included = invoiceItemIsIncludedInProductCharge(
+                        line,
+                        detailQuery.data.items,
+                      );
+                      return (
                       <tr key={line.id}>
                         <td>
                           {line.categoryName}
@@ -224,16 +230,21 @@ export function FacturaDetailPage() {
                         </td>
                         <td>{line.quantity}</td>
                         <td className="text-right tabular-nums">
-                          {formatInvoiceAmountOrDash(line.unitPriceUsd, formatAmount)}
+                          {included
+                            ? "Incluido"
+                            : formatInvoiceAmountOrDash(line.unitPriceUsd, formatAmount)}
                         </td>
                         <td className="text-right tabular-nums">
-                          {formatInvoiceAmountOrDash(line.unitPrice, formatAmount)}
+                          {included
+                            ? "Incluido"
+                            : formatInvoiceAmountOrDash(line.unitPrice, formatAmount)}
                         </td>
                         <td className="text-right tabular-nums">
-                          {formatAmount(line.subtotal)}
+                          {included ? "—" : formatAmount(line.subtotal)}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

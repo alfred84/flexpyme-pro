@@ -1,4 +1,9 @@
 import { serviceMatchesWorkType } from "@/features/invoices/lib/work-type-match";
+import {
+  applyProductSalePrice,
+  findProductPriceRow,
+  normalizeProductFinish,
+} from "@/features/products/lib/product-price";
 import { SIN_FORMATO_LABEL } from "@/lib/formats";
 import type { CategoryFinishDto, CategoryFormatDto, CategoryWorkTypeDto } from "@/types/category";
 import type { PriceRowDto } from "@/types/price";
@@ -12,19 +17,9 @@ export interface PriceTableRow extends PriceRowDto {
 }
 
 /**
- * Normaliza acabado para comparar filas.
- *
- * @param value - Acabado o vacío.
- * @returns Texto en minúsculas sin espacios extremos.
- */
-function normalizeFinish(value: string | null | undefined): string {
-  return (value ?? "").trim().toLowerCase();
-}
-
-/**
  * Construye las filas a mostrar para un tipo de trabajo de una categoría.
- * Combina formatos/acabados configurados con precios existentes; si falta el precio,
- * genera un borrador con precio y tarifa en 0.
+ * El precio de venta CUP/USD es único del producto (formato + acabado) y se muestra
+ * en cada pestaña como referencia; la tarifa de pago sí es por tipo de trabajo.
  *
  * @param args - Datos de categoría, tipo, catálogos y precios.
  * @returns Filas de tabla (reales + borradores).
@@ -76,41 +71,48 @@ export function buildPriceTableRows(args: {
 
   for (const format of formatSlots) {
     for (const finish of finishSlots) {
+      const productSale = findProductPriceRow(prices, categoryId, format.id, finish);
       const match = existing.find(
         (row) =>
           row.formatId === format.id &&
-          normalizeFinish(row.finish) === normalizeFinish(finish),
+          normalizeProductFinish(row.finish) === normalizeProductFinish(finish),
       );
       if (match) {
         usedIds.add(match.id);
-        rows.push({ ...match, isDraft: false });
+        rows.push({ ...applyProductSalePrice({ ...match, isDraft: false }, productSale) });
         continue;
       }
       draftSeq -= 1;
-      rows.push({
-        id: draftSeq,
-        categoryId,
-        categoryName,
-        formatId: format.id,
-        formatLabel: format.label,
-        finish,
-        service: workType.workTypeName,
-        price: 0,
-        priceCup: null,
-        priceUsd: null,
-        isCupActive: false,
-        isUsdActive: true,
-        cost: 0,
-        validFrom: "",
-        isActive: true,
-        isDraft: true,
-      });
+      rows.push(
+        applyProductSalePrice(
+          {
+            id: draftSeq,
+            categoryId,
+            categoryName,
+            formatId: format.id,
+            formatLabel: format.label,
+            finish,
+            service: workType.workTypeName,
+            price: 0,
+            priceCup: null,
+            priceUsd: null,
+            isCupActive: false,
+            isUsdActive: true,
+            cost: 0,
+            validFrom: "",
+            isActive: true,
+            isDraft: true,
+          },
+          productSale,
+        ),
+      );
     }
   }
 
   for (const row of existing) {
     if (!usedIds.has(row.id)) {
-      rows.push({ ...row, isDraft: false });
+      const productSale = findProductPriceRow(prices, categoryId, row.formatId, row.finish);
+      rows.push(applyProductSalePrice({ ...row, isDraft: false }, productSale));
     }
   }
 

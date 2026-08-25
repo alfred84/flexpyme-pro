@@ -9,6 +9,7 @@ import {
   formatInvoiceAmountOrDash,
   resolveInvoiceDualAmounts,
 } from "@/features/invoices/lib/invoice-dual-amounts";
+import { invoiceItemIsIncludedInProductCharge } from "@/features/invoices/lib/product-charge";
 import { pushFlashMessage } from "@/lib/flash-message";
 import { formatDate } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
@@ -266,7 +267,9 @@ export function InvoicePrintPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((line) => (
+                {items.map((line) => {
+                  const included = invoiceItemIsIncludedInProductCharge(line, items);
+                  return (
                   <tr key={line.id} className="print:break-inside-avoid">
                     <td>{line.categoryName}</td>
                     <td>{line.formatLabel ?? "—"}</td>
@@ -274,14 +277,21 @@ export function InvoicePrintPage() {
                     <td>{line.finish ?? "—"}</td>
                     <td className="text-right">{line.quantity}</td>
                     <td className="text-right tabular-nums">
-                      {formatInvoiceAmountOrDash(line.unitPriceUsd, formatAmount)}
+                      {included
+                        ? "Incluido"
+                        : formatInvoiceAmountOrDash(line.unitPriceUsd, formatAmount)}
                     </td>
                     <td className="text-right tabular-nums">
-                      {formatInvoiceAmountOrDash(line.unitPrice, formatAmount)}
+                      {included
+                        ? "Incluido"
+                        : formatInvoiceAmountOrDash(line.unitPrice, formatAmount)}
                     </td>
-                    <td className="text-right tabular-nums">{formatAmount(line.subtotal)}</td>
+                    <td className="text-right tabular-nums">
+                      {included ? "—" : formatAmount(line.subtotal)}
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

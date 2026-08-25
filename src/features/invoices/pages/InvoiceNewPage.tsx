@@ -40,6 +40,7 @@ import {
 import {
   draftLineSubtotal,
   draftLineToItems,
+  draftLineUnitPriceUsd,
   isDraftLineValid,
   recalculateDraftLinesForRate,
   type DraftLine,
@@ -167,16 +168,7 @@ export function InvoiceNewPage() {
     () =>
       lines.reduce((sum, line) => {
         const qty = Number.parseInt(line.quantity, 10) || 0;
-        const usd = line.services.reduce((s, svc) => {
-          const u = Number.parseFloat((svc.unitPriceUsd ?? "").replace(",", "."));
-          if (Number.isFinite(u) && u >= 0) {
-            return s + u;
-          }
-          // Fallback: inferir USD desde CUP si falta unitPriceUsd.
-          const cup = Number.parseFloat(svc.unitPrice.replace(",", "."));
-          return Number.isFinite(cup) && summaryRate > 0 ? s + cup / summaryRate : s;
-        }, 0);
-        return sum + qty * usd;
+        return sum + qty * draftLineUnitPriceUsd(line, summaryRate);
       }, 0),
     [lines, summaryRate],
   );

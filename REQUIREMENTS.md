@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.24 | Última actualización: 2026-08-25
+### Versión: 2.25 | Última actualización: 2026-08-25
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -61,8 +61,8 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Vista detalle de pedido con todos los ítems
 - **Editar pedido**: permitido solo si no está anulado, no está listo y aún no hay trabajo registrado (sin `completed_quantity` ni lotes). Se pueden cambiar cliente, fecha, notas y líneas; los cobros ya hechos se conservan y el saldo se recalcula (no se permite bajar el total por debajo de lo pagado)
 - **Anular pedido**: motivo obligatorio; revierte cobros en caja e inventario descontado; no se permite si está totalmente cobrado; los lotes/nómina históricos se conservan. También disponible desde Facturas
+- **Resumen por tipo de trabajo**: debajo de las líneas, cantidades globales agrupadas por tipo (el importe de venta es del producto terminado, no se suma por tipo)
 - **Asignación de empleados en líneas**: al crear/editar, por cada tipo de trabajo de la línea, botón **Empleados** para seleccionar 1..N trabajadores elegibles (rol primario/secundario con ese tipo de trabajo en Configuración). Tope: N ≤ cantidad de la línea (uno por unidad). Tarifa de pago personalizada opcional por empleado
-- **Resumen por tipo de trabajo**: debajo de las líneas, totales globales (cantidad + importe) agrupados por tipo, independientemente del formato
 - **Status por línea** en Ver pedido: `En producción` | `Listo`; botón para confirmar Listo (modal con empleados, cantidades y tarifas editables → crea `production_batches`). Si todas las líneas están Listo, el pedido pasa a `production_status=listo`. **Marcar listo** en el listado aplica el mismo flujo a todas las líneas pendientes (requiere asignaciones)
 - Se eliminó **Registrar trabajo** del detalle; la asignación ocurre en crear/editar líneas
 - Historial de pedidos por cliente
@@ -139,10 +139,10 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 ### 3.7 Configuración
 - Datos del negocio (nombre, dirección, teléfono, logo)
 - Tasa de cambio USD → CUP (actualizable desde cabecera o Configuración; histórico de cambios)
-- **Precios** como entrada del sidebar (debajo de Flujo de Caja), no como tab de Configuración. Incluye precios de venta (**USD por defecto**; CUP opcional, activables por fila) y **tarifas de pago** a trabajadores en CUP (antes «Costos»); la ruta legacy `/costos` redirige a `/precios`. Cada moneda se define de forma independiente; se puede aplicar la tasa vigente de la app para derivar un precio a partir del otro. En el mosaico, **Nueva categoría** abre el mismo formulario que Configuración → Categorías de productos. Al entrar a una categoría, **Configurar** abre el mismo modal de tipos de trabajo, formatos y acabados.
+- **Precios** como entrada del sidebar (debajo de Flujo de Caja), no como tab de Configuración. Incluye precios de venta (**USD por defecto**; CUP opcional, activables por fila) y **tarifas de pago** a trabajadores en CUP (antes «Costos»); la ruta legacy `/costos` redirige a `/precios`. El precio de venta CUP/USD es **único del producto terminado** (categoría + formato + acabado); las pestañas por tipo de trabajo lo muestran como referencia y no pueden divergir. La tarifa de pago sí es por tipo de trabajo. Cada moneda se define de forma independiente; se puede aplicar la tasa vigente de la app para derivar un precio a partir del otro. En el mosaico, **Nueva categoría** abre el mismo formulario que Configuración → Categorías de productos. Al entrar a una categoría, **Configurar** abre el mismo modal de tipos de trabajo, formatos y acabados.
 - **Categorías** de productos (CRUD con `is_system`, snapshot en pedidos)
 - **Roles de empleados**: catálogo `employee_roles`; cada rol puede asociarse a uno o más **tipos de trabajo** (`role_work_types`) que definen qué trabajos pueden realizar los empleados con ese rol (principal o secundario)
-- **Tipos de trabajo, formatos y acabados por categoría**: tablas `category_work_types`, `category_formats` y `category_finishes` (vinculadas a los catálogos `work_types`, `formats` y `finishes`). Catálogo global de acabados en Configuración → Acabados. Al crear líneas se preseleccionan tipos y acabados «por defecto», se limitan formatos asociados y cada tipo se expande en un `invoice_item`.
+- **Tipos de trabajo, formatos y acabados por categoría**: tablas `category_work_types`, `category_formats` y `category_finishes` (vinculadas a los catálogos `work_types`, `formats` y `finishes`). Catálogo global de acabados en Configuración → Acabados. Al crear líneas se preseleccionan tipos y acabados «por defecto»; cada tipo se expande en un `invoice_item` para producción, pero el cobro es una sola vez (precio del producto).
 - **Unidades** de medida (CRUD con tipo, snapshot en inventario)
 - Formatos disponibles (alta, edición y baja de formatos). Incluye formato base **Sin formato** (0×0) para categorías sin medidas.
 - Backup y restauración de la base de datos
@@ -253,7 +253,7 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 ## 7. Reglas de Negocio
 
 1. Un pedido siempre está asociado a un cliente
-2. Los precios se toman de la lista de precios configurada (no se hardcodean). Cada fila puede ofrecer USD, CUP o ambas; en pedidos/facturas el unitario se resuelve en **CUP** (prioridad **USD activo** → `precio_usd × tasa`; si solo CUP, precio CUP)
+2. Los precios se toman de la lista de precios configurada (no se hardcodean). El precio de venta es **único por producto terminado** (categoría + formato + acabado), no por tipo de trabajo; en pedidos no se suman precios de Impresión+Laminado+Enmarcado. Cada fila puede ofrecer USD, CUP o ambas; el unitario se resuelve en **CUP** (prioridad **USD activo** → `precio_usd × tasa`; si solo CUP, precio CUP)
 3. Los pagos a empleados usan las **tarifas de pago** en CUP (distintas a precios de VENTA), salvo empleados con **salario fijo diario**, **salario por destajo diario** o **salario fijo mensual**
 4. La deuda anterior del cliente **no** se incluye en el total del pedido; al guardar se actualiza `clients.balance` (deuda abierta). El saldo a favor vive en `clients.credit_balance` y se puede aplicar al pedido/cobro
 5. El flujo de caja registra TODA operación de dinero (cobros a clientes, anticipos de pedido, pagos a empleados, gastos)
@@ -466,6 +466,10 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.24 — Alta de categoría desde Precios (2026-08)
 - En el mosaico de Precios, **Nueva categoría** (botón y ficha) usa el mismo formulario que Configuración → Categorías de productos.
+
+### v2.25 — Precio único del producto terminado (2026-08)
+- Precios: CUP/USD únicos por categoría + formato + acabado (visibles en cada tipo de trabajo; al guardar se sincronizan). La tarifa de pago sigue por tipo.
+- Pedidos: el total cobra una vez el producto; los tipos de trabajo extra quedan como «Incluido» (producción y salarios no cambian).
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

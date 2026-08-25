@@ -19,6 +19,8 @@ interface OrderWorkTypeSummaryProps {
   primary?: SaleCurrency;
   /** Título opcional de la sección. */
   title?: string;
+  /** Nota bajo el título (p. ej. cobro único del producto). */
+  caption?: string;
 }
 
 /**
@@ -65,6 +67,7 @@ export function OrderWorkTypeSummary(props: OrderWorkTypeSummaryProps) {
     exchangeRate = 0,
     primary = "USD",
     title = "Producción por tipo de trabajo",
+    caption,
   } = props;
   if (rows.length === 0) {
     return null;
@@ -72,6 +75,7 @@ export function OrderWorkTypeSummary(props: OrderWorkTypeSummaryProps) {
   return (
     <div className="rounded-lg border border-base-300 p-3">
       <h3 className="mb-2 text-sm font-semibold">{title}</h3>
+      {caption && <p className="mb-2 text-xs text-base-content/60">{caption}</p>}
       <div className="overflow-x-auto">
         <table className="table table-sm">
           <thead>

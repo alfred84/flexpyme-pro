@@ -269,11 +269,11 @@ pub fn prices_update(payload: UpdatePricePayload) -> Result<(), String> {
 
     let tx = conn.transaction().map_err(|e| e.to_string())?;
 
-    let (format_id, service): (Option<i64>, Option<String>) = tx
+    let (category_id, format_id, finish, service): (i64, Option<i64>, Option<String>, Option<String>) = tx
         .query_row(
-            "SELECT format_id, service FROM price_list WHERE id = ?1",
+            "SELECT category_id, format_id, finish, service FROM price_list WHERE id = ?1",
             params![payload.id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .map_err(|_| "Precio no encontrado".to_string())?;
 
@@ -300,6 +300,18 @@ pub fn prices_update(payload: UpdatePricePayload) -> Result<(), String> {
     if updated == 0 {
         return Err("Precio no encontrado".to_string());
     }
+
+    sync_product_sale_prices(
+        &tx,
+        category_id,
+        format_id,
+        &finish,
+        legacy_price,
+        price_cup,
+        price_usd,
+        if payload.is_cup_active { 1i64 } else { 0i64 },
+        if payload.is_usd_active { 1i64 } else { 0i64 },
+    )?;
 
     if let Some(ref service_name) = service {
         sync_cost_list_for_service(&tx, service_name, format_id, tarifa, payload.is_active)?;
@@ -385,6 +397,49 @@ pub fn prices_create(payload: CreatePricePayload) -> Result<PriceRowDto, String>
     .map_err(|e| e.to_string())?;
 
     let id = tx.last_insert_rowid();
+
+    let (sale_cup, sale_usd, sale_legacy, sale_cup_on, sale_usd_on) =
+        product_sale_or_sibling(
+            &tx,
+            payload.category_id,
+            payload.format_id,
+            &finish,
+            id,
+            price_cup,
+            price_usd,
+            legacy_price,
+            if payload.is_cup_active { 1i64 } else { 0i64 },
+            if payload.is_usd_active { 1i64 } else { 0i64 },
+        )?;
+
+    if sale_legacy != legacy_price
+        || sale_cup != price_cup
+        || sale_usd != price_usd
+        || sale_cup_on != i64::from(payload.is_cup_active)
+        || sale_usd_on != i64::from(payload.is_usd_active)
+    {
+        tx.execute(
+            "UPDATE price_list
+             SET price = ?1, price_cup = ?2, price_usd = ?3,
+                 is_cup_active = ?4, is_usd_active = ?5
+             WHERE id = ?6",
+            params![sale_legacy, sale_cup, sale_usd, sale_cup_on, sale_usd_on, id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    sync_product_sale_prices(
+        &tx,
+        payload.category_id,
+        payload.format_id,
+        &finish,
+        sale_legacy,
+        sale_cup,
+        sale_usd,
+        sale_cup_on,
+        sale_usd_on,
+    )?;
+
     sync_cost_list_for_service(
         &tx,
         &service,
@@ -403,6 +458,112 @@ pub fn prices_create(payload: CreatePricePayload) -> Result<PriceRowDto, String>
 
     tx.commit().map_err(|e| e.to_string())?;
     Ok(row)
+}
+
+fn finish_lookup_key(finish: &Option<String>) -> String {
+    finish
+        .as_ref()
+        .map(|v| v.trim().to_lowercase())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_default()
+}
+
+fn row_has_sale_price(price: f64, price_cup: Option<f64>, price_usd: Option<f64>) -> bool {
+    price_usd.filter(|v| *v > 0.0).is_some()
+        || price_cup.filter(|v| *v > 0.0).is_some()
+        || price > 0.0
+}
+
+/// If the new row has no sale price, copies CUP/USD from a sibling of the same product.
+fn product_sale_or_sibling(
+    conn: &rusqlite::Connection,
+    category_id: i64,
+    format_id: Option<i64>,
+    finish: &Option<String>,
+    exclude_id: i64,
+    price_cup: Option<f64>,
+    price_usd: Option<f64>,
+    legacy_price: f64,
+    is_cup_active: i64,
+    is_usd_active: i64,
+) -> Result<(Option<f64>, Option<f64>, f64, i64, i64), String> {
+    if row_has_sale_price(legacy_price, price_cup, price_usd) {
+        return Ok((
+            price_cup,
+            price_usd,
+            legacy_price,
+            is_cup_active,
+            is_usd_active,
+        ));
+    }
+    let mut stmt = conn
+        .prepare(
+            "SELECT price, price_cup, price_usd, COALESCE(is_cup_active, 0), COALESCE(is_usd_active, 1)
+             FROM price_list
+             WHERE category_id = ?1
+               AND ((format_id IS NULL AND ?2 IS NULL) OR format_id = ?2)
+               AND lower(trim(coalesce(finish, ''))) = ?3
+               AND id != ?4
+               AND (COALESCE(price_usd, 0) > 0 OR COALESCE(price_cup, price, 0) > 0)
+             LIMIT 1",
+        )
+        .map_err(|e| e.to_string())?;
+    match stmt.query_row(
+        params![category_id, format_id, finish_lookup_key(finish), exclude_id],
+        |row| {
+            Ok((
+                row.get::<_, Option<f64>>(1)?,
+                row.get::<_, Option<f64>>(2)?,
+                row.get::<_, f64>(0)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(4)?,
+            ))
+        },
+    ) {
+        Ok(found) => Ok(found),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok((
+            price_cup,
+            price_usd,
+            legacy_price,
+            is_cup_active,
+            is_usd_active,
+        )),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Copies sale prices to every work-type row of the same finished product.
+fn sync_product_sale_prices(
+    conn: &rusqlite::Connection,
+    category_id: i64,
+    format_id: Option<i64>,
+    finish: &Option<String>,
+    legacy_price: f64,
+    price_cup: Option<f64>,
+    price_usd: Option<f64>,
+    is_cup_active: i64,
+    is_usd_active: i64,
+) -> Result<(), String> {
+    conn.execute(
+        "UPDATE price_list
+         SET price = ?1, price_cup = ?2, price_usd = ?3,
+             is_cup_active = ?4, is_usd_active = ?5
+         WHERE category_id = ?6
+           AND ((format_id IS NULL AND ?7 IS NULL) OR format_id = ?7)
+           AND lower(trim(coalesce(finish, ''))) = ?8",
+        params![
+            legacy_price,
+            price_cup,
+            price_usd,
+            is_cup_active,
+            is_usd_active,
+            category_id,
+            format_id,
+            finish_lookup_key(finish),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Syncs `cost_list.unit_cost` for a work type + format pair.
@@ -582,18 +743,14 @@ pub fn prices_lookup(args: PriceLookupArgs) -> Result<Option<f64>, String> {
         .map_err(|e| e.to_string())?;
 
     let want_finish = normalize_lookup_token(&args.finish);
-    let want_service = normalize_lookup_token(&args.service);
 
     for r in rows {
-        let (fid, finish, service, price_cup, price_usd, cup_on, usd_on) =
+        let (fid, finish, _service, price_cup, price_usd, cup_on, usd_on) =
             r.map_err(|e| e.to_string())?;
         if args.format_id != fid {
             continue;
         }
         if normalize_lookup_token(&finish) != want_finish {
-            continue;
-        }
-        if normalize_lookup_token(&service) != want_service {
             continue;
         }
         if cup_on {
@@ -612,7 +769,6 @@ pub fn prices_lookup(args: PriceLookupArgs) -> Result<Option<f64>, String> {
                 return Ok(Some(u * rate));
             }
         }
-        return Ok(None);
     }
     Ok(None)
 }

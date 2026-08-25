@@ -4,11 +4,10 @@ import { SearchSelect } from "@/components/common/SearchSelect";
 import { LineEmployeesModal } from "@/features/invoices/components/LineEmployeesModal";
 import {
   draftLineSubtotal,
-  filterPricesByCategory,
   formatOptionsForCategory,
   resolveRecipeMaterials,
+  resolveSaleUnitPriceCup,
   resolveSaleUnitPriceUsd,
-  resolveServicePrice,
   serviceAndFinishOptions,
   type DraftLine,
   type DraftLineMaterial,
@@ -16,6 +15,7 @@ import {
   type DraftMaterialMode,
   type DraftServiceAssignment,
 } from "@/features/invoices/lib/order-draft";
+import { findProductPriceRow } from "@/features/products/lib/product-price";
 import { DualMoneyText } from "@/components/common/DualMoneyText";
 import { SalePriceInput } from "@/features/invoices/components/SalePriceInput";
 import { formatInventoryMaterialOptionLabel } from "@/features/inventory/lib/inventory-item-label";
@@ -198,8 +198,9 @@ function hydrateManualMaterials(
 }
 
 /**
- * Modal CRUD para añadir o editar una línea de pedido con tipos de trabajo
- * por categoría y cálculo automático de precios.
+ * Modal CRUD para añadir o editar una línea de pedido.
+ * El precio de venta es único del producto (formato + acabado); los tipos de trabajo
+ * son para producción y empleados.
  *
  * @param props - Estado del modal y catálogos.
  * @returns Diálogo de línea de pedido.
@@ -231,31 +232,16 @@ export function OrderLineModal(props: OrderLineModalProps) {
   const [employeesForService, setEmployeesForService] = useState<string | null>(null);
 
   /**
-   * Resuelve precios USD+CUP para un tipo de trabajo.
+   * Resuelve el precio único del producto (formato + acabado), no por tipo de trabajo.
    */
-  const resolveServicePrices = (
+  const resolveProductPrices = (
     categoryId: number,
     formatId: number | null,
-    service: string,
     finish: string,
   ): { unitPrice: string; unitPriceUsd: string } => {
-    const cup = resolveServicePrice(
-      prices,
-      categoryId,
-      formatId,
-      service,
-      finish,
-      usdExchangeRate,
-    );
-    const rows = filterPricesByCategory(prices, categoryId, formatId);
-    const norm = (v: string) => v.trim().toLowerCase();
-    const match =
-      rows.find(
-        (row) =>
-          norm(row.service ?? "") === norm(service) &&
-          norm(row.finish ?? "") === norm(finish),
-      ) ?? rows.find((row) => norm(row.service ?? "") === norm(service));
-    const usd = resolveSaleUnitPriceUsd(match, usdExchangeRate);
+    const row = findProductPriceRow(prices, categoryId, formatId, finish);
+    const cup = resolveSaleUnitPriceCup(row, usdExchangeRate);
+    const usd = resolveSaleUnitPriceUsd(row, usdExchangeRate);
     const usdFallback =
       usd ??
       (cup !== null && usdExchangeRate > 0 ? cup / usdExchangeRate : null);
@@ -275,8 +261,8 @@ export function OrderLineModal(props: OrderLineModalProps) {
   ): DraftLineService[] => {
     const options = workTypeOptionsFor(categoryWorkTypes, prices, categoryId, formatId);
     const defaults = options.filter((o) => o.isDefault);
+    const priced = resolveProductPrices(categoryId, formatId, finish);
     return defaults.map((o) => {
-      const priced = resolveServicePrices(categoryId, formatId, o.name, finish);
       return {
         service: o.name,
         unitPrice: priced.unitPrice,
@@ -351,13 +337,14 @@ export function OrderLineModal(props: OrderLineModalProps) {
     categoryId: number,
     formatId: number | null,
     finish: string,
-  ): DraftLineService[] =>
-    services.map((s) => {
-      const priced = resolveServicePrices(categoryId, formatId, s.service, finish);
-      return priced.unitPrice !== ""
+  ): DraftLineService[] => {
+    const priced = resolveProductPrices(categoryId, formatId, finish);
+    return services.map((s) =>
+      priced.unitPrice !== ""
         ? { ...s, unitPrice: priced.unitPrice, unitPriceUsd: priced.unitPriceUsd }
-        : s;
-    });
+        : s,
+    );
+  };
 
   const changeCategory = (categoryId: number) => {
     setDraft((prev) => {
@@ -419,12 +406,17 @@ export function OrderLineModal(props: OrderLineModalProps) {
         if (prev.services.some((s) => s.service === name)) {
           return prev;
         }
-        const priced = resolveServicePrices(
-          prev.categoryId,
-          prev.formatId,
-          name,
-          prev.finish,
-        );
+        const priced =
+          prev.services[0] != null && prev.services[0].unitPrice !== ""
+            ? {
+                unitPrice: prev.services[0].unitPrice,
+                unitPriceUsd: prev.services[0].unitPriceUsd,
+              }
+            : resolveProductPrices(
+                prev.categoryId,
+                prev.formatId,
+                prev.finish,
+              );
         return {
           ...prev,
           services: [
@@ -442,7 +434,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
     });
   };
 
-  const setWorkTypePrice = (name: string, unitPrice: string) => {
+  const setProductPrice = (unitPrice: string) => {
     setDraft((prev) => {
       if (!prev) {
         return prev;
@@ -450,11 +442,12 @@ export function OrderLineModal(props: OrderLineModalProps) {
       const cup = Number.parseFloat(unitPrice.replace(",", "."));
       const unitPriceUsd =
         Number.isFinite(cup) && usdExchangeRate > 0 ? String(cup / usdExchangeRate) : "";
+      if (prev.services.length === 0) {
+        return prev;
+      }
       return {
         ...prev,
-        services: prev.services.map((s) =>
-          s.service === name ? { ...s, unitPrice, unitPriceUsd } : s,
-        ),
+        services: prev.services.map((s) => ({ ...s, unitPrice, unitPriceUsd })),
       };
     });
   };
@@ -520,7 +513,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
       return !Number.isFinite(unit) || unit < 0;
     });
     if (invalidPrice) {
-      setError("Indica un precio válido para cada tipo de trabajo.");
+      setError("Indica un precio válido del producto.");
       return;
     }
     const qtyNum = Number.parseInt(draft.quantity, 10);
@@ -782,6 +775,25 @@ export function OrderLineModal(props: OrderLineModalProps) {
           </div>
 
           <div className="form-control sm:col-span-2">
+            <span className="label-text text-xs">Precio del producto</span>
+            <p className="mb-1 text-xs text-base-content/50">
+              Único por formato y acabado. Los tipos de trabajo no se cobran por separado.
+            </p>
+            <SalePriceInput
+              valueCup={draft.services[0]?.unitPrice ?? manualPrice}
+              rate={usdExchangeRate}
+              placeholder="Precio"
+              onChangeCup={(cup) => {
+                if (hasConfiguredWorkTypes) {
+                  setProductPrice(cup);
+                } else {
+                  setManualPrice(cup);
+                }
+              }}
+            />
+          </div>
+
+          <div className="form-control sm:col-span-2">
             <span className="label-text text-xs">Tipos de trabajo</span>
             {hasConfiguredWorkTypes ? (
               <div className="mt-1 space-y-1 rounded-lg border border-base-300 p-2">
@@ -800,13 +812,6 @@ export function OrderLineModal(props: OrderLineModalProps) {
                         />
                         {opt.name}
                       </label>
-                      <SalePriceInput
-                        valueCup={selected?.unitPrice ?? ""}
-                        rate={usdExchangeRate}
-                        disabled={!checked}
-                        placeholder="Precio"
-                        onChangeCup={(cup) => setWorkTypePrice(opt.name, cup)}
-                      />
                       <button
                         type="button"
                         className="btn btn-ghost btn-xs"
@@ -821,19 +826,10 @@ export function OrderLineModal(props: OrderLineModalProps) {
                 })}
               </div>
             ) : (
-              <div className="mt-1 space-y-1">
-                <p className="text-xs text-base-content/50">
-                  Esta categoría no tiene tipos de trabajo asociados. Configúralos en Categorías o
-                  indica un precio unitario.
-                </p>
-                <SalePriceInput
-                  valueCup={manualPrice}
-                  rate={usdExchangeRate}
-                  placeholder="Precio unitario"
-                  className="input input-bordered input-sm w-36"
-                  onChangeCup={setManualPrice}
-                />
-              </div>
+              <p className="mt-1 text-xs text-base-content/50">
+                Esta categoría no tiene tipos de trabajo asociados. Configúralos en Categorías o
+                indica un precio unitario arriba.
+              </p>
             )}
           </div>
 
@@ -1009,7 +1005,7 @@ export function OrderLineModal(props: OrderLineModalProps) {
           <span className="text-base-content/60">{moneyHeading("Subtotal de la línea", "USD")}</span>
           <span className="font-semibold">
             <DualMoneyText
-              amountCup={draftLineSubtotal(draft)}
+              amountCup={draftLineSubtotal(draft, usdExchangeRate)}
               rate={usdExchangeRate}
               primary="USD"
             />

@@ -86,7 +86,9 @@ const DEFAULT_PRICE_TABLE_SORTING: SortingState = [
 ];
 
 /**
- * Precios: mosaico por categoría → tipos de trabajo → tabla con precios USD/CUP y tarifa de pago.
+ * Precios: mosaico por categoría → tipos de trabajo → tabla.
+ * El precio de venta CUP/USD es único por formato y acabado (producto terminado);
+ * la tarifa de pago es por tipo de trabajo.
  * La categoría activa vive en `?categoria=` para que el sidebar vuelva siempre al mosaico.
  * Desde el mosaico se puede dar de alta una categoría; desde el detalle se abre el mismo
  * modal de Configuración para tipos, formatos y acabados.
@@ -566,7 +568,8 @@ export function PricesListPage() {
           <div>
             <h1 className="text-2xl font-bold">{selectedCategory.name}</h1>
             <p className="text-sm text-base-content/70">
-              Precio de venta y tarifa de pago por formato según el tipo de trabajo. Las filas
+              Precio de venta único por formato y acabado (producto terminado); se muestra en
+              cada tipo de trabajo como referencia. La tarifa de pago sí es por tipo. Las filas
               pendientes aparecen en 0 hasta que las definas.
             </p>
           </div>

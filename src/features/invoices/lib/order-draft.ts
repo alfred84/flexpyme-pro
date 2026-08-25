@@ -1,3 +1,4 @@
+import { findProductPriceRow, priceRowHasSalePrice } from "@/features/products/lib/product-price";
 import { SIN_FORMATO_LABEL } from "@/lib/formats";
 import type { CategoryWorkTypeDto } from "@/types/category";
 import type { CreateInvoiceItemPayload } from "@/types/invoice";
@@ -5,7 +6,9 @@ import type { InventoryRecipeDto, InvoiceItemMaterialInput } from "@/types/inven
 import type { PriceRowDto } from "@/types/price";
 
 /**
- * Servicio/tipo de trabajo seleccionado dentro de una línea con su precio.
+ * Servicio/tipo de trabajo seleccionado dentro de una línea.
+ * `unitPrice` / `unitPriceUsd` son el precio único del producto (referencia);
+ * al persistir solo el primer ítem lleva el cobro.
  */
 export interface DraftLineService {
   /** Nombre del tipo de trabajo (se guarda en `invoice_items.service`). */
@@ -52,8 +55,9 @@ export interface DraftLineMaterial {
  *
  * Una línea representa un producto (categoría) + formato + acabado con una
  * cantidad, y uno o más tipos de trabajo (Impresión, Laminado, Enmarcado...).
- * Al guardar el pedido, cada tipo se expande en un `invoice_item` independiente
- * (el campo `service` almacena el nombre del tipo de trabajo).
+ * El precio de venta es único del producto terminado; al guardar el pedido
+ * cada tipo se expande en un `invoice_item` (producción), pero solo el primero
+ * lleva el cobro.
  */
 export interface DraftLine {
   key: string;
@@ -351,41 +355,37 @@ export function recalculateDraftLinesForRate(
 }
 
 /**
- * Resuelve precio unitario (CUP) desde filas filtradas según servicio y acabado.
+ * Resuelve precio unitario (CUP) del producto terminado (formato + acabado).
+ * El tipo de trabajo se ignora: el cobro es único.
  *
- * @param rows - Filas de precio ya filtradas.
- * @param service - Servicio buscado.
+ * @param rows - Filas de precio ya filtradas por categoría/formato.
+ * @param _service - Ignorado (compatibilidad de firma).
  * @param finish - Acabado buscado.
  * @param exchangeRate - Tasa USD→CUP para filas solo-USD.
  * @returns Precio en CUP o `null` si no hay coincidencia usable.
  */
 export function resolvePriceFromRows(
   rows: PriceRowDto[],
-  service: string,
+  _service: string,
   finish: string,
   exchangeRate = 0,
 ): number | null {
-  const norm = (v: string) => v.trim().toLowerCase();
-  const wantService = norm(service);
-  const wantFinish = norm(finish);
-  const match =
-    rows.find((row) => {
-      const rowService = norm(row.service ?? "");
-      const rowFinish = norm(row.finish ?? "");
-      return rowService === wantService && rowFinish === wantFinish;
-    }) ??
-    // Coincidencia por servicio ignorando el acabado si no hay exacta.
-    rows.find((row) => norm(row.service ?? "") === wantService);
+  const wantFinish = finish.trim().toLowerCase();
+  const byFinish = rows.filter(
+    (row) => (row.finish ?? "").trim().toLowerCase() === wantFinish,
+  );
+  const pool = byFinish.length > 0 ? byFinish : rows;
+  const match = pool.find(priceRowHasSalePrice) ?? pool[0];
   return resolveSaleUnitPriceCup(match, exchangeRate);
 }
 
 /**
- * Resuelve el precio de un servicio concreto para una categoría/formato/acabado (en CUP).
+ * Resuelve el precio de venta CUP del producto (categoría/formato/acabado).
  *
  * @param prices - Lista de precios.
  * @param categoryId - Categoría.
  * @param formatId - Formato opcional.
- * @param service - Servicio.
+ * @param service - Ignorado; se mantiene por compatibilidad.
  * @param finish - Acabado.
  * @param exchangeRate - Tasa USD→CUP vigente.
  * @returns Precio unitario en CUP o `null`.
@@ -398,6 +398,10 @@ export function resolveServicePrice(
   finish: string,
   exchangeRate = 0,
 ): number | null {
+  const row = findProductPriceRow(prices, categoryId, formatId, finish);
+  if (row) {
+    return resolveSaleUnitPriceCup(row, exchangeRate);
+  }
   const rows = filterPricesByCategory(prices, categoryId, formatId);
   return resolvePriceFromRows(rows, service, finish, exchangeRate);
 }
@@ -423,8 +427,51 @@ export function draftServiceUnitPriceCup(
 }
 
 /**
- * Calcula subtotal de una línea de borrador (cantidad × suma de servicios).
- * Si hay tasa y precios USD, el CUP se deriva de USD × tasa.
+ * Precio unitario CUP del producto (una vez; no suma tipos de trabajo).
+ * Si los tipos tienen importes distintos (pedidos antiguos), usa la suma para no alterar el total.
+ *
+ * @param line - Línea de borrador.
+ * @param exchangeRate - Tasa USD→CUP del pedido.
+ * @returns Precio unitario en CUP.
+ */
+export function draftLineUnitPriceCup(line: DraftLine, exchangeRate = 0): number {
+  const cups = line.services.map((s) => draftServiceUnitPriceCup(s, exchangeRate));
+  const positive = cups.filter((c) => c > 0);
+  if (positive.length === 0) {
+    return cups[0] ?? 0;
+  }
+  const first = positive[0] ?? 0;
+  const allEqual = positive.every((c) => Math.abs(c - first) < 0.0001);
+  return allEqual ? first : positive.reduce((sum, c) => sum + c, 0);
+}
+
+/**
+ * Precio unitario USD del producto (una vez; no suma tipos de trabajo).
+ *
+ * @param line - Línea de borrador.
+ * @param exchangeRate - Tasa USD→CUP (para inferir USD desde CUP).
+ * @returns Precio unitario en USD.
+ */
+export function draftLineUnitPriceUsd(line: DraftLine, exchangeRate = 0): number {
+  const usds = line.services.map((s) => {
+    const u = Number.parseFloat((s.unitPriceUsd ?? "").replace(",", "."));
+    if (Number.isFinite(u) && u >= 0) {
+      return u;
+    }
+    const cup = Number.parseFloat(s.unitPrice.replace(",", "."));
+    return Number.isFinite(cup) && exchangeRate > 0 ? cup / exchangeRate : 0;
+  });
+  const positive = usds.filter((u) => u > 0);
+  if (positive.length === 0) {
+    return usds[0] ?? 0;
+  }
+  const first = positive[0] ?? 0;
+  const allEqual = positive.every((u) => Math.abs(u - first) < 0.0001);
+  return allEqual ? first : positive.reduce((sum, u) => sum + u, 0);
+}
+
+/**
+ * Calcula subtotal de una línea (cantidad × precio único del producto).
  *
  * @param line - Línea de borrador.
  * @param exchangeRate - Tasa USD→CUP del pedido (opcional).
@@ -435,11 +482,7 @@ export function draftLineSubtotal(line: DraftLine, exchangeRate = 0): number {
   if (!Number.isFinite(qty)) {
     return 0;
   }
-  const servicesTotal = line.services.reduce(
-    (sum, s) => sum + draftServiceUnitPriceCup(s, exchangeRate),
-    0,
-  );
-  return qty * servicesTotal;
+  return qty * draftLineUnitPriceCup(line, exchangeRate);
 }
 
 /**
@@ -476,17 +519,14 @@ export function isDraftLineValid(line: DraftLine): boolean {
 }
 
 /**
- * Expande una línea en uno o varios items de factura (uno por servicio).
- *
- * @param line - Línea de borrador válida.
- * @returns Items de factura listos para el backend.
- */
-/**
- * Expande una línea en ítems de factura, adjuntando materiales según el modo.
+ * Expande una línea en ítems de factura (uno por tipo de trabajo).
+ * Solo el primer ítem lleva el precio de venta del producto; el resto queda en 0
+ * (producción/empleados/materiales siguen por tipo).
  *
  * @param line - Línea de borrador válida.
  * @param recipes - Normas activas (para modo norma).
  * @param categoryWorkTypes - Tipos de trabajo por categoría.
+ * @param exchangeRate - Tasa USD→CUP para completar USD si falta.
  * @returns Items de factura listos para el backend.
  */
 export function draftLineToItems(
@@ -509,7 +549,10 @@ export function draftLineToItems(
           .filter((m) => Number.isFinite(m.quantityPerUnit) && m.quantityPerUnit > 0)
       : [];
 
-  return line.services.map((s) => {
+  const productCup = draftLineUnitPriceCup(line, exchangeRate);
+  const productUsd = draftLineUnitPriceUsd(line, exchangeRate);
+
+  return line.services.map((s, index) => {
     const service = s.service.trim() || null;
     const materials =
       line.materialMode === "manual"
@@ -522,13 +565,9 @@ export function draftLineToItems(
             finish,
             service,
           );
-    const unitPrice = Number.parseFloat(s.unitPrice.replace(",", "."));
-    const cup = Number.isFinite(unitPrice) ? unitPrice : 0;
-    const usdParsed = Number.parseFloat((s.unitPriceUsd ?? "").replace(",", "."));
-    let unitPriceUsd = Number.isFinite(usdParsed) && usdParsed >= 0 ? usdParsed : 0;
-    if (unitPriceUsd <= 0 && cup > 0 && exchangeRate > 0) {
-      unitPriceUsd = cup / exchangeRate;
-    }
+    const isChargeItem = index === 0;
+    const cup = isChargeItem ? productCup : 0;
+    const unitPriceUsd = isChargeItem ? productUsd : 0;
     return {
       categoryId: line.categoryId,
       formatId: line.formatId,

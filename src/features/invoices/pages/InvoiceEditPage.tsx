@@ -30,6 +30,7 @@ import { invoiceItemsToDraftLines } from "@/features/invoices/lib/invoice-to-dra
 import {
   draftLineSubtotal,
   draftLineToItems,
+  draftLineUnitPriceUsd,
   isDraftLineValid,
   recalculateDraftLinesForRate,
   type DraftLine,
@@ -158,13 +159,7 @@ export function InvoiceEditPage() {
     () =>
       lines.reduce((sum, line) => {
         const qty = Number.parseInt(line.quantity, 10) || 0;
-        const usd = line.services.reduce((s, svc) => {
-          const u = Number.parseFloat((svc.unitPriceUsd ?? "").replace(",", "."));
-          if (Number.isFinite(u) && u >= 0) return s + u;
-          const cup = Number.parseFloat(svc.unitPrice.replace(",", "."));
-          return Number.isFinite(cup) && displayRate > 0 ? s + cup / displayRate : s;
-        }, 0);
-        return sum + qty * usd;
+        return sum + qty * draftLineUnitPriceUsd(line, displayRate);
       }, 0),
     [lines, displayRate],
   );
