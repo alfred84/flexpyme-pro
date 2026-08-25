@@ -79,6 +79,12 @@ function parseDecimal(raw: string): number {
   return Number.parseFloat(raw.trim().replace(",", "."));
 }
 
+/** Orden inicial de la tabla: acabado y, dentro de cada acabado, formato. */
+const DEFAULT_PRICE_TABLE_SORTING: SortingState = [
+  { id: "finish", desc: false },
+  { id: "formatLabel", desc: false },
+];
+
 /**
  * Precios: mosaico por categoría → tipos de trabajo → tabla con precios USD/CUP y tarifa de pago.
  * La categoría activa vive en `?categoria=` para que el sidebar vuelva siempre al mosaico.
@@ -99,7 +105,7 @@ export function PricesListPage() {
   const [configuring, setConfiguring] = useState<ProductCategoryDto | null>(null);
   const [includeInactive, setIncludeInactive] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [sorting, setSorting] = useState<SortingState>(DEFAULT_PRICE_TABLE_SORTING);
   const [editing, setEditing] = useState<PriceTableRow | null>(null);
   const [editPriceCup, setEditPriceCup] = useState("");
   const [editPriceUsd, setEditPriceUsd] = useState("");
@@ -276,6 +282,11 @@ export function PricesListPage() {
       {
         accessorKey: "finish",
         header: "Acabado",
+        sortingFn: (rowA, rowB, columnId) => {
+          const a = (rowA.getValue<string | null>(columnId) ?? "").trim();
+          const b = (rowB.getValue<string | null>(columnId) ?? "").trim();
+          return a.localeCompare(b, "es", { sensitivity: "base" });
+        },
         cell: (info) => info.getValue<string | null>() ?? "—",
       },
       {
@@ -349,7 +360,7 @@ export function PricesListPage() {
   const handleSelectCategory = (category: ProductCategoryDto) => {
     setSelectedWorkTypeId(null);
     setGlobalFilter("");
-    setSorting([]);
+    setSorting(DEFAULT_PRICE_TABLE_SORTING);
     void navigate({ search: { categoria: category.id } });
   };
 
