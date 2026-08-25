@@ -16,6 +16,11 @@ import {
   aggregateWorkTypeSummary,
 } from "@/features/invoices/components/OrderWorkTypeSummary";
 import { DualMoneyText } from "@/components/common/DualMoneyText";
+import {
+  groupInvoiceItemsByProduct,
+  invoiceProductGroupSubtotal,
+  invoiceProductGroupUnitPrice,
+} from "@/features/invoices/lib/product-charge";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import type { SaleCurrency } from "@/lib/currency";
 import { formatDate } from "@/lib/format-date";
@@ -394,7 +399,10 @@ export function InvoiceDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {detailQuery.data?.items.map((line) => {
+                {groupInvoiceItemsByProduct(detailQuery.data?.items ?? []).flatMap((group) => {
+                  const unitCup = invoiceProductGroupUnitPrice(group);
+                  const subtotalCup = invoiceProductGroupSubtotal(group);
+                  return group.map((line, index) => {
                   const pending = Math.max(0, line.quantity - line.completedQuantity);
                   const isListo = (line.productionLineStatus ?? "en_produccion") === "listo";
                   return (
@@ -430,20 +438,37 @@ export function InvoiceDetailPage() {
                           <span className="text-xs text-base-content/50"> (faltan {pending})</span>
                         )}
                       </td>
-                      <td className="text-right">
-                        <DualMoneyText
-                          amountCup={line.unitPrice}
-                          rate={displayRate}
-                          primary={displayPrimary}
-                        />
-                      </td>
-                      <td className="text-right">
-                        <DualMoneyText
-                          amountCup={line.subtotal}
-                          rate={displayRate}
-                          primary={displayPrimary}
-                        />
-                      </td>
+                      {index === 0 ? (
+                        <>
+                          <td
+                            rowSpan={group.length}
+                            className="border-l border-base-300 bg-base-200/50 text-right align-middle"
+                          >
+                            <div className="flex flex-col items-end gap-0.5">
+                              {group.length > 1 ? (
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-base-content/50">
+                                  Producto
+                                </span>
+                              ) : null}
+                              <DualMoneyText
+                                amountCup={unitCup}
+                                rate={displayRate}
+                                primary={displayPrimary}
+                              />
+                            </div>
+                          </td>
+                          <td
+                            rowSpan={group.length}
+                            className="bg-base-200/50 text-right align-middle"
+                          >
+                            <DualMoneyText
+                              amountCup={subtotalCup}
+                              rate={displayRate}
+                              primary={displayPrimary}
+                            />
+                          </td>
+                        </>
+                      ) : null}
                       <td>
                         <div className="flex flex-wrap items-center gap-1">
                           <span
@@ -471,6 +496,7 @@ export function InvoiceDetailPage() {
                       </td>
                     </tr>
                   );
+                  });
                 })}
               </tbody>
             </table>
@@ -479,6 +505,8 @@ export function InvoiceDetailPage() {
           <OrderWorkTypeSummary
             exchangeRate={displayRate}
             primary={displayPrimary}
+            title="Producción por tipo de trabajo"
+            caption="El importe es del producto terminado; los tipos adicionales no se cobran aparte."
             rows={aggregateWorkTypeSummary(detailQuery.data?.items ?? [])}
           />
 
