@@ -245,18 +245,11 @@ fn trim_optional(value: &Option<String>) -> Option<String> {
 fn insert_invoice_item_assignments(
     tx: &rusqlite::Transaction<'_>,
     invoice_item_id: i64,
-    quantity: i64,
     service: &Option<String>,
     assignments: &[InvoiceItemAssignmentInput],
 ) -> Result<(), String> {
     if assignments.is_empty() {
         return Ok(());
-    }
-    if assignments.len() as i64 > quantity {
-        return Err(format!(
-            "No se pueden asignar m?s de {} empleado(s) para la cantidad de la l?nea",
-            quantity
-        ));
     }
     let mut seen = std::collections::HashSet::new();
     for a in assignments {
@@ -320,6 +313,21 @@ fn insert_invoice_item_assignments(
         .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Cantidad de nómina por empleado al marcar Listo.
+/// Si hay más trabajadores que unidades, todos colaboran (`pending` cada uno).
+fn pay_quantity_for_assigned_worker(worker_count: usize, pending: i64, index: usize) -> i64 {
+    if pending <= 0 || worker_count == 0 || index >= worker_count {
+        return 0;
+    }
+    if (worker_count as i64) > pending {
+        return pending;
+    }
+    if index + 1 == worker_count {
+        return pending - (worker_count as i64 - 1);
+    }
+    1
 }
 
 fn load_item_assignments(
@@ -1276,7 +1284,6 @@ pub fn invoices_create(payload: CreateInvoicePayload) -> Result<CreateInvoiceRes
             insert_invoice_item_assignments(
                 &tx,
                 invoice_item_id,
-                item.quantity,
                 &service,
                 assignments,
             )?;
@@ -1578,7 +1585,6 @@ pub fn invoices_update(payload: UpdateInvoicePayload) -> Result<InvoiceHeaderDto
             insert_invoice_item_assignments(
                 &tx,
                 invoice_item_id,
-                item.quantity,
                 &service,
                 assignments,
             )?;
@@ -2206,23 +2212,19 @@ pub fn invoice_item_mark_listo(payload: MarkInvoiceItemListoPayload) -> Result<I
         return Err("Esta linea ya esta marcada como listo".to_string());
     }
     let pending = (quantity - completed).max(0);
-    if total_qty > pending {
-        return Err(format!(
-            "La cantidad asignada ({}) supera lo pendiente ({})",
-            total_qty, pending
-        ));
-    }
-    if (payload.workers.len() as i64) > quantity {
-        return Err(format!(
-            "No se pueden asignar mas de {} empleado(s) para esta linea",
-            quantity
-        ));
+    for w in &payload.workers {
+        if w.quantity > pending {
+            return Err(format!(
+                "La cantidad de un trabajador ({}) supera lo pendiente ({})",
+                w.quantity, pending
+            ));
+        }
     }
 
     let shortages = crate::commands::inventory::line_material_shortages_for_quantity(
         &tx,
         payload.invoice_item_id,
-        total_qty,
+        pending,
     )?;
     if !shortages.is_empty() {
         return Err(format!(
@@ -2311,7 +2313,7 @@ pub fn invoice_item_mark_listo(payload: MarkInvoiceItemListoPayload) -> Result<I
              completed_at = datetime('now'),
              production_line_status = 'listo'
          WHERE id = ?2",
-        params![total_qty, payload.invoice_item_id],
+        params![pending, payload.invoice_item_id],
     )
     .map_err(|e| e.to_string())?;
 
@@ -2329,7 +2331,7 @@ pub fn invoice_item_mark_listo(payload: MarkInvoiceItemListoPayload) -> Result<I
         service_filter,
         format_id,
         finish.as_deref(),
-        total_qty,
+        pending,
     )?;
 
     tx.execute(
@@ -2344,7 +2346,8 @@ pub fn invoice_item_mark_listo(payload: MarkInvoiceItemListoPayload) -> Result<I
     invoices_get_detail(invoice_id)
 }
 
-/// Marca todas las lineas pendientes como listo (1 unidad por empleado; resto al ultimo).
+/// Marca todas las lineas pendientes como listo.
+/// Si hay más trabajadores que unidades, cada uno cobra `pending` (colaboración).
 #[tauri::command]
 pub fn invoice_mark_all_listo(invoice_id: i64, date: String) -> Result<InvoiceDetailDto, String> {
     let date = date.trim().to_string();
@@ -2386,17 +2389,9 @@ pub fn invoice_mark_all_listo(invoice_id: i64, date: String) -> Result<InvoiceDe
         let service = item.service.clone().unwrap_or_default();
         let default_cost = default_unit_cost_for_item(&conn, &service, item.format_id);
         let n = item.assignments.len();
-        let mut remaining = pending;
         let mut workers: Vec<MarkListoWorkerPayload> = Vec::new();
         for (idx, a) in item.assignments.iter().enumerate() {
-            let is_last = idx + 1 == n;
-            let qty = if is_last {
-                remaining
-            } else {
-                let q = 1i64.min(remaining);
-                remaining -= q;
-                q
-            };
+            let qty = pay_quantity_for_assigned_worker(n, pending, idx);
             if qty <= 0 {
                 continue;
             }

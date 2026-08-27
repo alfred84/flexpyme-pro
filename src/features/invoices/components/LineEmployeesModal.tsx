@@ -11,7 +11,7 @@ interface LineEmployeesModalProps {
   open: boolean;
   /** Nombre del tipo de trabajo (p.ej. Laminado). */
   workTypeName: string;
-  /** Cantidad de la línea (= máximo de empleados). */
+  /** Cantidad del producto (solo contexto; no limita cuántos empleados). */
   quantity: number;
   initial: DraftServiceAssignment[];
   onClose: () => void;
@@ -20,6 +20,7 @@ interface LineEmployeesModalProps {
 
 /**
  * Modal para seleccionar empleados elegibles de un tipo de trabajo y tarifa opcional.
+ * Permite varios trabajadores aunque la cantidad del producto sea 1.
  *
  * @param props - Props del modal.
  */
@@ -46,11 +47,10 @@ export function LineEmployeesModal(props: LineEmployeesModalProps) {
     return null;
   }
 
-  const maxEmployees = Math.max(1, quantity);
   const byId = new Map(selected.map((a) => [a.employeeId, a]));
 
   /**
-   * Alterna la selección de un empleado respetando el tope de cantidad.
+   * Alterna la selección de un empleado (sin tope por cantidad del producto).
    *
    * @param emp - Empleado elegible.
    * @param checked - Si se selecciona.
@@ -58,12 +58,6 @@ export function LineEmployeesModal(props: LineEmployeesModalProps) {
   const toggleEmployee = (emp: EmployeeForWorkTypeDto, checked: boolean) => {
     setError(null);
     if (checked) {
-      if (selected.length >= maxEmployees) {
-        setError(
-          `Solo se pueden asignar hasta ${maxEmployees} empleado(s) (uno por unidad).`,
-        );
-        return;
-      }
       if (byId.has(emp.id)) {
         return;
       }
@@ -95,12 +89,6 @@ export function LineEmployeesModal(props: LineEmployeesModalProps) {
   };
 
   const handleSave = () => {
-    if (selected.length > maxEmployees) {
-      setError(
-        `Solo se pueden asignar hasta ${maxEmployees} empleado(s) (uno por unidad).`,
-      );
-      return;
-    }
     for (const a of selected) {
       const raw = a.customUnitCost.trim().replace(",", ".");
       if (raw === "") {
@@ -124,8 +112,9 @@ export function LineEmployeesModal(props: LineEmployeesModalProps) {
         <div className="modal-box max-w-lg">
           <h3 className="font-bold text-lg">Empleados — {workTypeName}</h3>
           <p className="mt-1 text-sm text-base-content/70">
-            Máximo {maxEmployees} empleado(s) según la cantidad de la línea. Solo aparecen
-            trabajadores cuyo rol (principal o secundario) tiene este tipo de trabajo.
+            Puedes asignar uno o varios trabajadores a este tipo de trabajo, aunque la
+            cantidad del producto sea {Math.max(1, quantity)}. Solo aparecen empleados cuyo
+            rol (principal o secundario) incluye este tipo.
           </p>
 
           <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">

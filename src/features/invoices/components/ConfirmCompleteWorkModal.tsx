@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import { fetchCostListForWorkType } from "@/db/queries/employees";
 import { markInvoiceItemListo } from "@/db/queries/invoices";
+import { payQuantityForAssignedWorker } from "@/features/invoices/lib/assignment-quantity";
 import { todayIso } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import type { InvoiceItemDto } from "@/types/invoice";
@@ -30,7 +31,8 @@ interface ConfirmCompleteWorkModalProps {
 
 /**
  * Modal de confirmación para marcar una línea como Listo (opción C):
- * pre-rellena empleados asignados con 1 ud. y tarifa custom o de Precios.
+ * pre-rellena empleados asignados (reparto 1 ud. o colaboración si hay más
+ * trabajadores que unidades) con tarifa custom o de Precios.
  *
  * @param props - Línea, tipos de trabajo y callbacks.
  */
@@ -75,15 +77,8 @@ export function ConfirmCompleteWorkModal(props: ConfirmCompleteWorkModalProps) {
     setError(null);
     const pending = Math.max(0, item.quantity - item.completedQuantity);
     const assignments = item.assignments ?? [];
-    let remaining = pending;
     const next: WorkerRow[] = assignments.map((a, idx) => {
-      const isLast = idx === assignments.length - 1;
-      const qty = isLast ? remaining : Math.min(1, remaining);
-      if (!isLast) {
-        remaining -= qty;
-      } else {
-        remaining = 0;
-      }
+      const qty = payQuantityForAssignedWorker(assignments.length, pending, idx);
       return {
         employeeId: a.employeeId,
         employeeName: a.employeeName,
@@ -118,9 +113,13 @@ export function ConfirmCompleteWorkModal(props: ConfirmCompleteWorkModalProps) {
         return { employeeId: r.employeeId, quantity, unitCost };
       });
       const pending = Math.max(0, item.quantity - item.completedQuantity);
-      const sum = workers.reduce((s, w) => s + w.quantity, 0);
-      if (sum > pending) {
-        throw new Error(`La suma de cantidades (${sum}) supera lo pendiente (${pending}).`);
+      for (const r of rows) {
+        const quantity = Number.parseInt(r.quantity, 10);
+        if (Number.isFinite(quantity) && quantity > pending) {
+          throw new Error(
+            `La cantidad de ${r.employeeName} no puede superar lo pendiente (${pending}).`,
+          );
+        }
       }
       return markInvoiceItemListo({
         invoiceItemId: item.id,
@@ -159,7 +158,9 @@ export function ConfirmCompleteWorkModal(props: ConfirmCompleteWorkModalProps) {
         <div className="modal-box max-w-lg">
           <h3 className="font-bold text-lg">Confirmar Listo — {item.service ?? "Línea"}</h3>
           <p className="mt-1 text-sm text-base-content/70">
-            Se crearán lotes de producción por empleado. Puedes ajustar cantidad y tarifa antes de
+            Se crearán lotes de producción por empleado. Si varios trabajan la misma
+            unidad, cada uno puede tener cantidad igual a lo pendiente (el inventario
+            se descuenta una sola vez). Puedes ajustar cantidad y tarifa antes de
             confirmar.
           </p>
           {blockedByMaterial && (

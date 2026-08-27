@@ -516,16 +516,6 @@ export function OrderLineModal(props: OrderLineModalProps) {
       setError("Indica un precio válido del producto.");
       return;
     }
-    const qtyNum = Number.parseInt(draft.quantity, 10);
-    const overAssigned = draft.services.find(
-      (s) => (s.assignments?.length ?? 0) > qtyNum,
-    );
-    if (overAssigned) {
-      setError(
-        `«${overAssigned.service}» tiene más empleados que la cantidad de la línea (${qtyNum}).`,
-      );
-      return;
-    }
     if (draft.materialMode === "manual") {
       if (draft.materials.length === 0) {
         setError("Añade al menos un material de inventario, o cambia a normas de producción.");

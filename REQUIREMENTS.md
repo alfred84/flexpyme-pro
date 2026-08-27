@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.25 | Última actualización: 2026-08-25
+### Versión: 2.26 | Última actualización: 2026-08-27
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -62,8 +62,8 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Editar pedido**: permitido solo si no está anulado, no está listo y aún no hay trabajo registrado (sin `completed_quantity` ni lotes). Se pueden cambiar cliente, fecha, notas y líneas; los cobros ya hechos se conservan y el saldo se recalcula (no se permite bajar el total por debajo de lo pagado)
 - **Anular pedido**: motivo obligatorio; revierte cobros en caja e inventario descontado; no se permite si está totalmente cobrado; los lotes/nómina históricos se conservan. También disponible desde Facturas
 - **Resumen por tipo de trabajo**: debajo de las líneas, cantidades globales agrupadas por tipo (el importe de venta es del producto terminado, no se suma por tipo)
-- **Asignación de empleados en líneas**: al crear/editar, por cada tipo de trabajo de la línea, botón **Empleados** para seleccionar 1..N trabajadores elegibles (rol primario/secundario con ese tipo de trabajo en Configuración). Tope: N ≤ cantidad de la línea (uno por unidad). Tarifa de pago personalizada opcional por empleado
-- **Status por línea** en Ver pedido: `En producción` | `Listo`; botón para confirmar Listo (modal con empleados, cantidades y tarifas editables → crea `production_batches`). Si todas las líneas están Listo, el pedido pasa a `production_status=listo`. **Marcar listo** en el listado aplica el mismo flujo a todas las líneas pendientes (requiere asignaciones)
+- **Asignación de empleados en líneas**: al crear/editar, por cada tipo de trabajo de la línea, botón **Empleados** para seleccionar 1..N trabajadores elegibles (rol primario/secundario con ese tipo de trabajo en Configuración). Varios pueden colaborar en la misma unidad (p. ej. cantidad 1 y 2 laminadores). Tarifa de pago personalizada opcional por empleado
+- **Status por línea** en Ver pedido: `En producción` | `Listo`; botón para confirmar Listo (modal con empleados, cantidades y tarifas editables → crea `production_batches`). Si varios colaboran en la misma unidad, cada uno cobra su cantidad de nómina (≤ unidades pendientes); el inventario se descuenta una sola vez. Si todas las líneas están Listo, el pedido pasa a `production_status=listo`. **Marcar listo** en el listado aplica el mismo flujo a todas las líneas pendientes (requiere asignaciones)
 - Se eliminó **Registrar trabajo** del detalle; la asignación ocurre en crear/editar líneas
 - Historial de pedidos por cliente
 - **Aviso de saldo a favor al cobrar**: si el cliente ya tiene crédito o el cobro va a dejarlo, un modal informativo resume importes (existente, aplicado, nuevo y saldo resultante) antes de confirmar
@@ -377,7 +377,7 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.7 — Roles ↔ trabajos, asignación en líneas y Listo (2026-07)
 - **Roles ↔ tipos de trabajo** (`role_work_types`): configurable en Configuración → Roles.
-- **Asignaciones en líneas** (`invoice_item_assignments`): empleados + tarifa opcional; tope N ≤ cantidad.
+- **Asignaciones en líneas** (`invoice_item_assignments`): empleados + tarifa opcional; varios pueden colaborar en la misma unidad.
 - **Status por línea** (`production_line_status`); confirmar Listo crea lotes; Marcar listo del listado sincroniza todas las líneas.
 - Se retira **Registrar trabajo** del detalle de pedido.
 - **Pago empleados** con `DenominationGrid` (lote individual y pago del día).
@@ -470,6 +470,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 ### v2.25 — Precio único del producto terminado (2026-08)
 - Precios: CUP/USD únicos por categoría + formato + acabado (visibles en cada tipo de trabajo; al guardar se sincronizan). La tarifa de pago sigue por tipo.
 - Pedidos: el total cobra una vez el producto; los tipos de trabajo extra quedan como «Incluido» (producción y salarios no cambian).
+
+### v2.26 — Varios empleados por tipo de trabajo (2026-08)
+- En líneas de pedido se pueden asignar varios trabajadores a un mismo tipo aunque la cantidad sea 1 (trabajo colaborativo). Al marcar Listo, el inventario se descuenta por unidades del producto, no por la suma de nómina.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
