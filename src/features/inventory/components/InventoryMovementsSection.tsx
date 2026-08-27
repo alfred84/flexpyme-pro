@@ -13,12 +13,13 @@ const PERIOD_OPTIONS: { id: MovementPeriod; label: string }[] = [
 ];
 
 /**
- * Sección de movimientos globales de inventario con filtro Día/Mes/Todos.
+ * Sección de movimientos globales de inventario con filtro Día/Mes/Todos
+ * (por defecto mes actual).
  *
  * @returns Bloque de UI para la pantalla principal de Inventario.
  */
 export function InventoryMovementsSection() {
-  const [period, setPeriod] = useState<MovementPeriod>("hoy");
+  const [period, setPeriod] = useState<MovementPeriod>("mes");
   const movementsQuery = useQuery({
     queryKey: ["inventory", "movements", "list", period],
     queryFn: () => fetchInventoryMovementsList(period),
@@ -32,7 +33,7 @@ export function InventoryMovementsSection() {
         <div>
           <h2 className="text-lg font-semibold">Movimientos de materiales de inventario</h2>
           <p className="text-xs text-base-content/60">
-            Filtra la tabla de forma rápida. Por defecto: día actual.
+            Filtra la tabla de forma rápida. Por defecto: mes actual.
           </p>
         </div>
         <div className="join" role="group" aria-label="Filtrar movimientos por periodo">
