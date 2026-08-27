@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.26 | Última actualización: 2026-08-27
+### Versión: 2.27 | Última actualización: 2026-08-27
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -110,7 +110,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 ### 3.5 Inventario
 - Gestión de materiales/insumos del taller
 - **Categorías de material** (CRUD del usuario): obligatorias antes de dar de alta ítems; se gestionan desde la opción **Categorías** en Inventario (modal); el listado agrupa ítems en acordeón por categoría
-- Campos del ítem: categoría (obligatoria), nombre, unidad, stock; **stock mínimo, costo unitario (CUP y/o USD, independientes) y proveedor opcionales**; descripción/apuntes; **edición** de datos del ítem (el stock solo cambia con movimientos)
+- Campos del ítem: categoría (obligatoria), nombre, **formato** (catálogo de Configuración; por defecto **Sin formato**), unidad, stock; **stock mínimo, costo unitario (CUP y/o USD, independientes) y proveedor opcionales**; descripción/apuntes; **edición** de datos del ítem (el stock solo cambia con movimientos)
 - Stock mínimo `0` o vacío = **Sin establecer** (sin alertas de stock bajo). Alertas solo si mínimo &gt; 0 y cantidad ≤ mínimo
 - Listado: mosaico compacto por categoría de material; al entrar, tabla de ítems y alta de ítem; sección **Movimientos** (día/mes) con método Manual vs Rebaja por Pedido vs Merma; **salida manual** (sin pedido) con **motivo obligatorio**; **normas** desde la opción **Normas** (modal)
 - Historial de movimientos por ítem (salidas con motivo obligatorio)
@@ -473,6 +473,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.26 — Varios empleados por tipo de trabajo (2026-08)
 - En líneas de pedido se pueden asignar varios trabajadores a un mismo tipo aunque la cantidad sea 1 (trabajo colaborativo). Al marcar Listo, el inventario se descuenta por unidades del producto, no por la suma de nómina.
+
+### v2.27 — Formato en ítems de inventario (2026-08)
+- Al crear o editar un material se elige un formato del catálogo de Configuración. Si no se selecciona, queda el formato base **Sin formato**. Los ítems existentes se migran a ese formato.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

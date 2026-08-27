@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { UnitSelect } from "@/components/inventory/UnitSelect";
+import { FormatSelect } from "@/components/inventory/FormatSelect";
 import {
   fetchInventoryItem,
   fetchMaterialCategories,
@@ -33,6 +34,7 @@ export function InventoryItemEditPage() {
   const [materialCategoryId, setMaterialCategoryId] = useState("");
   const [name, setName] = useState("");
   const [unitId, setUnitId] = useState<number | null>(null);
+  const [formatId, setFormatId] = useState<number | null>(null);
   const [minStock, setMinStock] = useState("");
   const [costPerUnit, setCostPerUnit] = useState("");
   const [costPerUnitUsd, setCostPerUnitUsd] = useState("");
@@ -49,6 +51,7 @@ export function InventoryItemEditPage() {
     setMaterialCategoryId(item.materialCategoryId != null ? String(item.materialCategoryId) : "");
     setName(item.name);
     setUnitId(item.unitId);
+    setFormatId(item.formatId);
     setMinStock(item.minStock > 0 ? String(item.minStock) : "");
     setCostPerUnit(item.costPerUnit > 0 ? String(item.costPerUnit) : "");
     setCostPerUnitUsd(item.costPerUnitUsd > 0 ? String(item.costPerUnitUsd) : "");
@@ -137,6 +140,7 @@ export function InventoryItemEditPage() {
       id: itemId,
       name: name.trim(),
       materialCategoryId: catId,
+      formatId,
       unitId,
       minStock: min,
       costPerUnit: cost,
@@ -239,6 +243,25 @@ export function InventoryItemEditPage() {
               <span className="label-text">Unidad *</span>
             </label>
             <UnitSelect id="edit-inv-unit" value={unitId} onChange={setUnitId} />
+          </div>
+
+          <div className="form-control">
+            <label className="label" htmlFor="edit-inv-format">
+              <span className="label-text">Formato</span>
+            </label>
+            <FormatSelect
+              id="edit-inv-format"
+              value={formatId}
+              onChange={setFormatId}
+              fallback={
+                itemQuery.data.formatId != null && itemQuery.data.formatLabel
+                  ? { id: itemQuery.data.formatId, label: itemQuery.data.formatLabel }
+                  : null
+              }
+            />
+            <span className="label-text-alt text-base-content/50">
+              Catálogo de Configuración. Si no eliges, queda «Sin formato».
+            </span>
           </div>
 
           <div className="form-control">

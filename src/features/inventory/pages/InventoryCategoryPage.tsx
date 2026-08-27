@@ -120,6 +120,7 @@ export function InventoryCategoryPage() {
             <thead>
               <tr>
                 <th>Nombre</th>
+                <th>Formato</th>
                 <th className="text-right">Stock</th>
                 <th>Unidad</th>
                 <th className="text-right">Stock mín.</th>
@@ -143,6 +144,7 @@ export function InventoryCategoryPage() {
                       </div>
                     )}
                   </td>
+                  <td>{item.formatLabel ?? "Sin formato"}</td>
                   <td className={`text-right ${item.deficit ? "font-semibold text-error" : ""}`}>
                     {item.quantity}
                   </td>
@@ -184,7 +186,7 @@ export function InventoryCategoryPage() {
               })}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-base-content/60">
+                  <td colSpan={9} className="py-6 text-center text-base-content/60">
                     No hay materiales en esta categoría. Crea el primero con «Nuevo ítem».
                   </td>
                 </tr>

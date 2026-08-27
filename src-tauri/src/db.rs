@@ -124,6 +124,8 @@ const EMBEDDED_EMPLOYEE_MONTHLY_SALARY_SCHEMA: &str =
     include_str!("../../src/db/migrations/0034_employee_monthly_salary.sql");
 const EMBEDDED_MONTHLY_SALARY_OPT_IN_SCHEMA: &str =
     include_str!("../../src/db/migrations/0035_monthly_salary_opt_in.sql");
+const EMBEDDED_INVENTORY_ITEM_FORMAT_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0036_inventory_item_format.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -474,6 +476,13 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             "0035_monthly_salary_opt_in",
         )?;
         set_settings_flag(conn, "migration_0035_monthly_salary_opt_in")?;
+    }
+    if !column_exists(conn, "inventory_items", "format_id") {
+        execute_migration(
+            conn,
+            EMBEDDED_INVENTORY_ITEM_FORMAT_SCHEMA,
+            "0036_inventory_item_format",
+        )?;
     }
     Ok(())
 }

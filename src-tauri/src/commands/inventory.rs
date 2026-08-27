@@ -15,6 +15,8 @@ pub struct InventoryItemDto {
     pub category: Option<String>,
     pub material_category_id: Option<i64>,
     pub material_category_name: Option<String>,
+    pub format_id: Option<i64>,
+    pub format_label: Option<String>,
     pub unit_id: Option<i64>,
     pub unit_snapshot: Option<String>,
     pub unit: String,
@@ -76,6 +78,7 @@ pub struct CreateItemPayload {
     pub name: String,
     pub material_category_id: i64,
     pub category: Option<String>,
+    pub format_id: Option<i64>,
     pub unit_id: Option<i64>,
     pub unit: Option<String>,
     pub quantity: f64,
@@ -94,6 +97,7 @@ pub struct UpdateItemPayload {
     pub name: String,
     pub material_category_id: i64,
     pub category: Option<String>,
+    pub format_id: Option<i64>,
     pub unit_id: Option<i64>,
     pub unit: Option<String>,
     pub min_stock: f64,
@@ -249,6 +253,8 @@ fn map_item_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<InventoryItemDto> {
         cost_per_unit_usd: row.get(11)?,
         supplier: row.get(12)?,
         notes: row.get(13)?,
+        format_id: row.get(14)?,
+        format_label: row.get(15)?,
         low_stock: is_low_stock(quantity, min_stock),
         deficit: quantity < 0.0,
     })
@@ -256,9 +262,11 @@ fn map_item_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<InventoryItemDto> {
 
 const ITEM_SELECT: &str = "SELECT ii.id, ii.name, ii.category, ii.material_category_id, mc.name,
         ii.unit_id, ii.unit_snapshot, ii.quantity, ii.min_stock, ii.unit,
-        ii.cost_per_unit, ii.cost_per_unit_usd, ii.supplier, ii.notes
+        ii.cost_per_unit, ii.cost_per_unit_usd, ii.supplier, ii.notes,
+        ii.format_id, COALESCE(f.label, 'Sin formato')
      FROM inventory_items ii
-     LEFT JOIN inventory_material_categories mc ON mc.id = ii.material_category_id";
+     LEFT JOIN inventory_material_categories mc ON mc.id = ii.material_category_id
+     LEFT JOIN formats f ON f.id = ii.format_id";
 
 /// Escasez de un material respecto a lo requerido por una línea.
 #[derive(Debug, Clone, Serialize)]
@@ -855,6 +863,27 @@ pub fn deduct_inventory_for_invoice(
     Ok(())
 }
 
+/// Resuelve el formato del ítem; si no viene, usa el formato base «Sin formato».
+fn resolve_inventory_format_id(
+    conn: &rusqlite::Connection,
+    format_id: Option<i64>,
+) -> Result<i64, String> {
+    if let Some(id) = format_id.filter(|id| *id > 0) {
+        let exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM formats WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if exists == 0 {
+            return Err("El formato seleccionado no existe".to_string());
+        }
+        return Ok(id);
+    }
+    crate::commands::formats::ensure_sin_formato_row(conn)
+}
+
 fn resolve_unit_fields(
     conn: &rusqlite::Connection,
     unit_id: Option<i64>,
@@ -1119,15 +1148,17 @@ pub fn inventory_item_create(payload: CreateItemPayload) -> Result<i64, String> 
     let cat_name = material_category_name(&conn, payload.material_category_id)?;
     let (unit_id, unit_snapshot, unit_label) =
         resolve_unit_fields(&conn, payload.unit_id, payload.unit)?;
+    let format_id = resolve_inventory_format_id(&conn, payload.format_id)?;
     let category_label = normalize_optional(payload.category).or(Some(cat_name));
     conn.execute(
         "INSERT INTO inventory_items
-            (name, category, material_category_id, unit_id, unit_snapshot, unit, quantity, min_stock, cost_per_unit, cost_per_unit_usd, supplier, notes, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, datetime('now'))",
+            (name, category, material_category_id, format_id, unit_id, unit_snapshot, unit, quantity, min_stock, cost_per_unit, cost_per_unit_usd, supplier, notes, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, datetime('now'))",
         params![
             name,
             category_label,
             payload.material_category_id,
+            format_id,
             unit_id,
             unit_snapshot,
             unit_label,
@@ -1154,17 +1185,19 @@ pub fn inventory_item_update(payload: UpdateItemPayload) -> Result<(), String> {
     let cat_name = material_category_name(&conn, payload.material_category_id)?;
     let (unit_id, unit_snapshot, unit_label) =
         resolve_unit_fields(&conn, payload.unit_id, payload.unit)?;
+    let format_id = resolve_inventory_format_id(&conn, payload.format_id)?;
     let category_label = normalize_optional(payload.category).or(Some(cat_name));
     let updated = conn
         .execute(
             "UPDATE inventory_items
-             SET name = ?1, category = ?2, material_category_id = ?3, unit_id = ?4, unit_snapshot = ?5, unit = ?6,
-                 min_stock = ?7, cost_per_unit = ?8, cost_per_unit_usd = ?9, supplier = ?10, notes = ?11, updated_at = datetime('now')
-             WHERE id = ?12",
+             SET name = ?1, category = ?2, material_category_id = ?3, format_id = ?4, unit_id = ?5, unit_snapshot = ?6, unit = ?7,
+                 min_stock = ?8, cost_per_unit = ?9, cost_per_unit_usd = ?10, supplier = ?11, notes = ?12, updated_at = datetime('now')
+             WHERE id = ?13",
             params![
                 name,
                 category_label,
                 payload.material_category_id,
+                format_id,
                 unit_id,
                 unit_snapshot,
                 unit_label,

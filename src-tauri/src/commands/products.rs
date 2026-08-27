@@ -208,9 +208,11 @@ pub fn product_categories_list() -> Result<Vec<CategoryDto>, String> {
 #[tauri::command]
 pub fn formats_list() -> Result<Vec<FormatDto>, String> {
     let conn = db::open_connection()?;
+    crate::commands::formats::ensure_sin_formato_row(&conn)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, label FROM formats WHERE is_active = 1
+            "SELECT id, label FROM formats
+             WHERE is_active = 1 OR lower(label) = lower('Sin formato')
              ORDER BY CASE WHEN lower(label) = lower('Sin formato') THEN 0 ELSE 1 END,
                label COLLATE NOCASE",
         )

@@ -11,6 +11,7 @@ import {
   reactivateInventoryRecipe,
   updateInventoryRecipe,
 } from "@/db/queries/inventory";
+import { formatInventoryMaterialOptionLabel } from "@/features/inventory/lib/inventory-item-label";
 import { pushFlashMessage } from "@/lib/flash-message";
 import type { InventoryRecipeDto } from "@/types/inventory";
 
@@ -433,9 +434,8 @@ export function InventoryRecipesPanel(props: InventoryRecipesPanelProps = {}) {
                         {items.map((item) => (
                           <option key={item.id} value={item.id}>
                             {item.materialCategoryName
-                              ? `${item.materialCategoryName} · ${item.name}`
-                              : item.name}{" "}
-                            ({item.quantity} {item.unit})
+                              ? `${item.materialCategoryName} · ${formatInventoryMaterialOptionLabel(item)}`
+                              : formatInventoryMaterialOptionLabel(item)}
                           </option>
                         ))}
                       </select>

@@ -28,6 +28,7 @@ pub struct UpdateFormatPayload {
 #[tauri::command]
 pub fn get_formats(active_only: Option<bool>) -> Result<Vec<FormatDto>, String> {
     let conn = db::open_connection()?;
+    ensure_sin_formato_row(&conn)?;
     let sql = if active_only.unwrap_or(false) {
         "SELECT id, label, width_inches, height_inches, is_active, is_system FROM formats
          WHERE is_active = 1
@@ -181,4 +182,26 @@ pub fn reactivate_format(id: i64) -> Result<FormatDto, String> {
         },
     )
     .map_err(|_| "Formato no encontrado".to_string())
+}
+
+/// Inserta o reactiva el formato base «Sin formato» y devuelve su id.
+pub fn ensure_sin_formato_row(conn: &rusqlite::Connection) -> Result<i64, String> {
+    conn.execute(
+        "INSERT OR IGNORE INTO formats (label, width_inches, height_inches, is_active, is_system)
+         VALUES ('Sin formato', 0, 0, 1, 1)",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE formats SET is_active = 1, is_system = 1
+         WHERE lower(label) = lower('Sin formato')",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.query_row(
+        "SELECT id FROM formats WHERE lower(label) = lower('Sin formato') LIMIT 1",
+        [],
+        |row| row.get(0),
+    )
+    .map_err(|_| "No se encontró el formato base «Sin formato»".to_string())
 }

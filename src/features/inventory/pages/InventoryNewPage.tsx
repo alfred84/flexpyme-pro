@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { UnitSelect } from "@/components/inventory/UnitSelect";
+import { FormatSelect } from "@/components/inventory/FormatSelect";
 import { createInventoryItem, fetchMaterialCategories } from "@/db/queries/inventory";
 import { pushFlashMessage } from "@/lib/flash-message";
 
@@ -26,6 +27,8 @@ export function InventoryNewPage() {
   );
   const [name, setName] = useState("");
   const [unitId, setUnitId] = useState<number | null>(null);
+  const [formatId, setFormatId] = useState<number | null>(null);
+  const [formatTouched, setFormatTouched] = useState(false);
   const [quantity, setQuantity] = useState("0");
   const [minStock, setMinStock] = useState("");
   const [costPerUnit, setCostPerUnit] = useState("");
@@ -104,6 +107,7 @@ export function InventoryNewPage() {
     await mutation.mutateAsync({
       name: name.trim(),
       materialCategoryId: catId,
+      formatId,
       unitId,
       quantity: Number(quantity) || 0,
       minStock: min,
@@ -196,6 +200,22 @@ export function InventoryNewPage() {
             <span className="label-text">Unidad *</span>
           </label>
           <UnitSelect id="inv-unit" value={unitId} onChange={setUnitId} />
+        </div>
+
+        <div className="form-control">
+          <label className="label" htmlFor="inv-format">
+            <span className="label-text">Formato</span>
+          </label>
+          <FormatSelect
+            id="inv-format"
+            value={formatId}
+            preferDefault={!formatTouched}
+            onChange={setFormatId}
+            onUserSelect={() => setFormatTouched(true)}
+          />
+          <span className="label-text-alt text-base-content/50">
+            Catálogo de Configuración. Si no eliges, queda «Sin formato».
+          </span>
         </div>
 
         <div className="form-control">

@@ -2,14 +2,31 @@ import { formatMoney } from "@/lib/format-money";
 import type { InventoryItemDto } from "@/types/inventory";
 
 /**
+ * Nombre del ítem incluyendo el formato del catálogo.
+ *
+ * @param item - Ítem de inventario.
+ * @returns Texto como `Vinilo · 5x7`.
+ */
+export function formatInventoryItemName(
+  item: Pick<InventoryItemDto, "name" | "formatLabel">,
+): string {
+  const label = item.formatLabel?.trim();
+  if (!label) {
+    return item.name;
+  }
+  return `${item.name} · ${label}`;
+}
+
+/**
  * Etiqueta de opción en selectores de material de inventario.
- * Incluye stock y, si están definidos, los costos unitarios en su moneda
+ * Incluye formato, stock y, si están definidos, los costos unitarios en su moneda
  * (CUP y/o USD independientes) para distinguir ítems con el mismo nombre.
  *
  * @param item - Ítem de inventario.
- * @returns Texto para `<option>` / listas, p. ej. `Vinilo (12 m · $ 50,00 CUP · $ 1,20 USD)`.
+ * @returns Texto para `<option>` / listas, p. ej. `Vinilo · 5x7 (12 m · $ 50,00 CUP · $ 1,20 USD)`.
  */
 export function formatInventoryMaterialOptionLabel(item: InventoryItemDto): string {
+  const namePart = formatInventoryItemName(item);
   const stockPart = `${item.quantity} ${item.unit}`;
   const costParts: string[] = [];
   if (item.costPerUnit > 0) {
@@ -19,7 +36,7 @@ export function formatInventoryMaterialOptionLabel(item: InventoryItemDto): stri
     costParts.push(formatMoney(item.costPerUnitUsd, "USD"));
   }
   if (costParts.length === 0) {
-    return `${item.name} (${stockPart})`;
+    return `${namePart} (${stockPart})`;
   }
-  return `${item.name} (${stockPart} · ${costParts.join(" · ")})`;
+  return `${namePart} (${stockPart} · ${costParts.join(" · ")})`;
 }

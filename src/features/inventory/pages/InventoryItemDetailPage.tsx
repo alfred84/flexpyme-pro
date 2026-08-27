@@ -87,7 +87,8 @@ export function InventoryItemDetailPage() {
           <h1 className="text-2xl font-bold">{item?.name ?? "Ítem"}</h1>
           {item && (
             <p className="text-sm text-base-content/60">
-              {item.materialCategoryName ?? item.category ?? "Sin categoría"} · {item.unit}
+              {item.materialCategoryName ?? item.category ?? "Sin categoría"} ·{" "}
+              {item.formatLabel ?? "Sin formato"} · {item.unit}
             </p>
           )}
         </div>

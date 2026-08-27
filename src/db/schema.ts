@@ -503,6 +503,8 @@ export const inventoryItems = sqliteTable("inventory_items", {
   materialCategoryId: integer("material_category_id").references(
     () => inventoryMaterialCategories.id,
   ),
+  /** Formato del catálogo (`formats`); por defecto «Sin formato». */
+  formatId: integer("format_id").references(() => formats.id),
   unitId: integer("unit_id").references(() => units.id),
   unitSnapshot: text("unit_snapshot"),
   unit: text("unit").notNull().default("unidad"),
@@ -691,8 +693,12 @@ export const productionBatchesRelations = relations(productionBatches, ({ one, m
   items: many(productionBatchItems),
 }));
 
-export const inventoryItemsRelations = relations(inventoryItems, ({ many }) => ({
+export const inventoryItemsRelations = relations(inventoryItems, ({ one, many }) => ({
   movements: many(inventoryMovements),
+  format: one(formats, {
+    fields: [inventoryItems.formatId],
+    references: [formats.id],
+  }),
 }));
 
 export const inventoryMovementsRelations = relations(inventoryMovements, ({ one }) => ({

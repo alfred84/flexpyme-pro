@@ -18,6 +18,9 @@ export interface InventoryItemDto {
   category: string | null;
   materialCategoryId: number | null;
   materialCategoryName: string | null;
+  /** Formato del catálogo de Configuración. */
+  formatId: number | null;
+  formatLabel: string | null;
   unitId: number | null;
   unitSnapshot: string | null;
   unit: string;
@@ -82,6 +85,8 @@ export interface CreateItemPayload {
   name: string;
   materialCategoryId: number;
   category?: string | null;
+  /** Si se omite, el backend usa «Sin formato». */
+  formatId?: number | null;
   unitId?: number | null;
   unit?: string | null;
   quantity: number;
@@ -100,6 +105,7 @@ export interface UpdateItemPayload {
   name: string;
   materialCategoryId: number;
   category?: string | null;
+  formatId?: number | null;
   unitId?: number | null;
   unit?: string | null;
   minStock: number;

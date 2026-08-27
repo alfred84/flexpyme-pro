@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import { fetchInventoryItems, registerInventoryMovement } from "@/db/queries/inventory";
+import { formatInventoryMaterialOptionLabel } from "@/features/inventory/lib/inventory-item-label";
 
 interface ManualOutboundModalProps {
   onClose: () => void;
@@ -79,7 +80,7 @@ export function ManualOutboundModal(props: ManualOutboundModalProps) {
                 <option value="">Selecciona…</option>
                 {(itemsQuery.data ?? []).map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.name} (stock: {item.quantity} {item.unit})
+                    {formatInventoryMaterialOptionLabel(item)}
                   </option>
                 ))}
               </select>
