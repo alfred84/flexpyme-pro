@@ -97,6 +97,31 @@ export interface RegisterMaterialSalePayload {
   notes: string | null;
 }
 
+/** Periodo del resumen de consumo de materiales. */
+export type InventoryConsumptionPeriod = "hoy" | "mes" | "todos";
+
+/**
+ * Fila del resumen de consumo de un ítem de inventario.
+ */
+export interface InventoryConsumptionRowDto {
+  itemId: number;
+  /** Nombre del ítem (columna «Formato» de la vista). */
+  formato: string;
+  unit: string;
+  materialCategoryId: number | null;
+  materialCategoryName: string;
+  existenciaInicial: number;
+  entradas: number;
+  salidas: number;
+  solicitados: number;
+  mermas: number;
+  ventas: number;
+  existenciaFinal: number;
+  demanda: number;
+  deficit: number;
+  disponible: number;
+}
+
 /**
  * Payload de creación de ítem de inventario.
  */

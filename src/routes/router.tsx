@@ -28,6 +28,7 @@ import { EmployeeWorkBatchPage } from "@/features/employees/pages/EmployeeWorkBa
 import { InventoryListPage } from "@/features/inventory/pages/InventoryListPage";
 import { InventoryNewPage } from "@/features/inventory/pages/InventoryNewPage";
 import { InventoryCategoryPage } from "@/features/inventory/pages/InventoryCategoryPage";
+import { InventoryConsumptionPage } from "@/features/inventory/pages/InventoryConsumptionPage";
 import { InventoryItemDetailPage } from "@/features/inventory/pages/InventoryItemDetailPage";
 import { InventoryItemEditPage } from "@/features/inventory/pages/InventoryItemEditPage";
 import { CashflowPage } from "@/features/cashflow/pages/CashflowPage";
@@ -284,6 +285,12 @@ const inventoryNewRoute = createRoute({
   component: InventoryNewPage,
 });
 
+const inventorySummaryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "inventario/resumen",
+  component: InventoryConsumptionPage,
+});
+
 const inventoryCategoryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "inventario/categoria/$categoryId",
@@ -377,6 +384,7 @@ const routeTree = rootRoute.addChildren([
   employeeWorkBatchRoute,
   inventoryListRoute,
   inventoryNewRoute,
+  inventorySummaryRoute,
   inventoryCategoryRoute,
   inventoryItemEditRoute,
   inventoryItemDetailRoute,

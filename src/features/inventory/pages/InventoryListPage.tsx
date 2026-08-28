@@ -8,6 +8,7 @@ import {
   FolderTree,
   Package,
   PackageMinus,
+  PackageSearch,
 } from "lucide-react";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import { fetchInventoryItems, fetchMaterialCategories, fetchInventoryPendingOrderDemand } from "@/db/queries/inventory";
@@ -83,6 +84,9 @@ export function InventoryListPage() {
           <Package className="h-6 w-6" /> Inventario
         </h1>
         <div className="flex flex-wrap gap-2">
+          <Link to="/inventario/resumen" className="btn btn-outline btn-sm gap-1">
+            <PackageSearch className="h-4 w-4" /> Resumen
+          </Link>
           <button
             type="button"
             className="btn btn-outline btn-sm gap-1"

@@ -182,6 +182,7 @@ pub fn run() {
             commands::inventory::inventory_pending_order_demand,
             commands::inventory::inventory_movements_for_item,
             commands::inventory::inventory_movements_list,
+            commands::inventory::inventory_consumption_summary,
             commands::inventory::inventory_material_categories_list,
             commands::inventory::inventory_material_category_create,
             commands::inventory::inventory_material_category_update,

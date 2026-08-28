@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.28 | Última actualización: 2026-08-28
+### Versión: 2.29 | Última actualización: 2026-08-28
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -112,7 +112,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Categorías de material** (CRUD del usuario): obligatorias antes de dar de alta ítems; se gestionan desde la opción **Categorías** en Inventario (modal); el listado agrupa ítems en acordeón por categoría
 - Campos del ítem: categoría (obligatoria), nombre, **formato** (catálogo de Configuración; por defecto **Sin formato**), unidad, stock; **stock mínimo, costo unitario (CUP y/o USD, independientes) y proveedor opcionales**; descripción/apuntes; **edición** de datos del ítem (el stock solo cambia con movimientos)
 - Stock mínimo `0` o vacío = **Sin establecer** (sin alertas de stock bajo). Alertas solo si mínimo &gt; 0 y cantidad ≤ mínimo
-- Listado: mosaico compacto por categoría de material; al entrar, tabla de ítems y alta de ítem; sección **Movimientos** (día/mes/todos, **por defecto mes actual**) con método Manual vs Rebaja por Pedido vs Merma vs **Venta**; **salida manual** (sin pedido) con **motivo obligatorio**; **venta de material** (sin pedido) con precio USD/CUP/mixto; **normas** desde la opción **Normas** (modal)
+- Listado: mosaico compacto por categoría de material; al entrar, tabla de ítems y alta de ítem; sección **Movimientos** (día/mes/todos, **por defecto mes actual**) con método Manual vs Rebaja por Pedido vs Merma vs **Venta**; **Resumen** de consumo por tipo de material; **salida manual** (sin pedido) con **motivo obligatorio**; **venta de material** (sin pedido) con precio USD/CUP/mixto; **normas** desde la opción **Normas** (modal)
 - Historial de movimientos por ítem (salidas con motivo obligatorio)
 - **Normas de producción**: por categoría de pedido + tipo de trabajo (tabs) + formato/acabado + material y cantidad/unidad; editables (solo afectan pedidos futuros); desactivadas ocultas con opción de ver/reactivar
 - En **Pedidos**, por línea: asignar materiales manualmente desde almacén (opción por defecto) **o** aplicar norma (se fijan materiales al crear el pedido). Solo materiales **existentes** (stock 0 o insuficiente permitido; no crear ítems desde el modal)
@@ -120,6 +120,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Mermas de producción**: desde el pedido (editar o detalle) se registra merma eligiendo material, cantidad y motivo (Error de impresión, Material defectuoso, Error de corte, Otro). Descuenta almacén (salida estricta, sin stock negativo), guarda el costo snapshot (CUP/USD del costo unitario del ítem × cantidad) y **no altera el precio al cliente**. Si ya hay mermas, el pedido muestra el historial. Al anular el pedido no se revierte el stock de merma (pérdida física). Inventario clasifica esas salidas como método **Merma**.
 - **Déficit al asignar (v2.16)**: si al guardar el pedido el stock no cubre `cant./ud. × cantidad de línea`, se permite guardar y se marca `resource_missing` (línea y pedido) con nota de materiales faltantes. **No** se puede marcar Listo (línea ni pedido) hasta reponer con una **entrada** en Inventario; tras la entrada se recalculan las banderas. Inventario muestra alerta de demanda pendiente (necesario &gt; disponible)
 - **Ventas de material (v2.28)**: desde Inventario, **Venta de material** (junto a salida manual). Descuenta stock con salida estricta (sin negativo), registra el **precio de venta** en USD, CUP o mixto (cajones independientes; tasa solo auditoría) e **ingreso** en Flujo de caja. Efectivo por defecto en USD; transferencia en CUP. No crea pedido ni factura. Inventario clasifica esas salidas como método **Venta**.
+- **Resumen de consumo (v2.29)**: vista `/inventario/resumen` agrupada por tipo de material. Periodos Día actual / Mes actual (en curso) / Total. Columnas: Formato (nombre del ítem), existencia inicial y final, entradas, salidas, solicitados (pedidos del periodo), mermas, ventas, demanda pendiente, déficit y disponible. La existencia inicial se reconstruye desde el stock actual y el libro de movimientos (no hay snapshot histórico). El déficit no se compensa entre formatos.
 
 ### 3.6 Flujo de Caja
 - Registro de todas las entradas y salidas de dinero
@@ -481,6 +482,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.28 — Ventas de material (2026-08)
 - Inventario: **Venta de material** descuenta stock (salida estricta) y registra un ingreso en Flujo de caja con precio USD, CUP o mixto (cajones independientes). Transferencia en CUP. Los movimientos se clasifican como método **Venta**.
+
+### v2.29 — Resumen de consumo de materiales (2026-08)
+- Inventario → **Resumen**: kardex por tipo de material (Día / Mes en curso / Total) con existencias, entradas, salidas, solicitados, mermas, ventas, demanda, déficit y disponible.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

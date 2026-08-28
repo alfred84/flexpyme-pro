@@ -14,6 +14,8 @@ import type {
   InvoiceMaterialWasteDto,
   RegisterMermaPayload,
   RegisterMaterialSalePayload,
+  InventoryConsumptionPeriod,
+  InventoryConsumptionRowDto,
 } from "@/types/inventory";
 
 /**
@@ -198,4 +200,16 @@ export async function registerInventoryMaterialSale(
   payload: RegisterMaterialSalePayload,
 ): Promise<number> {
   return invoke<number>("inventory_material_sale_register", { payload });
+}
+
+/**
+ * Resumen de consumo de materiales por ítem para el día, el mes en curso o el total.
+ *
+ * @param period - `hoy` | `mes` | `todos`.
+ * @returns Filas listas para agrupar por tipo de material.
+ */
+export async function fetchInventoryConsumptionSummary(
+  period: InventoryConsumptionPeriod,
+): Promise<InventoryConsumptionRowDto[]> {
+  return invoke<InventoryConsumptionRowDto[]>("inventory_consumption_summary", { period });
 }
