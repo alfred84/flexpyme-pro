@@ -3,6 +3,7 @@ import {
   buildCountsPayload,
   emptyDenominationCounts,
   serializeDenominationBreakdown,
+  serializeSaleDenominationBreakdown,
   sumDenominationCounts,
 } from "@/lib/cash-counts";
 
@@ -47,5 +48,26 @@ describe("cash-counts", () => {
 
   it("returns null when serializing empty counts", () => {
     expect(serializeDenominationBreakdown(emptyDenominationCounts("CUP"), "CUP")).toBeNull();
+  });
+
+  it("serializes mixto sale breakdown with both currencies", () => {
+    const cup = { ...emptyDenominationCounts("CUP"), "100": 2 };
+    const usd = { ...emptyDenominationCounts("USD"), "10": 1 };
+    const json = serializeSaleDenominationBreakdown("mixto", cup, usd);
+    expect(json).not.toBeNull();
+    const parsed = JSON.parse(json ?? "{}") as { mixto?: boolean; cup?: Record<string, number>; usd?: Record<string, number> };
+    expect(parsed.mixto).toBe(true);
+    expect(parsed.cup?.["100"]).toBe(2);
+    expect(parsed.usd?.["10"]).toBe(1);
+  });
+
+  it("returns null mixto breakdown when both grids are empty", () => {
+    expect(
+      serializeSaleDenominationBreakdown(
+        "mixto",
+        emptyDenominationCounts("CUP"),
+        emptyDenominationCounts("USD"),
+      ),
+    ).toBeNull();
   });
 });

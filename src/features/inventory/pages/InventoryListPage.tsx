@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
+  BadgeDollarSign,
   ClipboardList,
   FolderTree,
   Package,
@@ -13,6 +14,7 @@ import { fetchInventoryItems, fetchMaterialCategories, fetchInventoryPendingOrde
 import { InventoryRecipesPanel } from "@/features/inventory/components/InventoryRecipesPanel";
 import { InventoryMovementsSection } from "@/features/inventory/components/InventoryMovementsSection";
 import { ManualOutboundModal } from "@/features/inventory/components/ManualOutboundModal";
+import { MaterialSaleModal } from "@/features/inventory/components/MaterialSaleModal";
 import { MaterialCategoriesPanel } from "@/features/inventory/components/MaterialCategoriesPanel";
 import { categoryMosaicTone } from "@/lib/category-icons";
 
@@ -35,6 +37,7 @@ interface CategoryTile {
  */
 export function InventoryListPage() {
   const [showOutbound, setShowOutbound] = useState(false);
+  const [showMaterialSale, setShowMaterialSale] = useState(false);
   const [managePanel, setManagePanel] = useState<InventoryManagePanel>(null);
 
   const itemsQuery = useQuery({
@@ -100,6 +103,13 @@ export function InventoryListPage() {
             onClick={() => setShowOutbound(true)}
           >
             <PackageMinus className="h-4 w-4" /> Salida manual
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-success btn-sm gap-1"
+            onClick={() => setShowMaterialSale(true)}
+          >
+            <BadgeDollarSign className="h-4 w-4" /> Venta de material
           </button>
         </div>
       </div>
@@ -212,6 +222,7 @@ export function InventoryListPage() {
       <InventoryMovementsSection />
 
       {showOutbound && <ManualOutboundModal onClose={() => setShowOutbound(false)} />}
+      {showMaterialSale && <MaterialSaleModal onClose={() => setShowMaterialSale(false)} />}
 
       {managePanel === "categorias" && (
         <ModalPortal>

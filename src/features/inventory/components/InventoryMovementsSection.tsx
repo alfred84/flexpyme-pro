@@ -33,7 +33,8 @@ export function InventoryMovementsSection() {
         <div>
           <h2 className="text-lg font-semibold">Movimientos de materiales de inventario</h2>
           <p className="text-xs text-base-content/60">
-            Filtra la tabla de forma rápida. Por defecto: mes actual.
+            Filtra la tabla de forma rápida. Por defecto: mes actual. Las ventas de material
+            aparecen como método <span className="font-medium">Venta</span>.
           </p>
         </div>
         <div className="join" role="group" aria-label="Filtrar movimientos por periodo">
@@ -106,6 +107,8 @@ export function InventoryMovementsSection() {
                       <span className="badge badge-sm badge-info">{mov.method}</span>
                     ) : mov.method === "Merma" ? (
                       <span className="badge badge-sm badge-warning">{mov.method}</span>
+                    ) : mov.method === "Venta" ? (
+                      <span className="badge badge-sm badge-success">{mov.method}</span>
                     ) : (
                       <span className="text-base-content/50">{mov.method}</span>
                     )}

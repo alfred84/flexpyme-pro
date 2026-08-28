@@ -194,6 +194,7 @@ pub fn run() {
             commands::inventory::inventory_recipe_reactivate,
             commands::inventory::invoice_material_wastes_list,
             commands::inventory::invoice_material_waste_register,
+            commands::inventory::inventory_material_sale_register,
             commands::cashflow::cash_balance,
             commands::cashflow::cash_transactions_list,
             commands::cashflow::cash_daily_series,

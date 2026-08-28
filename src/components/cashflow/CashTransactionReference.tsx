@@ -22,6 +22,10 @@ export function CashTransactionReference(props: CashTransactionReferenceProps) {
     );
   }
 
+  if (referenceType === "venta_material") {
+    return <span>Venta de material</span>;
+  }
+
   if (!referenceType) {
     return <span>—</span>;
   }

@@ -11,6 +11,7 @@ import {
   expenseTypes,
   formats,
   inventoryItems,
+  inventoryMaterialSales,
   inventoryMovements,
   invoiceItems,
   invoices,
@@ -41,6 +42,7 @@ describe("database schema", () => {
     expect(employees).toBeDefined();
     expect(inventoryItems).toBeDefined();
     expect(inventoryMovements).toBeDefined();
+    expect(inventoryMaterialSales).toBeDefined();
     expect(cashTransactions).toBeDefined();
   });
 

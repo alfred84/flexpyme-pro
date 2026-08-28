@@ -13,6 +13,7 @@ import type {
   UpdateRecipePayload,
   InvoiceMaterialWasteDto,
   RegisterMermaPayload,
+  RegisterMaterialSalePayload,
 } from "@/types/inventory";
 
 /**
@@ -185,4 +186,16 @@ export async function registerInvoiceMaterialWaste(
   payload: RegisterMermaPayload,
 ): Promise<InvoiceMaterialWasteDto[]> {
   return invoke<InvoiceMaterialWasteDto[]>("invoice_material_waste_register", { payload });
+}
+
+/**
+ * Registra una venta de material: descuenta inventario e ingresa el cobro en caja.
+ *
+ * @param payload - Material, cantidad, importes y forma de pago.
+ * @returns Id de la venta persistida.
+ */
+export async function registerInventoryMaterialSale(
+  payload: RegisterMaterialSalePayload,
+): Promise<number> {
+  return invoke<number>("inventory_material_sale_register", { payload });
 }

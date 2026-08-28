@@ -74,8 +74,27 @@ export interface InventoryMovementListDto {
   date: string;
   notes: string | null;
   referenceId: number | null;
-  /** `Manual` | `Rebaja por Pedido` | `Merma` | `—` */
+  /** `Manual` | `Rebaja por Pedido` | `Merma` | `Venta` | `—` */
   method: string;
+}
+
+/** Moneda de cobro de una venta de material. */
+export type MaterialSalePaymentCurrency = "CUP" | "USD" | "mixto";
+
+/**
+ * Payload para registrar una venta de material (salida de stock + ingreso en caja).
+ */
+export interface RegisterMaterialSalePayload {
+  inventoryItemId: number;
+  quantity: number;
+  paymentMethod: "efectivo" | "transferencia";
+  paymentCurrency: MaterialSalePaymentCurrency;
+  amountCup: number;
+  amountUsd: number;
+  exchangeRate: number;
+  denominationBreakdown: string | null;
+  transferConcept: string | null;
+  notes: string | null;
 }
 
 /**

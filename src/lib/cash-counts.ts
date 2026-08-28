@@ -75,6 +75,33 @@ export function serializeDenominationBreakdown(
 }
 
 /**
+ * Serializa el desglose de una venta de material (una moneda o mixto).
+ *
+ * @param paymentCurrency - Moneda de cobro (`CUP`, `USD` o `mixto`).
+ * @param cupCounts - Conteo CUP (usado en CUP y mixto).
+ * @param usdCounts - Conteo USD (usado en USD y mixto).
+ * @returns JSON de auditoría o `null` si no hay billetes.
+ */
+export function serializeSaleDenominationBreakdown(
+  paymentCurrency: "CUP" | "USD" | "mixto",
+  cupCounts: Record<string, number>,
+  usdCounts: Record<string, number>,
+): string | null {
+  if (paymentCurrency === "mixto") {
+    const cup = buildCountsPayload(cupCounts, "CUP");
+    const usd = buildCountsPayload(usdCounts, "USD");
+    if (!cup && !usd) {
+      return null;
+    }
+    return JSON.stringify({ mixto: true, cup, usd });
+  }
+  if (paymentCurrency === "USD") {
+    return serializeDenominationBreakdown(usdCounts, "USD");
+  }
+  return serializeDenominationBreakdown(cupCounts, "CUP");
+}
+
+/**
  * Resultado de parsear un desglose de denominaciones almacenado.
  */
 export interface ParsedDenominationBreakdown {

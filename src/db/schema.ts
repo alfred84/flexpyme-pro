@@ -624,6 +624,32 @@ export const cashTransactions = sqliteTable("cash_transactions", {
 });
 
 /**
+ * Venta de material de inventario: salida de stock e ingreso en flujo de caja.
+ * Los importes CUP/USD son cajones físicos independientes (la tasa es auditoría).
+ */
+export const inventoryMaterialSales = sqliteTable("inventory_material_sales", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  inventoryItemId: integer("inventory_item_id")
+    .notNull()
+    .references(() => inventoryItems.id),
+  quantity: real("quantity").notNull(),
+  unitSnapshot: text("unit_snapshot"),
+  saleAmountCup: real("sale_amount_cup").notNull().default(0),
+  saleAmountUsd: real("sale_amount_usd").notNull().default(0),
+  paymentCurrency: text("payment_currency").notNull(),
+  paymentMethod: text("payment_method").notNull(),
+  exchangeRate: real("exchange_rate").notNull().default(0),
+  denominationBreakdown: text("denomination_breakdown"),
+  notes: text("notes"),
+  inventoryMovementId: integer("inventory_movement_id").references(
+    () => inventoryMovements.id,
+  ),
+  cashTransactionId: integer("cash_transaction_id").references(() => cashTransactions.id),
+  date: text("date").notNull().default(sql`(datetime('now'))`),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
+/**
  * Catálogo de tipos de gasto para el módulo Otros gastos (configurable en UI).
  * El nombre se guarda como snapshot en `other_expenses.expense_type`.
  */
@@ -705,6 +731,21 @@ export const inventoryMovementsRelations = relations(inventoryMovements, ({ one 
   item: one(inventoryItems, {
     fields: [inventoryMovements.itemId],
     references: [inventoryItems.id],
+  }),
+}));
+
+export const inventoryMaterialSalesRelations = relations(inventoryMaterialSales, ({ one }) => ({
+  item: one(inventoryItems, {
+    fields: [inventoryMaterialSales.inventoryItemId],
+    references: [inventoryItems.id],
+  }),
+  movement: one(inventoryMovements, {
+    fields: [inventoryMaterialSales.inventoryMovementId],
+    references: [inventoryMovements.id],
+  }),
+  cashTransaction: one(cashTransactions, {
+    fields: [inventoryMaterialSales.cashTransactionId],
+    references: [cashTransactions.id],
   }),
 }));
 

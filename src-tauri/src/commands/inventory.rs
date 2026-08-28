@@ -67,7 +67,7 @@ pub struct InventoryMovementListDto {
     pub date: String,
     pub notes: Option<String>,
     pub reference_id: Option<i64>,
-    /// `Manual` | `Rebaja por Pedido` | `—` (entradas).
+    /// `Manual` | `Rebaja por Pedido` | `Merma` | `Venta` | `—` (entradas).
     pub method: String,
 }
 
@@ -134,6 +134,22 @@ pub struct InvoiceMaterialWasteLinePayload {
 pub struct RegisterInvoiceMaterialWastePayload {
     pub invoice_id: i64,
     pub items: Vec<InvoiceMaterialWasteLinePayload>,
+}
+
+/// Payload para registrar una venta de material (salida de stock + ingreso en caja).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterMaterialSalePayload {
+    pub inventory_item_id: i64,
+    pub quantity: f64,
+    pub payment_method: String,
+    pub payment_currency: String,
+    pub amount_cup: f64,
+    pub amount_usd: Option<f64>,
+    pub exchange_rate: Option<f64>,
+    pub denomination_breakdown: Option<String>,
+    pub transfer_concept: Option<String>,
+    pub notes: Option<String>,
 }
 
 /// Merma persistida de un pedido (con snapshot de costo).
@@ -1311,15 +1327,19 @@ pub fn inventory_movements_for_item(item_id: i64) -> Result<Vec<InventoryMovemen
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
-/// Clasifica el método de un movimiento de salida (`Manual`, `Rebaja por Pedido` o `Merma`).
+/// Clasifica el método de un movimiento de salida (`Manual`, `Rebaja por Pedido`, `Merma` o `Venta`).
 fn classify_movement_method(
     movement_type: &str,
     reference_id: Option<i64>,
     reason: Option<&str>,
     notes: Option<&str>,
+    is_sale: bool,
 ) -> String {
     if movement_type != "salida" {
         return "—".to_string();
+    }
+    if is_sale {
+        return "Venta".to_string();
     }
     let notes_l = notes.map(|n| n.to_lowercase()).unwrap_or_default();
     let reason_l = reason.map(|r| r.trim().to_lowercase()).unwrap_or_default();
@@ -1358,9 +1378,11 @@ pub fn inventory_movements_list(period: String) -> Result<Vec<InventoryMovementL
 
     let conn = db::open_connection()?;
     let sql = format!(
-        "SELECT m.id, m.item_id, ii.name, m.type, m.quantity, m.reason, m.date, m.notes, m.reference_id
+        "SELECT m.id, m.item_id, ii.name, m.type, m.quantity, m.reason, m.date, m.notes, m.reference_id,
+                s.id
          FROM inventory_movements m
          INNER JOIN inventory_items ii ON ii.id = m.item_id
+         LEFT JOIN inventory_material_sales s ON s.inventory_movement_id = m.id
          WHERE {date_clause}
          ORDER BY m.date DESC, m.id DESC"
     );
@@ -1371,11 +1393,13 @@ pub fn inventory_movements_list(period: String) -> Result<Vec<InventoryMovementL
             let reason: Option<String> = row.get(5)?;
             let notes: Option<String> = row.get(7)?;
             let reference_id: Option<i64> = row.get(8)?;
+            let sale_id: Option<i64> = row.get(9)?;
             let method = classify_movement_method(
                 &movement_type,
                 reference_id,
                 reason.as_deref(),
                 notes.as_deref(),
+                sale_id.is_some(),
             );
             Ok(InventoryMovementListDto {
                 id: row.get(0)?,
@@ -1660,4 +1684,181 @@ pub fn invoice_material_waste_register(
     tx.commit().map_err(|e| e.to_string())?;
 
     invoice_material_wastes_list(payload.invoice_id)
+}
+
+const SALE_MOVEMENT_REASON: &str = "Venta de material";
+
+/// Formatea la cantidad de venta para el concepto de caja.
+fn format_sale_qty(quantity: f64) -> String {
+    if (quantity - quantity.round()).abs() < 1e-9 {
+        format!("{}", quantity.round() as i64)
+    } else {
+        format!("{:.2}", quantity)
+    }
+}
+
+/// Registra una venta de material: descuenta almacén (salida estricta) e ingresa el cobro en caja.
+/// No crea pedido ni factura. Cajones CUP/USD independientes; la tasa es solo auditoría.
+#[tauri::command]
+pub fn inventory_material_sale_register(
+    payload: RegisterMaterialSalePayload,
+) -> Result<i64, String> {
+    const EPS: f64 = 1e-6;
+    if payload.inventory_item_id <= 0 {
+        return Err("Selecciona un material.".to_string());
+    }
+    if payload.quantity <= 0.0 {
+        return Err("La cantidad debe ser mayor que cero.".to_string());
+    }
+
+    let method = payload.payment_method.trim().to_lowercase();
+    if method != "efectivo" && method != "transferencia" {
+        return Err("Forma de pago inválida.".to_string());
+    }
+
+    let mut amount_cup = payload.amount_cup.max(0.0);
+    let mut amount_usd = payload.amount_usd.unwrap_or(0.0).max(0.0);
+    let mut rate = payload.exchange_rate.unwrap_or(0.0).max(0.0);
+
+    let currency = if method == "transferencia" {
+        amount_usd = 0.0;
+        rate = 0.0;
+        if amount_cup <= EPS {
+            return Err("Indica el importe CUP de la transferencia.".to_string());
+        }
+        "CUP".to_string()
+    } else {
+        match payload.payment_currency.trim().to_lowercase().as_str() {
+            "usd" => {
+                amount_cup = 0.0;
+                if amount_usd <= EPS {
+                    return Err("Indica el importe USD de la venta.".to_string());
+                }
+                if rate <= EPS {
+                    return Err("Indica una tasa USD→CUP válida (auditoría).".to_string());
+                }
+                "USD".to_string()
+            }
+            "cup" => {
+                amount_usd = 0.0;
+                rate = 0.0;
+                if amount_cup <= EPS {
+                    return Err("Indica el importe CUP de la venta.".to_string());
+                }
+                "CUP".to_string()
+            }
+            "mixto" => {
+                if amount_cup <= EPS || amount_usd <= EPS {
+                    return Err(
+                        "El cobro mixto requiere importes en CUP y en USD mayores que cero."
+                            .to_string(),
+                    );
+                }
+                if rate <= EPS {
+                    return Err("Indica una tasa USD→CUP válida (auditoría).".to_string());
+                }
+                "mixto".to_string()
+            }
+            _ => {
+                return Err("Moneda de cobro inválida. Use USD, CUP o mixto.".to_string());
+            }
+        }
+    };
+
+    let notes = normalize_optional(payload.notes);
+    let transfer_concept = normalize_optional(payload.transfer_concept);
+    let denomination = if method == "efectivo" {
+        normalize_optional(payload.denomination_breakdown)
+    } else {
+        None
+    };
+
+    let mut conn = db::open_connection()?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    let (name, unit_label): (String, String) = tx
+        .query_row(
+            "SELECT name, COALESCE(NULLIF(unit_snapshot, ''), unit, '')
+             FROM inventory_items WHERE id = ?1",
+            params![payload.inventory_item_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Ítem de inventario no encontrado".to_string())?;
+
+    let mut concept = format!(
+        "Venta de material: {} ({} {})",
+        name,
+        format_sale_qty(payload.quantity),
+        unit_label.trim()
+    );
+    if method == "transferencia" {
+        if let Some(extra) = transfer_concept.as_ref() {
+            concept.push_str(" · ");
+            concept.push_str(extra);
+        }
+    }
+
+    let movement_notes = notes
+        .clone()
+        .unwrap_or_else(|| SALE_MOVEMENT_REASON.to_string());
+    let movement_id = apply_inventory_movement(
+        &tx,
+        payload.inventory_item_id,
+        "salida",
+        payload.quantity,
+        Some(SALE_MOVEMENT_REASON),
+        None,
+        Some(&movement_notes),
+    )?;
+
+    tx.execute(
+        "INSERT INTO cash_transactions
+            (type, concept, reference_type, reference_id, amount_cup, amount_usd, exchange_rate,
+             payment_method, denomination_breakdown, date)
+         VALUES ('ingreso', ?1, 'venta_material', NULL, ?2, ?3, ?4, ?5, ?6, datetime('now'))",
+        params![
+            concept,
+            amount_cup,
+            amount_usd,
+            rate,
+            method.as_str(),
+            denomination.as_deref()
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    let cash_id = tx.last_insert_rowid();
+
+    tx.execute(
+        "INSERT INTO inventory_material_sales
+            (inventory_item_id, quantity, unit_snapshot, sale_amount_cup, sale_amount_usd,
+             payment_currency, payment_method, exchange_rate, denomination_breakdown, notes,
+             inventory_movement_id, cash_transaction_id, date)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, datetime('now'))",
+        params![
+            payload.inventory_item_id,
+            payload.quantity,
+            unit_label,
+            amount_cup,
+            amount_usd,
+            currency.as_str(),
+            method.as_str(),
+            rate,
+            denomination.as_deref(),
+            notes.as_deref(),
+            movement_id,
+            cash_id
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    let sale_id = tx.last_insert_rowid();
+
+    tx.execute(
+        "UPDATE cash_transactions SET reference_id = ?1 WHERE id = ?2",
+        params![sale_id, cash_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    recompute_open_invoices_resource_flags(&tx)?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(sale_id)
 }
