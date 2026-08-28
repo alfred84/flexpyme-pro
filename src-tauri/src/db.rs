@@ -128,6 +128,8 @@ const EMBEDDED_INVENTORY_ITEM_FORMAT_SCHEMA: &str =
     include_str!("../../src/db/migrations/0036_inventory_item_format.sql");
 const EMBEDDED_INVENTORY_MATERIAL_SALES_SCHEMA: &str =
     include_str!("../../src/db/migrations/0037_inventory_material_sales.sql");
+const EMBEDDED_CASH_MONTH_OPENINGS_SCHEMA: &str =
+    include_str!("../../src/db/migrations/0038_cash_month_openings.sql");
 
 fn migrate_legacy_db_if_needed(db_path: &PathBuf) -> Result<(), String> {
     if db_path.exists() {
@@ -491,6 +493,13 @@ fn apply_current_migrations(conn: &Connection) -> Result<(), String> {
             conn,
             EMBEDDED_INVENTORY_MATERIAL_SALES_SCHEMA,
             "0037_inventory_material_sales",
+        )?;
+    }
+    if !table_exists(conn, "cash_month_openings") {
+        execute_migration(
+            conn,
+            EMBEDDED_CASH_MONTH_OPENINGS_SCHEMA,
+            "0038_cash_month_openings",
         )?;
     }
     Ok(())

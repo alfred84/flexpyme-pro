@@ -1,11 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   CashBalanceDto,
+  CashControlSummaryDto,
   CashDailyPointDto,
   CashFilters,
   CashNetSummaryDto,
   CashTransactionDto,
   CreateTransactionPayload,
+  SaveCashOpeningPayload,
 } from "@/types/cashflow";
 
 /**
@@ -41,4 +43,30 @@ export async function fetchCashNetSummary(): Promise<CashNetSummaryDto> {
  */
 export async function createCashTransaction(payload: CreateTransactionPayload): Promise<number> {
   return invoke<number>("cash_transaction_create", { payload });
+}
+
+/**
+ * Carga el control de efectivo del mes y, si se indica, el detalle de un día.
+ *
+ * @param month - Mes calendario (`YYYY-MM`).
+ * @param day - Día opcional (`YYYY-MM-DD`) para el monitoreo diario.
+ * @returns Resumen CUP y USD del mes (y del día si aplica).
+ */
+export async function fetchCashControlSummary(
+  month: string,
+  day?: string | null,
+): Promise<CashControlSummaryDto> {
+  return invoke<CashControlSummaryDto>("cash_control_summary", {
+    month,
+    day: day ?? null,
+  });
+}
+
+/**
+ * Guarda el conteo físico de billetes al inicio del mes.
+ *
+ * @param payload - Mes, conteos CUP/USD y notas opcionales.
+ */
+export async function saveCashMonthOpening(payload: SaveCashOpeningPayload): Promise<void> {
+  await invoke("cash_month_opening_save", { payload });
 }

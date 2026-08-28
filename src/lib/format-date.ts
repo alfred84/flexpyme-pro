@@ -77,6 +77,15 @@ export function todayIso(): string {
 }
 
 /**
+ * Devuelve el mes calendario actual en formato `YYYY-MM` (inputs `type="month"`).
+ *
+ * @returns Mes actual como `YYYY-MM`.
+ */
+export function currentMonthYm(): string {
+  return todayIso().slice(0, 7);
+}
+
+/**
  * Primer día del mes de una fecha ISO, como `YYYY-MM-DD`.
  *
  * @param isoDate - Fecha ISO (`YYYY-MM-DD` o con hora).
@@ -106,4 +115,28 @@ export function monthEndIso(isoDate: string): string {
   const last = new Date(year, month, 0);
   const lastDay = String(last.getDate()).padStart(2, "0");
   return `${day.slice(0, 7)}-${lastDay}`;
+}
+
+/**
+ * Ajusta una fecha ISO al mes indicado (`YYYY-MM`).
+ * Si está fuera del mes, devuelve el primer o el último día de ese mes.
+ *
+ * @param isoDate - Fecha ISO (`YYYY-MM-DD` o con hora).
+ * @param monthYm - Mes destino (`YYYY-MM`).
+ * @returns Fecha ISO dentro del mes.
+ */
+export function clampIsoToMonth(isoDate: string, monthYm: string): string {
+  const start = `${monthYm}-01`;
+  const end = monthEndIso(start);
+  const day = isoDate.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    return start;
+  }
+  if (day < start) {
+    return start;
+  }
+  if (day > end) {
+    return end;
+  }
+  return day;
 }

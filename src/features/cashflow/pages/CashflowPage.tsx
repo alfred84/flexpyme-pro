@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowDownCircle, ArrowUpCircle, Plus, Wallet } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Banknote, Plus, Wallet } from "lucide-react";
 import {
   fetchCashBalance,
   fetchCashDailySeries,
@@ -64,7 +64,10 @@ export function CashflowPage() {
             auditoría.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link to="/caja/control" className="btn btn-outline btn-sm gap-1">
+            <Banknote className="h-4 w-4" /> Control de efectivo
+          </Link>
           <Link to="/caja/historial" className="btn btn-outline btn-sm">
             Historial
           </Link>

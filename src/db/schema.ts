@@ -624,6 +624,18 @@ export const cashTransactions = sqliteTable("cash_transactions", {
 });
 
 /**
+ * Conteo físico de efectivo (CUP y USD) declarado al inicio de cada mes calendario.
+ * Es el saldo inicial de Control de efectivo; no se reconstruye desde el historial.
+ */
+export const cashMonthOpenings = sqliteTable("cash_month_openings", {
+  month: text("month").primaryKey(),
+  countsCup: text("counts_cup"),
+  countsUsd: text("counts_usd"),
+  notes: text("notes"),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+
+/**
  * Venta de material de inventario: salida de stock e ingreso en flujo de caja.
  * Los importes CUP/USD son cajones físicos independientes (la tasa es auditoría).
  */

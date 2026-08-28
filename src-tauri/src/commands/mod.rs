@@ -1,3 +1,4 @@
+pub mod cash_control;
 pub mod cashflow;
 pub mod cashier;
 pub mod categories;

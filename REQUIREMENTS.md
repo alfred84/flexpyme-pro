@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.29 | Última actualización: 2026-08-28
+### Versión: 2.31 | Última actualización: 2026-08-28
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -138,6 +138,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Resumen diario/mensual por moneda
 - Movimientos manuales y Otros gastos en USD afectan solo el cajón USD (`amount_cup = 0`)
 - **Venta de material**: ingreso vinculado (`reference_type = venta_material`); mismos cajones físicos que el resto de caja
+- **Control de efectivo (v2.30 / v2.31)**: desde Flujo de caja, conteo físico por denominaciones del sistema (CUP y USD, cajones independientes). Tabla de **saldo inicial del mes** (cantidad × denominación) y monitoreo del **mes** o de un **día** (inicial del día = saldo inicial + movimiento previo; estimado al cierre). El saldo inicial es un conteo declarado al empezar el mes, no se reconstruye desde el historial. Las transferencias y los movimientos en efectivo sin desglose no entran en el conteo de billetes
 
 ### 3.7 Configuración
 - Datos del negocio (nombre, dirección, teléfono, logo)
@@ -291,6 +292,7 @@ Brillo, 3D, Diamantado, Cuero Acrílico (solo Fotobooks)
 | Empleados + lotes + salarios | hecho |
 | Inventario + movimientos | hecho |
 | Flujo de caja general CUP/USD | hecho |
+| Control de efectivo (denominaciones) | hecho |
 | Configuración (tabs) | hecho |
 | Tauri commands nuevos | hecho |
 
@@ -485,6 +487,12 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.29 — Resumen de consumo de materiales (2026-08)
 - Inventario → **Resumen**: kardex por tipo de material (Día / Mes en curso / Total) con existencias, entradas, salidas, solicitados, mermas, ventas, demanda, déficit y disponible.
+
+### v2.30 — Control de efectivo (2026-08)
+- Flujo de caja → **Control de efectivo**: saldo inicial del mes por denominación (CUP y USD) y monitoreo estimado (inicial + entradas − salidas). Conteos persistidos en `cash_month_openings`.
+
+### v2.31 — Control de efectivo por día (2026-08)
+- Control de efectivo: pestaña **Día** con selector de fecha, desglose por denominación (inicial del día + entradas − salidas) y tabla de cierre diario del mes.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

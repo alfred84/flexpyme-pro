@@ -72,3 +72,69 @@ export interface CreateTransactionPayload {
   paymentMethod: "efectivo" | "transferencia";
   denominationBreakdown: string | null;
 }
+
+/**
+ * Una denominación en el control de efectivo del mes.
+ */
+export interface CashControlLineDto {
+  denomination: number;
+  openingQty: number;
+  inQty: number;
+  outQty: number;
+  estimatedQty: number;
+  openingSubtotal: number;
+  estimatedSubtotal: number;
+}
+
+/**
+ * Resumen de control de efectivo para una moneda (CUP o USD).
+ */
+export interface CashControlCurrencyDto {
+  currency: "CUP" | "USD";
+  hasOpening: boolean;
+  openingTotal: number;
+  inTotal: number;
+  outTotal: number;
+  estimatedTotal: number;
+  ledgerBalance: number;
+  lines: CashControlLineDto[];
+}
+
+/**
+ * Vista de control de efectivo para un mes calendario (`YYYY-MM`).
+ */
+export interface CashControlSummaryDto {
+  month: string;
+  selectedDay: string | null;
+  openingUpdatedAt: string | null;
+  notes: string | null;
+  cup: CashControlCurrencyDto;
+  usd: CashControlCurrencyDto;
+  dayCup: CashControlCurrencyDto | null;
+  dayUsd: CashControlCurrencyDto | null;
+  days: CashControlDayDto[];
+}
+
+/**
+ * Totales de un día del mes (estimado al cierre de ese día).
+ */
+export interface CashControlDayDto {
+  date: string;
+  inTotalCup: number;
+  outTotalCup: number;
+  estimatedTotalCup: number;
+  inTotalUsd: number;
+  outTotalUsd: number;
+  estimatedTotalUsd: number;
+  hasMovement: boolean;
+}
+
+/**
+ * Payload para registrar o actualizar el saldo inicial del mes.
+ */
+export interface SaveCashOpeningPayload {
+  month: string;
+  countsCup: Record<string, number>;
+  countsUsd: Record<string, number>;
+  notes?: string | null;
+}

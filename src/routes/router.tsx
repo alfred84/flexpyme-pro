@@ -34,6 +34,7 @@ import { InventoryItemEditPage } from "@/features/inventory/pages/InventoryItemE
 import { CashflowPage } from "@/features/cashflow/pages/CashflowPage";
 import { CashflowNewPage } from "@/features/cashflow/pages/CashflowNewPage";
 import { CashflowHistoryPage } from "@/features/cashflow/pages/CashflowHistoryPage";
+import { CashControlPage } from "@/features/cashflow/pages/CashControlPage";
 import { OtherExpensesPage } from "@/features/expenses/pages/OtherExpensesPage";
 import { OtherExpenseNewPage } from "@/features/expenses/pages/OtherExpenseNewPage";
 import { OtherExpenseDetailPage } from "@/features/expenses/pages/OtherExpenseDetailPage";
@@ -327,6 +328,12 @@ const cashflowHistoryRoute = createRoute({
   component: CashflowHistoryPage,
 });
 
+const cashflowControlRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "caja/control",
+  component: CashControlPage,
+});
+
 const otherExpensesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "otros-gastos",
@@ -391,6 +398,7 @@ const routeTree = rootRoute.addChildren([
   cashflowRoute,
   cashflowNewRoute,
   cashflowHistoryRoute,
+  cashflowControlRoute,
   otherExpensesRoute,
   otherExpenseNewRoute,
   otherExpenseDetailRoute,
