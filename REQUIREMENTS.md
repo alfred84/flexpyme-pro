@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.31 | Última actualización: 2026-08-28
+### Versión: 2.32 | Última actualización: 2026-08-31
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -138,7 +138,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Resumen diario/mensual por moneda
 - Movimientos manuales y Otros gastos en USD afectan solo el cajón USD (`amount_cup = 0`)
 - **Venta de material**: ingreso vinculado (`reference_type = venta_material`); mismos cajones físicos que el resto de caja
-- **Control de efectivo (v2.30 / v2.31)**: desde Flujo de caja, conteo físico por denominaciones del sistema (CUP y USD, cajones independientes). Tabla de **saldo inicial del mes** (cantidad × denominación) y monitoreo del **mes** o de un **día** (inicial del día = saldo inicial + movimiento previo; estimado al cierre). El saldo inicial es un conteo declarado al empezar el mes, no se reconstruye desde el historial. Las transferencias y los movimientos en efectivo sin desglose no entran en el conteo de billetes
+- **Control de efectivo (v2.30–v2.32)**: desde Flujo de caja, conteo físico por denominaciones (CUP y USD). Se puede registrar un **saldo inicial del mes** y un **saldo inicial del día**. El monitoreo (Mes o Día) muestra inicial, entradas, salidas y estimado. Si el día no tiene conteo, el inicial se estima desde el mes. Transferencias y efectivo sin desglose no entran en el conteo de billetes
 
 ### 3.7 Configuración
 - Datos del negocio (nombre, dirección, teléfono, logo)
@@ -493,6 +493,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.31 — Control de efectivo por día (2026-08)
 - Control de efectivo: pestaña **Día** con selector de fecha, desglose por denominación (inicial del día + entradas − salidas) y tabla de cierre diario del mes.
+
+### v2.32 — Saldo inicial diario y vista compacta (2026-08)
+- Control de efectivo: saldo inicial registrable por **mes** y por **día**; pantalla unificada (KPIs + una moneda a la vez) para no duplicar tablas.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

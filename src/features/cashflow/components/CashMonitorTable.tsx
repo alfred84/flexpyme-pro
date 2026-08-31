@@ -48,8 +48,8 @@ export function CashMonitorTable(props: CashMonitorTableProps) {
   const isDay = scope === "dia";
   const title = isDay ? "Movimiento del día" : "Movimiento del mes";
   const hint = isDay
-    ? "Inicial del día = saldo inicial del mes + movimiento de los días anteriores. Estimado = inicial + entradas − salidas."
-    : "Estimado = inicial + entradas − salidas (solo efectivo con desglose).";
+    ? "Inicial del día (registrado o estimado) + entradas − salidas."
+    : "Estimado = inicial del mes + entradas − salidas (solo efectivo con desglose).";
   const inicialLabel = isDay ? "Inicial del día" : "Inicial";
 
   return (

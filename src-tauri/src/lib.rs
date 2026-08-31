@@ -202,7 +202,8 @@ pub fn run() {
             commands::cashflow::cash_net_summary,
             commands::cashflow::cash_transaction_create,
             commands::cash_control::cash_control_summary,
-            commands::cash_control::cash_month_opening_save
+            commands::cash_control::cash_month_opening_save,
+            commands::cash_control::cash_day_opening_save
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

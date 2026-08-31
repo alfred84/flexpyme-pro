@@ -112,6 +112,8 @@ export interface CashControlSummaryDto {
   usd: CashControlCurrencyDto;
   dayCup: CashControlCurrencyDto | null;
   dayUsd: CashControlCurrencyDto | null;
+  dayNotes: string | null;
+  dayOpeningUpdatedAt: string | null;
   days: CashControlDayDto[];
 }
 
@@ -127,6 +129,7 @@ export interface CashControlDayDto {
   outTotalUsd: number;
   estimatedTotalUsd: number;
   hasMovement: boolean;
+  hasDeclaredOpening: boolean;
 }
 
 /**
@@ -134,6 +137,16 @@ export interface CashControlDayDto {
  */
 export interface SaveCashOpeningPayload {
   month: string;
+  countsCup: Record<string, number>;
+  countsUsd: Record<string, number>;
+  notes?: string | null;
+}
+
+/**
+ * Payload para registrar o actualizar el saldo inicial de un día.
+ */
+export interface SaveCashDayOpeningPayload {
+  day: string;
   countsCup: Record<string, number>;
   countsUsd: Record<string, number>;
   notes?: string | null;

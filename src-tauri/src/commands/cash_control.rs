@@ -47,6 +47,7 @@ pub struct CashControlDayDto {
     pub out_total_usd: f64,
     pub estimated_total_usd: f64,
     pub has_movement: bool,
+    pub has_declared_opening: bool,
 }
 
 /// Vista de control de efectivo para un mes (`YYYY-MM`) y, opcionalmente, un día.
@@ -61,6 +62,8 @@ pub struct CashControlSummaryDto {
     pub usd: CashControlCurrencyDto,
     pub day_cup: Option<CashControlCurrencyDto>,
     pub day_usd: Option<CashControlCurrencyDto>,
+    pub day_notes: Option<String>,
+    pub day_opening_updated_at: Option<String>,
     pub days: Vec<CashControlDayDto>,
 }
 
@@ -69,6 +72,16 @@ pub struct CashControlSummaryDto {
 #[serde(rename_all = "camelCase")]
 pub struct SaveCashOpeningPayload {
     pub month: String,
+    pub counts_cup: HashMap<String, f64>,
+    pub counts_usd: HashMap<String, f64>,
+    pub notes: Option<String>,
+}
+
+/// Payload para guardar el conteo inicial de un día.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveCashDayOpeningPayload {
+    pub day: String,
     pub counts_cup: HashMap<String, f64>,
     pub counts_usd: HashMap<String, f64>,
     pub notes: Option<String>,
@@ -417,6 +430,7 @@ fn build_day_rows(
     opening_cup: &HashMap<i64, i64>,
     opening_usd: &HashMap<i64, i64>,
     days: &HashMap<String, DayFlow>,
+    declared: &HashSet<String>,
 ) -> Vec<CashControlDayDto> {
     let mut run_cup = total_of(opening_cup, "CUP");
     let mut run_usd = total_of(opening_usd, "USD");
@@ -432,6 +446,7 @@ fn build_day_rows(
             run_cup += in_cup - out_cup;
             run_usd += in_usd - out_usd;
             let has_movement = in_cup.abs() + out_cup.abs() + in_usd.abs() + out_usd.abs() > 0.0;
+            let has_declared_opening = declared.contains(&date);
             CashControlDayDto {
                 date,
                 in_total_cup: in_cup,
@@ -441,6 +456,7 @@ fn build_day_rows(
                 out_total_usd: out_usd,
                 estimated_total_usd: run_usd,
                 has_movement,
+                has_declared_opening,
             }
         })
         .collect()
@@ -489,6 +505,43 @@ pub fn cash_control_summary(
         ),
         None => (HashMap::new(), HashMap::new(), None, None, false),
     };
+
+    let mut declared_cup: HashMap<String, HashMap<i64, i64>> = HashMap::new();
+    let mut declared_usd: HashMap<String, HashMap<i64, i64>> = HashMap::new();
+    let mut declared_days: HashSet<String> = HashSet::new();
+    let mut day_notes: Option<String> = None;
+    let mut day_opening_updated_at: Option<String> = None;
+
+    {
+        let sql = format!(
+            "SELECT day, counts_cup, counts_usd, notes, updated_at
+             FROM cash_day_openings
+             WHERE {}",
+            month_date_clause("day")
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![month], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, String>(4)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            let (day_key, cup, usd, notes_row, updated) = row.map_err(|e| e.to_string())?;
+            declared_cup.insert(day_key.clone(), parse_stored_opening(cup.as_deref(), "CUP"));
+            declared_usd.insert(day_key.clone(), parse_stored_opening(usd.as_deref(), "USD"));
+            declared_days.insert(day_key.clone());
+            if selected_day.as_deref() == Some(day_key.as_str()) {
+                day_notes = notes_row;
+                day_opening_updated_at = Some(updated);
+            }
+        }
+    }
 
     let mut days: HashMap<String, DayFlow> = HashMap::new();
     let mut session_invoices: HashSet<i64> = HashSet::new();
@@ -628,15 +681,22 @@ pub fn cash_control_summary(
 
     let day_detail = selected_day.as_ref().map(|day| {
         let flow = days.get(day).cloned().unwrap_or_default();
-        let start_cup = opening_at_day(&opening_cup, &days, &month, day, "CUP");
-        let start_usd = opening_at_day(&opening_usd, &days, &month, day, "USD");
+        let has_day_opening = declared_days.contains(day);
+        let start_cup = declared_cup
+            .get(day)
+            .cloned()
+            .unwrap_or_else(|| opening_at_day(&opening_cup, &days, &month, day, "CUP"));
+        let start_usd = declared_usd
+            .get(day)
+            .cloned()
+            .unwrap_or_else(|| opening_at_day(&opening_usd, &days, &month, day, "USD"));
         (
             build_currency(
                 "CUP",
                 &start_cup,
                 &flow.in_cup,
                 &flow.out_cup,
-                has_opening,
+                has_day_opening,
                 ledger_cup,
             ),
             build_currency(
@@ -644,7 +704,7 @@ pub fn cash_control_summary(
                 &start_usd,
                 &flow.in_usd,
                 &flow.out_usd,
-                has_opening,
+                has_day_opening,
                 ledger_usd,
             ),
         )
@@ -653,7 +713,7 @@ pub fn cash_control_summary(
         Some((cup, usd)) => (Some(cup), Some(usd)),
         None => (None, None),
     };
-    let day_rows = build_day_rows(&month, &opening_cup, &opening_usd, &days);
+    let day_rows = build_day_rows(&month, &opening_cup, &opening_usd, &days, &declared_days);
 
     Ok(CashControlSummaryDto {
         month,
@@ -678,6 +738,8 @@ pub fn cash_control_summary(
         ),
         day_cup,
         day_usd,
+        day_notes,
+        day_opening_updated_at,
         days: day_rows,
     })
 }
@@ -705,6 +767,43 @@ pub fn cash_month_opening_save(payload: SaveCashOpeningPayload) -> Result<(), St
             updated_at = datetime('now')",
         params![
             month,
+            serialize_counts(&cup, "CUP"),
+            serialize_counts(&usd, "USD"),
+            notes
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Guarda (o actualiza) el conteo de denominaciones al inicio del día.
+#[tauri::command]
+pub fn cash_day_opening_save(payload: SaveCashDayOpeningPayload) -> Result<(), String> {
+    let day = normalize_day(&payload.day)?;
+    let month = day[..7].to_string();
+    let last = dates_in_month(&month).pop().unwrap_or_default();
+    if day > last {
+        return Err("El día no existe en ese mes.".to_string());
+    }
+    let cup = counts_from_frontend(&payload.counts_cup, "CUP");
+    let usd = counts_from_frontend(&payload.counts_usd, "USD");
+    let notes = payload
+        .notes
+        .as_ref()
+        .map(|n| n.trim().to_string())
+        .filter(|n| !n.is_empty());
+
+    let conn = db::open_connection()?;
+    conn.execute(
+        "INSERT INTO cash_day_openings (day, counts_cup, counts_usd, notes, updated_at)
+         VALUES (?1, ?2, ?3, ?4, datetime('now'))
+         ON CONFLICT(day) DO UPDATE SET
+            counts_cup = excluded.counts_cup,
+            counts_usd = excluded.counts_usd,
+            notes = excluded.notes,
+            updated_at = datetime('now')",
+        params![
+            day,
             serialize_counts(&cup, "CUP"),
             serialize_counts(&usd, "USD"),
             notes

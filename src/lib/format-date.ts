@@ -140,3 +140,26 @@ export function clampIsoToMonth(isoDate: string, monthYm: string): string {
   }
   return day;
 }
+
+/**
+ * Suma (o resta) días a una fecha ISO `YYYY-MM-DD`.
+ *
+ * @param isoDate - Fecha ISO.
+ * @param delta - Días a sumar (negativo para restar).
+ * @returns Nueva fecha ISO, o la original si no es válida.
+ */
+export function addDaysIso(isoDate: string, delta: number): string {
+  const day = isoDate.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    return day;
+  }
+  const parsed = new Date(`${day}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return day;
+  }
+  parsed.setDate(parsed.getDate() + delta);
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const date = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${date}`;
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cashDayOpenings,
   cashMonthOpenings,
   cashSessions,
   cashTransactions,
@@ -46,6 +47,7 @@ describe("database schema", () => {
     expect(inventoryMaterialSales).toBeDefined();
     expect(cashTransactions).toBeDefined();
     expect(cashMonthOpenings).toBeDefined();
+    expect(cashDayOpenings).toBeDefined();
   });
 
   it("defines v2.5 tables (config, multi-role, other expenses)", () => {

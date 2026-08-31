@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatDateTime, monthEndIso, monthStartIso, todayIso, currentMonthYm, clampIsoToMonth } from "@/lib/format-date";
+import { formatDate, formatDateTime, monthEndIso, monthStartIso, todayIso, currentMonthYm, clampIsoToMonth, addDaysIso } from "@/lib/format-date";
 
 describe("format-date", () => {
   it("formats an ISO date as dd/mm/aaaa", () => {
@@ -39,5 +39,10 @@ describe("format-date", () => {
     expect(clampIsoToMonth("2026-07-31", "2026-08")).toBe("2026-08-01");
     expect(clampIsoToMonth("2026-09-01", "2026-08")).toBe("2026-08-31");
     expect(clampIsoToMonth("2026-08-15", "2026-08")).toBe("2026-08-15");
+  });
+
+  it("adds days to an ISO date", () => {
+    expect(addDaysIso("2026-08-31", 1)).toBe("2026-09-01");
+    expect(addDaysIso("2026-08-01", -1)).toBe("2026-07-31");
   });
 });

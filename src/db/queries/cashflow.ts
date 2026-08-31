@@ -7,6 +7,7 @@ import type {
   CashNetSummaryDto,
   CashTransactionDto,
   CreateTransactionPayload,
+  SaveCashDayOpeningPayload,
   SaveCashOpeningPayload,
 } from "@/types/cashflow";
 
@@ -69,4 +70,13 @@ export async function fetchCashControlSummary(
  */
 export async function saveCashMonthOpening(payload: SaveCashOpeningPayload): Promise<void> {
   await invoke("cash_month_opening_save", { payload });
+}
+
+/**
+ * Guarda el conteo físico de billetes al inicio del día.
+ *
+ * @param payload - Día ISO, conteos CUP/USD y notas opcionales.
+ */
+export async function saveCashDayOpening(payload: SaveCashDayOpeningPayload): Promise<void> {
+  await invoke("cash_day_opening_save", { payload });
 }
