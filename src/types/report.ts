@@ -8,6 +8,14 @@ export interface ReportsSummaryDto {
   totalBilled: number;
   totalPaid: number;
   totalPending: number;
+  /** Facturado físico en CUP (`due_cup`, sin conversión). */
+  totalBilledCup: number;
+  /** Facturado físico en USD (`due_usd`, sin conversión). */
+  totalBilledUsd: number;
+  /** Saldo físico pendiente en CUP. */
+  totalPendingCup: number;
+  /** Saldo físico pendiente en USD (`balance_usd`). */
+  totalPendingUsd: number;
   /** Facturas con estado paid en el rango (o global si no hay rango). */
   invoicesPaidCount: number;
   invoicesPartialCount: number;
@@ -38,5 +46,10 @@ export interface TopDebtorDto {
 export interface CategoryIncomeDto {
   category: string;
   label: string;
+  /** Total CUP del libro (igual a `totalCup`). */
   total: number;
+  /** Facturado físico en CUP. */
+  totalCup: number;
+  /** Facturado físico en USD. */
+  totalUsd: number;
 }

@@ -5,6 +5,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -19,14 +20,13 @@ import {
   Package,
   Receipt,
 } from "lucide-react";
-import { DualMoneyText } from "@/components/common/DualMoneyText";
 import { fetchIncomeByCategory, fetchReportsSummary } from "@/db/queries/reports";
 import { fetchInvoices } from "@/db/queries/invoices";
 import { fetchBackupOverview } from "@/db/queries/settings";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { cupToUsd } from "@/lib/currency";
 import { formatDate, formatDateTime, todayIso } from "@/lib/format-date";
-import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
+import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 
 /**
@@ -61,10 +61,40 @@ function KpiCard(props: {
         <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg ${accent}`}>
           <Icon className="h-6 w-6" />
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-xs uppercase tracking-wide text-base-content/60">{label}</p>
           <div className="text-xl font-semibold leading-tight">{value}</div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Importes físicos CUP y USD (sin conversión), mismo patrón que Caja y Facturas.
+ *
+ * @param props - Montos por moneda y clase opcional del valor.
+ * @returns Bloque dual CUP | USD.
+ */
+function DualPhysicalAmounts(props: {
+  amountCup: number;
+  amountUsd: number;
+  valueClassName?: string;
+}) {
+  const { amountCup, amountUsd, valueClassName = "" } = props;
+  return (
+    <div className="mt-0.5 grid grid-cols-2 gap-3">
+      <div>
+        <p className="text-[10px] font-normal uppercase tracking-wide text-base-content/50">
+          {moneyHeading("Importe", "CUP")}
+        </p>
+        <p className={`text-lg tabular-nums ${valueClassName}`}>{formatAmount(amountCup)}</p>
+      </div>
+      <div>
+        <p className="text-[10px] font-normal uppercase tracking-wide text-base-content/50">
+          {moneyHeading("Importe", "USD")}
+        </p>
+        <p className={`text-lg tabular-nums ${valueClassName}`}>{formatAmount(amountUsd)}</p>
       </div>
     </div>
   );
@@ -78,21 +108,20 @@ function KpiCard(props: {
 export function DashboardPage() {
   const settings = useAppSettings();
   const rate = settings.usdExchangeRate;
-  const moneyPrimary = rate > 0 ? ("USD" as const) : ("CUP" as const);
 
   const now = new Date();
   const monthStart = isoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+  const monthEnd = isoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
   const today = todayIso();
-  const thirtyDaysAgo = isoDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30));
 
   const summaryQuery = useQuery({
-    queryKey: ["reports", "summary", monthStart, today],
-    queryFn: () => fetchReportsSummary({ dateFrom: monthStart, dateTo: today }),
+    queryKey: ["reports", "summary", monthStart, monthEnd],
+    queryFn: () => fetchReportsSummary({ dateFrom: monthStart, dateTo: monthEnd }),
   });
 
   const incomeQuery = useQuery({
-    queryKey: ["reports", "income-by-category", thirtyDaysAgo, today],
-    queryFn: () => fetchIncomeByCategory({ dateFrom: thirtyDaysAgo, dateTo: today }),
+    queryKey: ["reports", "income-by-category", monthStart, monthEnd],
+    queryFn: () => fetchIncomeByCategory({ dateFrom: monthStart, dateTo: monthEnd }),
   });
 
   const invoicesQuery = useQuery({
@@ -119,11 +148,10 @@ export function DashboardPage() {
     () =>
       (incomeQuery.data ?? []).map((row) => ({
         name: row.label,
-        /** Valor del eje (USD si hay tasa; si no, CUP del libro). */
-        total: rate > 0 ? cupToUsd(row.total, rate) : row.total,
-        totalCup: row.total,
+        totalCup: row.totalCup,
+        totalUsd: row.totalUsd,
       })),
-    [incomeQuery.data, rate],
+    [incomeQuery.data],
   );
 
   const backups = backupOverviewQuery.data?.backups ?? [];
@@ -137,13 +165,11 @@ export function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label={moneyHeading("Facturación del mes", moneyPrimary)}
+          label="Facturación del mes"
           value={
-            <DualMoneyText
-              amountCup={summary?.totalBilled ?? 0}
-              rate={rate}
-              primary="USD"
-              className="items-start"
+            <DualPhysicalAmounts
+              amountCup={summary?.totalBilledCup ?? 0}
+              amountUsd={summary?.totalBilledUsd ?? 0}
             />
           }
           icon={Receipt}
@@ -156,13 +182,12 @@ export function DashboardPage() {
           accent="bg-warning/15 text-warning"
         />
         <KpiCard
-          label={moneyHeading("Cobros pendientes", moneyPrimary)}
+          label="Cobros pendientes"
           value={
-            <DualMoneyText
-              amountCup={summary?.totalPending ?? 0}
-              rate={rate}
-              primary="USD"
-              className="items-start"
+            <DualPhysicalAmounts
+              amountCup={summary?.totalPendingCup ?? 0}
+              amountUsd={summary?.totalPendingUsd ?? 0}
+              valueClassName="text-error"
             />
           }
           icon={CircleDollarSign}
@@ -178,9 +203,7 @@ export function DashboardPage() {
 
       <div className="card bg-base-200">
         <div className="card-body">
-          <h3 className="card-title text-base">
-            {moneyHeading("Ingresos por categoría (últimos 30 días)", moneyPrimary)}
-          </h3>
+          <h3 className="card-title text-base">Ingresos por categoría (mes actual)</h3>
           {incomeQuery.isLoading ? (
             <div className="h-72 animate-pulse rounded-lg bg-base-300" />
           ) : chartData.length === 0 ? (
@@ -188,29 +211,45 @@ export function DashboardPage() {
           ) : (
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                <BarChart data={chartData} margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
                   <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                   <YAxis
-                    tick={{ fontSize: 12 }}
-                    width={80}
+                    yAxisId="cup"
+                    tick={{ fontSize: 11 }}
+                    width={72}
                     tickFormatter={(value: number) => formatAmount(Number(value))}
+                    label={{ value: "CUP", angle: -90, position: "insideLeft", fontSize: 10 }}
+                  />
+                  <YAxis
+                    yAxisId="usd"
+                    orientation="right"
+                    tick={{ fontSize: 11 }}
+                    width={56}
+                    tickFormatter={(value: number) => formatAmount(Number(value))}
+                    label={{ value: "USD", angle: 90, position: "insideRight", fontSize: 10 }}
                   />
                   <Tooltip
-                    formatter={(value, _name, item) => {
-                      const cup = Number(
-                        (item?.payload as { totalCup?: number } | undefined)?.totalCup ?? value,
-                      );
-                      if (rate > 0) {
-                        return [
-                          `${formatMoney(Number(value), "USD")} (${formatMoney(cup, "CUP")})`,
-                          "Importe",
-                        ];
-                      }
-                      return [formatMoney(cup, "CUP"), "Importe"];
-                    }}
+                    formatter={(value, name) => [
+                      formatAmount(Number(value)),
+                      name === "totalCup" ? "CUP" : "USD",
+                    ]}
                   />
-                  <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Legend formatter={(value) => (value === "totalCup" ? "CUP" : "USD")} />
+                  <Bar
+                    yAxisId="cup"
+                    dataKey="totalCup"
+                    name="totalCup"
+                    fill="#0d9488"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar
+                    yAxisId="usd"
+                    dataKey="totalUsd"
+                    name="totalUsd"
+                    fill="#3b82f6"
+                    radius={[4, 4, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>

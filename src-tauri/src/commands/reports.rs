@@ -19,6 +19,14 @@ pub struct ReportsSummaryDto {
     pub total_billed: f64,
     pub total_paid: f64,
     pub total_pending: f64,
+    /// Facturado físico en CUP (`due_cup`, sin convertir).
+    pub total_billed_cup: f64,
+    /// Facturado físico en USD (`due_usd`, sin convertir).
+    pub total_billed_usd: f64,
+    /// Saldo físico pendiente en CUP.
+    pub total_pending_cup: f64,
+    /// Saldo físico pendiente en USD (`balance_usd`).
+    pub total_pending_usd: f64,
     pub invoices_paid_count: i64,
     pub invoices_partial_count: i64,
     pub invoices_pending_count: i64,
@@ -45,7 +53,12 @@ pub struct TopDebtorDto {
 pub struct CategoryIncomeDto {
     pub category: String,
     pub label: String,
+    /// Total en CUP del libro (alias de `total_cup` para compatibilidad).
     pub total: f64,
+    /// Facturado físico en CUP por categoría.
+    pub total_cup: f64,
+    /// Facturado físico en USD por categoría.
+    pub total_usd: f64,
 }
 
 fn normalize_range(args: ReportsRangeArgs) -> (Option<String>, Option<String>) {
@@ -74,16 +87,28 @@ pub fn reports_summary(args: ReportsRangeArgs) -> Result<ReportsSummaryDto, Stri
     let (from, to) = normalize_range(args);
 
     let invoice_where = if from.is_some() && to.is_some() {
-        "WHERE deleted_at IS NULL AND date >= ?1 AND date <= ?2"
+        "WHERE deleted_at IS NULL AND cancelled_at IS NULL AND date >= ?1 AND date <= ?2"
     } else {
-        "WHERE deleted_at IS NULL"
+        "WHERE deleted_at IS NULL AND cancelled_at IS NULL"
     };
     let invoice_sql = format!(
         "SELECT COUNT(*),
                 COALESCE(SUM(total),0), COALESCE(SUM(paid),0), COALESCE(SUM(balance),0),
                 COALESCE(SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END), 0),
                 COALESCE(SUM(CASE WHEN status = 'partial' THEN 1 ELSE 0 END), 0),
-                COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0)
+                COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(COALESCE(due_cup, CASE
+                    WHEN LOWER(COALESCE(payment_currency, 'cup')) = 'usd' THEN 0
+                    ELSE total
+                END)), 0),
+                COALESCE(SUM(COALESCE(due_usd, 0)), 0),
+                COALESCE(SUM(CASE
+                    WHEN COALESCE(exchange_rate_snapshot, 0) > 0
+                    THEN MAX(0, balance - COALESCE(balance_usd, 0) * exchange_rate_snapshot)
+                    WHEN LOWER(COALESCE(payment_currency, 'cup')) = 'usd' THEN 0
+                    ELSE balance
+                END), 0),
+                COALESCE(SUM(COALESCE(balance_usd, 0)), 0)
          FROM invoices {}",
         invoice_where
     );
@@ -96,33 +121,46 @@ pub fn reports_summary(args: ReportsRangeArgs) -> Result<ReportsSummaryDto, Stri
         invoices_paid_count,
         invoices_partial_count,
         invoices_pending_count,
-    ): (i64, f64, f64, f64, i64, i64, i64) = if let (Some(f), Some(t)) = (from.clone(), to.clone()) {
-        conn.query_row(&invoice_sql, params![f, t], |row| {
-            Ok((
-                row.get(0)?,
-                row.get(1)?,
-                row.get(2)?,
-                row.get(3)?,
-                row.get(4)?,
-                row.get(5)?,
-                row.get(6)?,
-            ))
-        })
-        .map_err(|e| e.to_string())?
-    } else {
-        conn.query_row(&invoice_sql, [], |row| {
-            Ok((
-                row.get(0)?,
-                row.get(1)?,
-                row.get(2)?,
-                row.get(3)?,
-                row.get(4)?,
-                row.get(5)?,
-                row.get(6)?,
-            ))
-        })
-        .map_err(|e| e.to_string())?
-    };
+        total_billed_cup,
+        total_billed_usd,
+        total_pending_cup,
+        total_pending_usd,
+    ): (i64, f64, f64, f64, i64, i64, i64, f64, f64, f64, f64) =
+        if let (Some(f), Some(t)) = (from.clone(), to.clone()) {
+            conn.query_row(&invoice_sql, params![f, t], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
+                    row.get(10)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?
+        } else {
+            conn.query_row(&invoice_sql, [], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
+                    row.get(10)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?
+        };
 
     let average_invoice_amount = if invoices_count > 0 {
         total_billed / (invoices_count as f64)
@@ -171,6 +209,10 @@ pub fn reports_summary(args: ReportsRangeArgs) -> Result<ReportsSummaryDto, Stri
         total_billed,
         total_paid,
         total_pending,
+        total_billed_cup,
+        total_billed_usd,
+        total_pending_cup,
+        total_pending_usd,
         invoices_paid_count,
         invoices_partial_count,
         invoices_pending_count,
@@ -191,28 +233,53 @@ pub fn reports_income_by_category(args: ReportsRangeArgs) -> Result<Vec<Category
     let (from, to) = normalize_range(args);
 
     let where_clause = if from.is_some() && to.is_some() {
-        "WHERE i.deleted_at IS NULL AND i.date >= ?1 AND i.date <= ?2"
+        "WHERE i.deleted_at IS NULL AND i.cancelled_at IS NULL AND i.date >= ?1 AND i.date <= ?2"
     } else {
-        "WHERE i.deleted_at IS NULL"
+        "WHERE i.deleted_at IS NULL AND i.cancelled_at IS NULL"
     };
+    // Montos físicos por moneda de cobro del pedido (no conversión por tasa de app).
+    // Mixto: se prorratea due_cup / due_usd según el peso de la línea en el total.
     let sql = format!(
-        "SELECT pc.name, COALESCE(pc.label_es, pc.name), COALESCE(SUM(ii.subtotal), 0) AS total
+        "SELECT pc.name,
+                COALESCE(pc.label_es, pc.name),
+                COALESCE(SUM(CASE
+                    WHEN LOWER(COALESCE(i.payment_currency, 'cup')) = 'usd' THEN 0
+                    WHEN LOWER(COALESCE(i.payment_currency, 'cup')) = 'mixto'
+                    THEN (ii.subtotal / NULLIF(i.total, 0)) * COALESCE(i.due_cup, i.total)
+                    ELSE ii.subtotal
+                END), 0) AS total_cup,
+                COALESCE(SUM(CASE
+                    WHEN LOWER(COALESCE(i.payment_currency, 'cup')) = 'usd' THEN
+                        CASE
+                            WHEN COALESCE(ii.unit_price_usd, 0) > 0 THEN ii.unit_price_usd * ii.quantity
+                            WHEN COALESCE(i.exchange_rate_snapshot, 0) > 0
+                            THEN ii.subtotal / i.exchange_rate_snapshot
+                            ELSE 0
+                        END
+                    WHEN LOWER(COALESCE(i.payment_currency, 'cup')) = 'mixto'
+                    THEN (ii.subtotal / NULLIF(i.total, 0)) * COALESCE(i.due_usd, 0)
+                    ELSE 0
+                END), 0) AS total_usd
          FROM invoice_items ii
          JOIN invoices i ON i.id = ii.invoice_id
          JOIN product_categories pc ON pc.id = ii.category_id
          {}
          GROUP BY pc.id
-         HAVING total > 0
-         ORDER BY total DESC",
+         HAVING total_cup > 1e-9 OR total_usd > 1e-9
+         ORDER BY (total_cup + total_usd) DESC",
         where_clause
     );
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let map_row = |row: &rusqlite::Row| {
+        let total_cup: f64 = row.get(2)?;
+        let total_usd: f64 = row.get(3)?;
         Ok(CategoryIncomeDto {
             category: row.get(0)?,
             label: row.get(1)?,
-            total: row.get(2)?,
+            total: total_cup,
+            total_cup,
+            total_usd,
         })
     };
     let rows = if let (Some(f), Some(t)) = (from, to) {

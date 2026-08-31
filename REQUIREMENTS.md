@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.33 | Última actualización: 2026-08-31
+### Versión: 2.34 | Última actualización: 2026-08-31
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -46,8 +46,8 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 ## 3. Módulos del Sistema
 
 ### 3.1 Inicio
-- KPIs: facturación del día/mes, pedidos pendientes, cobros pendientes
-- Gráfico de ingresos por categoría de producto (Recharts)
+- KPIs: facturación del mes en CUP y USD (montos físicos de cobro, sin conversión), pedidos pendientes, cobros pendientes en CUP y USD
+- Gráfico de ingresos por categoría del **mes actual**, con barras CUP y USD (ejes independientes)
 - Lista de pedidos recientes con estado
 - Accesos rápidos a las acciones más frecuentes
 
@@ -499,6 +499,10 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.33 — Menú: Reportes y Reportes globales (2026-08)
 - Sidebar: **Reportes** (antes Reportes producción, icono de gráfico) encima de Pedidos; **Reportes globales** sustituye a Reportes.
+
+### v2.34 — Inicio: facturación y cobros duales, gráfico del mes (2026-08)
+- KPIs **Facturación del mes** y **Cobros pendientes** muestran importes físicos CUP y USD (como Facturas/Caja).
+- Gráfico de ingresos por categoría: mes actual (no últimos 30 días) con series CUP y USD.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
