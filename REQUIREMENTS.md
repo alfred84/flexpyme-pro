@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.32 | Última actualización: 2026-08-31
+### Versión: 2.33 | Última actualización: 2026-08-31
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -166,7 +166,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Rutas `/facturas`, impresión y registro de pago
 
 ### 3.10 Reportes de producción (v2.5)
-- Entrada de sidebar **Reportes producción** (tras Pedidos); ruta `/reportes-produccion`
+- Entrada de sidebar **Reportes** (encima de Pedidos); ruta `/reportes-produccion`
 - Tracking por línea: `invoice_items.completed_quantity` / `completed_at` vía lotes (`production_batch_items.invoice_id`)
 - Vista mensual por Área (Impresión/Laminado/Enmarcado), día y formato: Realizado vs Pendiente e importes
 - Comparativa Factura vs Salario vs Diferencia del mes en curso
@@ -220,7 +220,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 
 - **Estilo**: Dashboard profesional, limpio, moderno — inspirado en Odoo/FacturaScript
 - **Modo**: Dark mode por defecto (con opción de light mode en Configuración)
-- **Sidebar**: Inicio, Pedidos, Reportes producción, Facturas, Clientes, Empleados, Inventario, Caja, Precios, Otros gastos, Reportes, Configuración
+- **Sidebar**: Inicio, Reportes, Pedidos, Facturas, Clientes, Empleados, Inventario, Caja, Precios, Otros gastos, Reportes globales, Configuración
 - **Fechas en UI (v2.5)**: siempre `dd/mm/aaaa` vía `formatDate` / `formatDateTime` (`src/lib/format-date.ts`)
 - **Importes en UI (v2.14)**: moneda en la etiqueta/columna vía `moneyHeading('…')` y valor limpio con `formatAmount`; usar `formatMoney(valor, 'CUP'|'USD')` solo en mensajes, badges, tooltips o contextos mixtos sin encabezado (`src/lib/format-money.ts`)
 - **Iconos**: Lucide React en todos los menús, botones y acciones
@@ -496,6 +496,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.32 — Saldo inicial diario y vista compacta (2026-08)
 - Control de efectivo: saldo inicial registrable por **mes** y por **día**; pantalla unificada (KPIs + una moneda a la vez) para no duplicar tablas.
+
+### v2.33 — Menú: Reportes y Reportes globales (2026-08)
+- Sidebar: **Reportes** (antes Reportes producción, icono de gráfico) encima de Pedidos; **Reportes globales** sustituye a Reportes.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

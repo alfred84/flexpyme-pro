@@ -9,7 +9,7 @@ import {
   Tag,
   Receipt,
   BarChart3,
-  Factory,
+  PieChart,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -38,8 +38,8 @@ export interface NavItem {
  */
 export const PRIMARY_NAV: NavItem[] = [
   { to: "/", label: "Inicio", icon: LayoutDashboard, exact: true },
+  { to: "/reportes-produccion", label: "Reportes", icon: BarChart3 },
   { to: "/pedidos", label: "Pedidos", icon: ShoppingCart, badge: "pedidosAtencion" },
-  { to: "/reportes-produccion", label: "Reportes producción", icon: Factory },
   { to: "/facturas", label: "Facturas", icon: FileText, badge: "facturasPendientes" },
   { to: "/clientes", label: "Clientes", icon: Users },
   { to: "/empleados", label: "Empleados", icon: UserCog },
@@ -47,7 +47,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { to: "/caja", label: "Flujo de Caja", icon: Wallet },
   { to: "/precios", label: "Precios", icon: Tag },
   { to: "/otros-gastos", label: "Otros gastos", icon: Receipt },
-  { to: "/reportes", label: "Reportes", icon: BarChart3 },
+  { to: "/reportes", label: "Reportes globales", icon: PieChart },
 ];
 
 /**
