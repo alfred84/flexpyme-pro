@@ -8,6 +8,7 @@ import type {
   InvoiceWorkBatchDto,
   MonthlySalaryStatusDto,
   PayrollDailyRowDto,
+  PayrollRangeRowDto,
   UpdateEmployeePayload,
   WorkBatchDto,
   WorkCostDto,
@@ -231,4 +232,17 @@ export async function removeEmployeeExtraRole(id: number): Promise<void> {
  */
 export async function fetchPayrollDaily(date: string): Promise<PayrollDailyRowDto[]> {
   return invoke<PayrollDailyRowDto[]>("payroll_daily", { date });
+}
+
+/**
+ * Carga la nómina agregada por empleado en un rango de fechas.
+ *
+ * @param args - `dateFrom`/`dateTo` ISO; omitidos = histórico registrado.
+ * @returns Filas por empleado (total, pagado, pendiente).
+ */
+export async function fetchPayrollInRange(args: {
+  dateFrom?: string | null;
+  dateTo?: string | null;
+}): Promise<PayrollRangeRowDto[]> {
+  return invoke<PayrollRangeRowDto[]>("payroll_in_range", { args });
 }

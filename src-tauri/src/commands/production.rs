@@ -129,7 +129,10 @@ pub struct ProductionFormatRowDto {
     pub pedido_qty: i64,
     pub realizado_qty: i64,
     pub pendiente_qty: i64,
+    /// Importe de venta en CUP (libro: `subtotal`).
     pub pedido_amount: f64,
+    /// Importe de venta en USD (`unit_price_usd × cantidad`).
+    pub pedido_amount_usd: f64,
     pub salario_amount: f64,
 }
 
@@ -142,8 +145,12 @@ pub struct ProductionAreaReportDto {
     pub pedido_qty: i64,
     pub realizado_qty: i64,
     pub pendiente_qty: i64,
+    /// Importe de venta en CUP (libro).
     pub pedido_amount: f64,
+    /// Importe de venta en USD.
+    pub pedido_amount_usd: f64,
     pub salario_amount: f64,
+    /// Margen CUP: factura CUP − salario CUP.
     pub diferencia: f64,
 }
 
@@ -156,13 +163,24 @@ pub struct ProductionDailyDto {
     pub realizado_qty: i64,
 }
 
-/// Monthly production report: areas with format rows and a daily series.
+/// Production report: areas with format rows and a daily series for a date range.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProductionReportDto {
+    /// Mes `YYYY-MM` cuando el rango es un mes calendario; vacío en otro caso.
     pub month: String,
+    pub date_from: Option<String>,
+    pub date_to: Option<String>,
     pub areas: Vec<ProductionAreaReportDto>,
     pub daily: Vec<ProductionDailyDto>,
+}
+
+/// Rango opcional para el reporte de producción (`None` = histórico completo).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProductionReportArgs {
+    pub date_from: Option<String>,
+    pub date_to: Option<String>,
 }
 
 #[derive(Default)]
@@ -170,6 +188,7 @@ struct FormatAgg {
     pedido_qty: i64,
     realizado_qty: i64,
     pedido_amount: f64,
+    pedido_amount_usd: f64,
     salario_amount: f64,
 }
 
@@ -179,50 +198,100 @@ struct AreaAgg {
     formats: BTreeMap<String, FormatAgg>,
 }
 
-/// Monthly production report by area/format with Realizado vs Pendiente and a
-/// daily series for the current-month production control.
-///
-/// `month` must be `YYYY-MM`. "Realizado" comes from work batches linked to
-/// orders; "Pedido" from the order lines dated in the month.
-#[tauri::command]
-pub fn production_report_monthly(month: String) -> Result<ProductionReportDto, String> {
-    let month = month.trim().to_string();
-    if month.len() != 7 {
-        return Err("Mes inválido (formato YYYY-MM)".to_string());
+fn normalize_optional_iso(value: Option<String>) -> Option<String> {
+    value.and_then(|v| {
+        let t = v.trim().to_string();
+        if t.len() >= 10 {
+            Some(t[..10].to_string())
+        } else if t.is_empty() {
+            None
+        } else {
+            None
+        }
+    })
+}
+
+fn last_day_of_month_iso(year_month: &str) -> Result<String, String> {
+    let y: i32 = year_month[0..4]
+        .parse()
+        .map_err(|_| "Mes inválido (formato YYYY-MM)".to_string())?;
+    let m: u32 = year_month[5..7]
+        .parse()
+        .map_err(|_| "Mes inválido (formato YYYY-MM)".to_string())?;
+    let last = days_in_month(y, m)?;
+    Ok(format!("{:04}-{:02}-{:02}", y, m, last))
+}
+
+fn days_in_month(year: i32, month: u32) -> Result<u32, String> {
+    let days = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+            if leap {
+                29
+            } else {
+                28
+            }
+        }
+        _ => return Err("Mes inválido".to_string()),
+    };
+    Ok(days)
+}
+
+fn month_label_for_range(from: &Option<String>, to: &Option<String>) -> String {
+    match (from, to) {
+        (Some(f), Some(t)) if f.len() >= 7 && t.len() >= 7 && f[..7] == t[..7] && f.ends_with("-01") => {
+            f[..7].to_string()
+        }
+        (Some(f), Some(t)) if f.len() >= 7 && t.len() >= 7 && f[..7] == t[..7] => f[..7].to_string(),
+        _ => String::new(),
     }
+}
+
+/// Reporte de producción por área/formato en un rango (o histórico completo).
+///
+/// "Realizado" proviene de lotes ligados a pedidos; "Pedido" de las líneas
+/// de factura con `service` en el rango.
+#[tauri::command]
+pub fn production_report(args: ProductionReportArgs) -> Result<ProductionReportDto, String> {
+    let date_from = normalize_optional_iso(args.date_from);
+    let date_to = normalize_optional_iso(args.date_to);
     let conn = db::open_connection()?;
     let mut areas: BTreeMap<String, AreaAgg> = BTreeMap::new();
 
-    // Pedido: líneas de pedido del mes agrupadas por servicio (Área) y formato.
     {
         let mut stmt = conn
             .prepare(
                 "SELECT ii.service,
                         COALESCE(ii.format_label_snapshot, f.label, '(sin formato)') AS fmt,
                         COALESCE(SUM(ii.quantity), 0),
-                        COALESCE(SUM(ii.subtotal), 0)
+                        COALESCE(SUM(ii.subtotal), 0),
+                        COALESCE(SUM(COALESCE(ii.unit_price_usd, 0) * ii.quantity), 0)
                  FROM invoice_items ii
                  JOIN invoices i ON i.id = ii.invoice_id
                  LEFT JOIN formats f ON f.id = ii.format_id
                  WHERE i.deleted_at IS NULL AND i.cancelled_at IS NULL
-                   AND strftime('%Y-%m', i.date) = ?1
+                   AND (?1 IS NULL OR substr(i.date, 1, 10) >= ?1)
+                   AND (?2 IS NULL OR substr(i.date, 1, 10) <= ?2)
                    AND ii.service IS NOT NULL AND trim(ii.service) <> ''
                  GROUP BY ii.service, fmt",
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
-            .query_map(params![month], |row| {
+            .query_map(params![date_from, date_to], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
                     row.get::<_, i64>(2)?,
                     row.get::<_, f64>(3)?,
+                    row.get::<_, f64>(4)?,
                 ))
             })
             .map_err(|e| e.to_string())?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?;
-        for (service, fmt, qty, amount) in rows {
+        for (service, fmt, qty, amount_cup, amount_usd) in rows {
             let key = normalize_token(&service);
             let area = areas.entry(key).or_default();
             if area.display.is_empty() {
@@ -230,11 +299,11 @@ pub fn production_report_monthly(month: String) -> Result<ProductionReportDto, S
             }
             let f = area.formats.entry(fmt).or_default();
             f.pedido_qty += qty;
-            f.pedido_amount += amount;
+            f.pedido_amount += amount_cup;
+            f.pedido_amount_usd += amount_usd;
         }
     }
 
-    // Realizado: ítems de lotes ligados a pedidos, del mes, por Área y formato.
     {
         let mut stmt = conn
             .prepare(
@@ -246,12 +315,13 @@ pub fn production_report_monthly(month: String) -> Result<ProductionReportDto, S
                  JOIN production_batches pb ON pb.id = pbi.batch_id
                  LEFT JOIN formats f ON f.id = pbi.format_id
                  WHERE pbi.invoice_id IS NOT NULL
-                   AND strftime('%Y-%m', pb.date) = ?1
+                   AND (?1 IS NULL OR substr(pb.date, 1, 10) >= ?1)
+                   AND (?2 IS NULL OR substr(pb.date, 1, 10) <= ?2)
                  GROUP BY pbi.category, fmt",
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
-            .query_map(params![month], |row| {
+            .query_map(params![date_from, date_to], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
@@ -281,12 +351,14 @@ pub fn production_report_monthly(month: String) -> Result<ProductionReportDto, S
             let mut a_pedido = 0;
             let mut a_realizado = 0;
             let mut a_amount = 0.0;
+            let mut a_amount_usd = 0.0;
             let mut a_salario = 0.0;
             for (fmt, f) in agg.formats {
                 let pendiente = (f.pedido_qty - f.realizado_qty).max(0);
                 a_pedido += f.pedido_qty;
                 a_realizado += f.realizado_qty;
                 a_amount += f.pedido_amount;
+                a_amount_usd += f.pedido_amount_usd;
                 a_salario += f.salario_amount;
                 rows.push(ProductionFormatRowDto {
                     format_label: fmt,
@@ -294,6 +366,7 @@ pub fn production_report_monthly(month: String) -> Result<ProductionReportDto, S
                     realizado_qty: f.realizado_qty,
                     pendiente_qty: pendiente,
                     pedido_amount: f.pedido_amount,
+                    pedido_amount_usd: f.pedido_amount_usd,
                     salario_amount: f.salario_amount,
                 });
             }
@@ -304,27 +377,28 @@ pub fn production_report_monthly(month: String) -> Result<ProductionReportDto, S
                 realizado_qty: a_realizado,
                 pendiente_qty: (a_pedido - a_realizado).max(0),
                 pedido_amount: a_amount,
+                pedido_amount_usd: a_amount_usd,
                 salario_amount: a_salario,
                 diferencia: a_amount - a_salario,
             }
         })
         .collect::<Vec<_>>();
 
-    // Serie diaria: realizado por día y Área del mes.
     let daily = {
         let mut stmt = conn
             .prepare(
-                "SELECT pb.date, pbi.category, COALESCE(SUM(pbi.quantity), 0)
+                "SELECT substr(pb.date, 1, 10), pbi.category, COALESCE(SUM(pbi.quantity), 0)
                  FROM production_batch_items pbi
                  JOIN production_batches pb ON pb.id = pbi.batch_id
                  WHERE pbi.invoice_id IS NOT NULL
-                   AND strftime('%Y-%m', pb.date) = ?1
-                 GROUP BY pb.date, pbi.category
-                 ORDER BY pb.date",
+                   AND (?1 IS NULL OR substr(pb.date, 1, 10) >= ?1)
+                   AND (?2 IS NULL OR substr(pb.date, 1, 10) <= ?2)
+                 GROUP BY substr(pb.date, 1, 10), pbi.category
+                 ORDER BY 1",
             )
             .map_err(|e| e.to_string())?;
         let result = stmt
-            .query_map(params![month], |row| {
+            .query_map(params![date_from, date_to], |row| {
                 Ok(ProductionDailyDto {
                     date: row.get(0)?,
                     area: row.get(1)?,
@@ -338,9 +412,26 @@ pub fn production_report_monthly(month: String) -> Result<ProductionReportDto, S
     };
 
     Ok(ProductionReportDto {
-        month,
+        month: month_label_for_range(&date_from, &date_to),
+        date_from,
+        date_to,
         areas: area_reports,
         daily,
+    })
+}
+
+/// Envoltorio mensual: `YYYY-MM` → primer/último día del mes.
+#[tauri::command]
+pub fn production_report_monthly(month: String) -> Result<ProductionReportDto, String> {
+    let month = month.trim().to_string();
+    if month.len() != 7 {
+        return Err("Mes inválido (formato YYYY-MM)".to_string());
+    }
+    let date_from = format!("{}-01", month);
+    let date_to = last_day_of_month_iso(&month)?;
+    production_report(ProductionReportArgs {
+        date_from: Some(date_from),
+        date_to: Some(date_to),
     })
 }
 

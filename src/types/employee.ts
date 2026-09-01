@@ -104,6 +104,17 @@ export interface PayrollDailyRowDto {
 }
 
 /**
+ * Fila de nómina agregada por empleado en un rango de fechas.
+ */
+export interface PayrollRangeRowDto {
+  employeeId: number;
+  employeeName: string;
+  totalCost: number;
+  paid: number;
+  pending: number;
+}
+
+/**
  * Tipos de trabajo retribuibles a empleados.
  */
 export const WORK_TYPES = ["laminado", "enmarcado", "respaldo", "impresion"] as const;

@@ -45,7 +45,12 @@ pub struct TopDebtorDto {
     pub client_id: i64,
     pub client_code: String,
     pub client_name: String,
+    /// Deuda equivalente CUP (espejo contable).
     pub balance: f64,
+    /// Deuda abierta física en USD.
+    pub balance_usd: f64,
+    /// Deuda abierta física en CUP (sin crédito).
+    pub balance_cup: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -296,10 +301,29 @@ pub fn reports_top_debtors(limit: Option<i64>) -> Result<Vec<TopDebtorDto>, Stri
     let lim = limit.unwrap_or(10).clamp(1, 100);
     let mut stmt = conn
         .prepare(
-            "SELECT id, code, name, balance
-             FROM clients
-             WHERE deleted_at IS NULL AND balance > 0
-             ORDER BY balance DESC, name COLLATE NOCASE
+            "SELECT c.id, c.code, c.name, c.balance,
+                    COALESCE(b.balance_usd, 0),
+                    COALESCE(b.balance_cup, 0)
+             FROM clients c
+             LEFT JOIN (
+                SELECT client_id,
+                    SUM(COALESCE(balance_usd, 0)) AS balance_usd,
+                    SUM(CASE
+                        WHEN COALESCE(balance, 0)
+                            - COALESCE(balance_usd, 0) * COALESCE(exchange_rate_snapshot, 0) > 0
+                        THEN COALESCE(balance, 0)
+                            - COALESCE(balance_usd, 0) * COALESCE(exchange_rate_snapshot, 0)
+                        ELSE 0
+                    END) AS balance_cup
+                FROM invoices
+                WHERE deleted_at IS NULL AND cancelled_at IS NULL
+                GROUP BY client_id
+             ) b ON b.client_id = c.id
+             WHERE c.deleted_at IS NULL
+               AND (c.balance > 1e-9
+                    OR COALESCE(b.balance_usd, 0) > 1e-9
+                    OR COALESCE(b.balance_cup, 0) > 1e-9)
+             ORDER BY c.balance DESC, c.name COLLATE NOCASE
              LIMIT ?1",
         )
         .map_err(|e| e.to_string())?;
@@ -310,6 +334,8 @@ pub fn reports_top_debtors(limit: Option<i64>) -> Result<Vec<TopDebtorDto>, Stri
                 client_code: row.get(1)?,
                 client_name: row.get(2)?,
                 balance: row.get(3)?,
+                balance_usd: row.get(4)?,
+                balance_cup: row.get(5)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -555,10 +581,16 @@ pub async fn export_clients_report(app: tauri::AppHandle, format: String) -> Res
             .ok_or_else(|| "Exportación cancelada".to_string())?;
         let path = dest.into_path().map_err(|e| e.to_string())?;
         let mut wtr = csv::Writer::from_path(&path).map_err(|e| e.to_string())?;
-        wtr.write_record(["codigo", "nombre", "balance"])
+        wtr.write_record(["codigo", "nombre", "balance_usd", "balance_cup", "balance_equiv_cup"])
             .map_err(|e| e.to_string())?;
         for d in &debtors {
-            wtr.write_record([&d.client_code, &d.client_name, &d.balance.to_string()])
+            wtr.write_record([
+                &d.client_code,
+                &d.client_name,
+                &d.balance_usd.to_string(),
+                &d.balance_cup.to_string(),
+                &d.balance.to_string(),
+            ])
                 .map_err(|e| e.to_string())?;
         }
         wtr.flush().map_err(|e| e.to_string())?;
@@ -579,12 +611,16 @@ pub async fn export_clients_report(app: tauri::AppHandle, format: String) -> Res
         let sheet = workbook.add_worksheet();
         sheet.write_string(0, 0, "Codigo").map_err(|e| e.to_string())?;
         sheet.write_string(0, 1, "Nombre").map_err(|e| e.to_string())?;
-        sheet.write_string(0, 2, "Balance").map_err(|e| e.to_string())?;
+        sheet.write_string(0, 2, "Balance USD").map_err(|e| e.to_string())?;
+        sheet.write_string(0, 3, "Balance CUP").map_err(|e| e.to_string())?;
+        sheet.write_string(0, 4, "Equiv. CUP").map_err(|e| e.to_string())?;
         for (i, d) in debtors.iter().enumerate() {
             let r = (i + 1) as u32;
             sheet.write_string(r, 0, &d.client_code).map_err(|e| e.to_string())?;
             sheet.write_string(r, 1, &d.client_name).map_err(|e| e.to_string())?;
-            sheet.write_number(r, 2, d.balance).map_err(|e| e.to_string())?;
+            sheet.write_number(r, 2, d.balance_usd).map_err(|e| e.to_string())?;
+            sheet.write_number(r, 3, d.balance_cup).map_err(|e| e.to_string())?;
+            sheet.write_number(r, 4, d.balance).map_err(|e| e.to_string())?;
         }
         workbook.save(&path).map_err(|e| e.to_string())?;
         return Ok(path.to_string_lossy().to_string());
@@ -610,7 +646,10 @@ pub async fn export_clients_report(app: tauri::AppHandle, format: String) -> Res
         layer.use_text("Clientes con saldo", 14.0, Mm(15.0), Mm(y), &font);
         y -= 10.0;
         for d in debtors.iter().take(40) {
-            let line = format!("{} - {}: {:.2}", d.client_code, d.client_name, d.balance);
+            let line = format!(
+                "{} - {}: {:.2} USD / {:.2} CUP",
+                d.client_code, d.client_name, d.balance_usd, d.balance_cup
+            );
             layer.use_text(&line, 10.0, Mm(15.0), Mm(y), &font);
             y -= 6.0;
             if y < 20.0 {
@@ -714,5 +753,128 @@ pub async fn export_cashflow_report(
         wtr.flush().map_err(|e| e.to_string())?;
     }
 
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Sección de tabla enviada desde el hub de Reportes para generar un XLSX.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportTableSectionPayload {
+    pub name: String,
+    pub aoa: Vec<Vec<serde_json::Value>>,
+}
+
+fn sanitize_xlsx_sheet_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| match c {
+            ':' | '\\' | '/' | '?' | '*' | '[' | ']' => '_',
+            _ => c,
+        })
+        .take(31)
+        .collect();
+    if cleaned.trim().is_empty() {
+        "Hoja".to_string()
+    } else {
+        cleaned
+    }
+}
+
+fn unique_xlsx_sheet_name(base: &str, used: &mut std::collections::HashSet<String>) -> String {
+    let mut name = sanitize_xlsx_sheet_name(base);
+    let mut n = 2u32;
+    while used.contains(&name) {
+        let suffix = format!("_{n}");
+        let keep = 31usize.saturating_sub(suffix.len());
+        name = format!(
+            "{}{}",
+            sanitize_xlsx_sheet_name(base)
+                .chars()
+                .take(keep)
+                .collect::<String>(),
+            suffix
+        );
+        n += 1;
+    }
+    used.insert(name.clone());
+    name
+}
+
+fn write_xlsx_cell(
+    sheet: &mut rust_xlsxwriter::Worksheet,
+    row: u32,
+    col: u16,
+    value: &serde_json::Value,
+) -> Result<(), String> {
+    match value {
+        serde_json::Value::Null => Ok(()),
+        serde_json::Value::Bool(flag) => sheet
+            .write_string(row, col, if *flag { "sí" } else { "no" })
+            .map(|_| ())
+            .map_err(|e| e.to_string()),
+        serde_json::Value::Number(num) => {
+            let n = num.as_f64().unwrap_or(0.0);
+            sheet
+                .write_number(row, col, n)
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        }
+        serde_json::Value::String(text) => sheet
+            .write_string(row, col, text)
+            .map(|_| ())
+            .map_err(|e| e.to_string()),
+        other => sheet
+            .write_string(row, col, &other.to_string())
+            .map(|_| ())
+            .map_err(|e| e.to_string()),
+    }
+}
+
+/// Guarda las tablas del informe operativo en un XLSX (diálogo nativo de Tauri).
+#[tauri::command]
+pub async fn export_operational_xlsx(
+    app: tauri::AppHandle,
+    file_name: String,
+    sections: Vec<ReportTableSectionPayload>,
+) -> Result<String, String> {
+    use rust_xlsxwriter::Workbook;
+    use tauri_plugin_dialog::DialogExt;
+
+    if sections.is_empty() {
+        return Err("No hay datos para exportar.".to_string());
+    }
+
+    let stem = file_name.trim();
+    let suggested = if stem.to_lowercase().ends_with(".xlsx") {
+        stem.to_string()
+    } else if stem.is_empty() {
+        "reportes.xlsx".to_string()
+    } else {
+        format!("{stem}.xlsx")
+    };
+
+    let dest = app
+        .dialog()
+        .file()
+        .add_filter("Excel", &["xlsx"])
+        .set_file_name(&suggested)
+        .blocking_save_file()
+        .ok_or_else(|| "Exportación cancelada".to_string())?;
+    let path = dest.into_path().map_err(|e| e.to_string())?;
+
+    let mut workbook = Workbook::new();
+    let mut used_names = std::collections::HashSet::new();
+    for section in &sections {
+        let sheet_name = unique_xlsx_sheet_name(&section.name, &mut used_names);
+        let sheet = workbook.add_worksheet();
+        sheet.set_name(&sheet_name).map_err(|e| e.to_string())?;
+        for (r, row) in section.aoa.iter().enumerate() {
+            for (c, cell) in row.iter().enumerate() {
+                write_xlsx_cell(sheet, r as u32, c as u16, cell)?;
+            }
+        }
+    }
+
+    workbook.save(&path).map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().to_string())
 }

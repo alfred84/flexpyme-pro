@@ -1,6 +1,6 @@
 //! Inventory items, material categories, recipes, stock movements and deductions.
 
-use rusqlite::params;
+use rusqlite::{params, Row};
 use serde::{Deserialize, Serialize};
 
 use crate::commands::units::unit_snapshot_for_id;
@@ -326,6 +326,14 @@ pub struct InventoryConsumptionRowDto {
     pub demanda: f64,
     pub deficit: f64,
     pub disponible: f64,
+}
+
+/// Rango opcional para informes de inventario (`None` = histórico completo).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InventoryReportRangeArgs {
+    pub date_from: Option<String>,
+    pub date_to: Option<String>,
 }
 
 const STOCK_EPS: f64 = 1e-9;
@@ -1381,6 +1389,61 @@ fn classify_movement_method(
     }
 }
 
+/// SQL del listado global de movimientos con cláusula de fecha interpolada.
+fn inventory_movements_sql(date_clause: &str) -> String {
+    format!(
+        "SELECT m.id, m.item_id, ii.name, m.type, m.quantity, m.reason, m.date, m.notes, m.reference_id,
+                s.id
+         FROM inventory_movements m
+         INNER JOIN inventory_items ii ON ii.id = m.item_id
+         LEFT JOIN inventory_material_sales s ON s.inventory_movement_id = m.id
+         WHERE {date_clause}
+         ORDER BY m.date DESC, m.id DESC"
+    )
+}
+
+/// Mapea una fila del listado global de movimientos.
+fn map_movement_list_row(row: &Row<'_>) -> rusqlite::Result<InventoryMovementListDto> {
+    let movement_type: String = row.get(3)?;
+    let reason: Option<String> = row.get(5)?;
+    let notes: Option<String> = row.get(7)?;
+    let reference_id: Option<i64> = row.get(8)?;
+    let sale_id: Option<i64> = row.get(9)?;
+    let method = classify_movement_method(
+        &movement_type,
+        reference_id,
+        reason.as_deref(),
+        notes.as_deref(),
+        sale_id.is_some(),
+    );
+    Ok(InventoryMovementListDto {
+        id: row.get(0)?,
+        item_id: row.get(1)?,
+        item_name: row.get(2)?,
+        movement_type,
+        quantity: row.get(4)?,
+        reason,
+        date: row.get(6)?,
+        notes,
+        reference_id,
+        method,
+    })
+}
+
+/// Ejecuta el listado de movimientos con cláusula y parámetros.
+fn query_movement_list(
+    date_clause: &str,
+    bind: impl rusqlite::Params,
+) -> Result<Vec<InventoryMovementListDto>, String> {
+    let conn = db::open_connection()?;
+    let sql = inventory_movements_sql(date_clause);
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(bind, map_movement_list_row)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
 /// Lists inventory movements for the current day, month, or all (local calendar).
 #[tauri::command]
 pub fn inventory_movements_list(period: String) -> Result<Vec<InventoryMovementListDto>, String> {
@@ -1396,47 +1459,54 @@ pub fn inventory_movements_list(period: String) -> Result<Vec<InventoryMovementL
             return Err("Periodo inválido. Use «hoy», «mes» o «todos».".to_string());
         }
     };
+    query_movement_list(date_clause, [])
+}
 
-    let conn = db::open_connection()?;
-    let sql = format!(
-        "SELECT m.id, m.item_id, ii.name, m.type, m.quantity, m.reason, m.date, m.notes, m.reference_id,
-                s.id
-         FROM inventory_movements m
-         INNER JOIN inventory_items ii ON ii.id = m.item_id
-         LEFT JOIN inventory_material_sales s ON s.inventory_movement_id = m.id
-         WHERE {date_clause}
-         ORDER BY m.date DESC, m.id DESC"
-    );
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([], |row| {
-            let movement_type: String = row.get(3)?;
-            let reason: Option<String> = row.get(5)?;
-            let notes: Option<String> = row.get(7)?;
-            let reference_id: Option<i64> = row.get(8)?;
-            let sale_id: Option<i64> = row.get(9)?;
-            let method = classify_movement_method(
-                &movement_type,
-                reference_id,
-                reason.as_deref(),
-                notes.as_deref(),
-                sale_id.is_some(),
-            );
-            Ok(InventoryMovementListDto {
-                id: row.get(0)?,
-                item_id: row.get(1)?,
-                item_name: row.get(2)?,
-                movement_type,
-                quantity: row.get(4)?,
-                reason,
-                date: row.get(6)?,
-                notes,
-                reference_id,
-                method,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+/// Recorta una fecha opcional a `YYYY-MM-DD`.
+fn normalize_optional_iso(value: Option<String>) -> Option<String> {
+    value.and_then(|v| {
+        let t = v.trim();
+        if t.len() >= 10 {
+            Some(t[..10].to_string())
+        } else {
+            None
+        }
+    })
+}
+
+/// Valida que las fechas ISO del rango estén bien formadas y no invertidas.
+fn validate_iso_range(from: &Option<String>, to: &Option<String>) -> Result<(), String> {
+    for date in [from, to].into_iter().flatten() {
+        if date.len() != 10 || &date[4..5] != "-" || &date[7..8] != "-" {
+            return Err("Fecha inválida. Use YYYY-MM-DD.".to_string());
+        }
+        if !date.bytes().all(|b| b.is_ascii_digit() || b == b'-') {
+            return Err("Fecha inválida. Use YYYY-MM-DD.".to_string());
+        }
+    }
+    if let (Some(start), Some(end)) = (from, to) {
+        if start > end {
+            return Err("El rango Desde / Hasta está invertido.".to_string());
+        }
+    }
+    Ok(())
+}
+
+const ISO_RANGE_MOVEMENT: &str = "(?1 IS NULL OR substr(m.date, 1, 10) >= ?1)
+             AND (?2 IS NULL OR substr(m.date, 1, 10) <= ?2)";
+
+const ISO_RANGE_INVOICE: &str = "(?1 IS NULL OR substr(inv.date, 1, 10) >= ?1)
+             AND (?2 IS NULL OR substr(inv.date, 1, 10) <= ?2)";
+
+/// Movimientos de inventario en un rango ISO (o histórico completo).
+#[tauri::command]
+pub fn inventory_movements_in_range(
+    args: InventoryReportRangeArgs,
+) -> Result<Vec<InventoryMovementListDto>, String> {
+    let date_from = normalize_optional_iso(args.date_from);
+    let date_to = normalize_optional_iso(args.date_to);
+    validate_iso_range(&date_from, &date_to)?;
+    query_movement_list(ISO_RANGE_MOVEMENT, params![date_from, date_to])
 }
 
 /// Cláusula de fecha local para filtros Día / Mes en curso / Total.
@@ -1465,16 +1535,9 @@ fn consumption_formato_label(name: &str, format_label: Option<&str>) -> String {
     }
 }
 
-/// Resumen de consumo por ítem: existencias, movimientos, pedidos, mermas y ventas del periodo.
-#[tauri::command]
-pub fn inventory_consumption_summary(
-    period: String,
-) -> Result<Vec<InventoryConsumptionRowDto>, String> {
-    let period = period.trim().to_lowercase();
-    let movement_clause = period_date_clause("m.date", &period)?;
-    let invoice_clause = period_date_clause("inv.date", &period)?;
-
-    let sql = format!(
+/// SQL del kardex de consumo con cláusulas de fecha interpoladas.
+fn inventory_consumption_sql(movement_clause: &str, invoice_clause: &str) -> String {
+    format!(
         "SELECT
             ii.id,
             ii.name,
@@ -1533,44 +1596,77 @@ pub fn inventory_consumption_summary(
          ORDER BY COALESCE(mc.name, 'Sin categoría') COLLATE NOCASE,
                   ii.name COLLATE NOCASE,
                   ii.id"
-    );
+    )
+}
 
+/// Mapea una fila del kardex de consumo.
+fn map_consumption_row(row: &Row<'_>) -> rusqlite::Result<InventoryConsumptionRowDto> {
+    let name: String = row.get(1)?;
+    let format_label: String = row.get(2)?;
+    let existencia_final: f64 = row.get(6)?;
+    let entradas: f64 = row.get(7)?;
+    let salidas: f64 = row.get(8)?;
+    let mermas: f64 = row.get(9)?;
+    let ventas: f64 = row.get(10)?;
+    let solicitados: f64 = row.get(11)?;
+    let demanda: f64 = row.get(12)?;
+    let existencia_inicial = existencia_final - entradas + salidas;
+    let deficit = (demanda - existencia_final).max(0.0);
+    let disponible = (existencia_final - demanda).max(0.0);
+    Ok(InventoryConsumptionRowDto {
+        item_id: row.get(0)?,
+        formato: consumption_formato_label(&name, Some(&format_label)),
+        unit: row.get(3)?,
+        material_category_id: row.get(4)?,
+        material_category_name: row.get(5)?,
+        existencia_inicial,
+        entradas,
+        salidas,
+        solicitados,
+        mermas,
+        ventas,
+        existencia_final,
+        demanda,
+        deficit,
+        disponible,
+    })
+}
+
+/// Ejecuta el kardex de consumo con cláusulas y parámetros.
+fn query_consumption_summary(
+    movement_clause: &str,
+    invoice_clause: &str,
+    bind: impl rusqlite::Params,
+) -> Result<Vec<InventoryConsumptionRowDto>, String> {
     let conn = db::open_connection()?;
+    let sql = inventory_consumption_sql(movement_clause, invoice_clause);
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| {
-            let name: String = row.get(1)?;
-            let format_label: String = row.get(2)?;
-            let existencia_final: f64 = row.get(6)?;
-            let entradas: f64 = row.get(7)?;
-            let salidas: f64 = row.get(8)?;
-            let mermas: f64 = row.get(9)?;
-            let ventas: f64 = row.get(10)?;
-            let solicitados: f64 = row.get(11)?;
-            let demanda: f64 = row.get(12)?;
-            let existencia_inicial = existencia_final - entradas + salidas;
-            let deficit = (demanda - existencia_final).max(0.0);
-            let disponible = (existencia_final - demanda).max(0.0);
-            Ok(InventoryConsumptionRowDto {
-                item_id: row.get(0)?,
-                formato: consumption_formato_label(&name, Some(&format_label)),
-                unit: row.get(3)?,
-                material_category_id: row.get(4)?,
-                material_category_name: row.get(5)?,
-                existencia_inicial,
-                entradas,
-                salidas,
-                solicitados,
-                mermas,
-                ventas,
-                existencia_final,
-                demanda,
-                deficit,
-                disponible,
-            })
-        })
+        .query_map(bind, map_consumption_row)
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Resumen de consumo por ítem: existencias, movimientos, pedidos, mermas y ventas del periodo.
+#[tauri::command]
+pub fn inventory_consumption_summary(
+    period: String,
+) -> Result<Vec<InventoryConsumptionRowDto>, String> {
+    let period = period.trim().to_lowercase();
+    let movement_clause = period_date_clause("m.date", &period)?;
+    let invoice_clause = period_date_clause("inv.date", &period)?;
+    query_consumption_summary(&movement_clause, &invoice_clause, [])
+}
+
+/// Kardex de consumo en un rango ISO (o histórico completo).
+#[tauri::command]
+pub fn inventory_consumption_in_range(
+    args: InventoryReportRangeArgs,
+) -> Result<Vec<InventoryConsumptionRowDto>, String> {
+    let date_from = normalize_optional_iso(args.date_from);
+    let date_to = normalize_optional_iso(args.date_to);
+    validate_iso_range(&date_from, &date_to)?;
+    query_consumption_summary(ISO_RANGE_MOVEMENT, ISO_RANGE_INVOICE, params![date_from, date_to])
 }
 
 /// Lists production consumption recipes.

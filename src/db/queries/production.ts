@@ -33,7 +33,23 @@ export async function createProductionBatch(
 }
 
 /**
+ * Carga el reporte de producción por área/formato en un rango de fechas.
+ *
+ * @param args - `dateFrom`/`dateTo` ISO; omitidos = histórico completo.
+ * @returns Áreas, filas por formato y serie diaria.
+ */
+export async function fetchProductionReport(args: {
+  dateFrom?: string | null;
+  dateTo?: string | null;
+}): Promise<ProductionReportDto> {
+  return invoke<ProductionReportDto>("production_report", { args });
+}
+
+/**
  * Carga el reporte mensual de producción por área/formato (`YYYY-MM`).
+ *
+ * @param month - Mes calendario `YYYY-MM`.
+ * @returns Mismo DTO que `fetchProductionReport` acotado al mes.
  */
 export async function fetchProductionReportMonthly(month: string): Promise<ProductionReportDto> {
   return invoke<ProductionReportDto>("production_report_monthly", { month });

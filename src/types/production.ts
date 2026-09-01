@@ -97,7 +97,10 @@ export interface ProductionFormatRowDto {
   pedidoQty: number;
   realizadoQty: number;
   pendienteQty: number;
+  /** Importe de venta en CUP (libro). */
   pedidoAmount: number;
+  /** Importe de venta en USD (`unit_price_usd × cantidad`). */
+  pedidoAmountUsd: number;
   salarioAmount: number;
 }
 
@@ -108,7 +111,10 @@ export interface ProductionAreaReportDto {
   pedidoQty: number;
   realizadoQty: number;
   pendienteQty: number;
+  /** Importe de venta en CUP (libro). */
   pedidoAmount: number;
+  /** Importe de venta en USD. */
+  pedidoAmountUsd: number;
   salarioAmount: number;
   diferencia: number;
 }
@@ -120,9 +126,12 @@ export interface ProductionDailyDto {
   realizadoQty: number;
 }
 
-/** Reporte mensual de producción por área/formato con serie diaria. */
+/** Reporte agregado de producción por área/formato (rango o histórico). */
 export interface ProductionReportDto {
+  /** Mes `YYYY-MM` si el rango es un mes; vacío en otro caso. */
   month: string;
+  dateFrom: string | null;
+  dateTo: string | null;
   areas: ProductionAreaReportDto[];
   daily: ProductionDailyDto[];
 }

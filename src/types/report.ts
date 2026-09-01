@@ -37,7 +37,12 @@ export interface TopDebtorDto {
   clientId: number;
   clientCode: string;
   clientName: string;
+  /** Deuda equivalente CUP (espejo contable). */
   balance: number;
+  /** Deuda abierta física en USD. */
+  balanceUsd: number;
+  /** Deuda abierta física en CUP. */
+  balanceCup: number;
 }
 
 /**

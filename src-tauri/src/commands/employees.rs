@@ -473,6 +473,25 @@ pub struct PayrollDailyRowDto {
     pub pending: f64,
 }
 
+/// Fila de nómina agregada por empleado en un rango de fechas.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PayrollRangeRowDto {
+    pub employee_id: i64,
+    pub employee_name: String,
+    pub total_cost: f64,
+    pub paid: f64,
+    pub pending: f64,
+}
+
+/// Rango opcional de nómina (`None` = histórico registrado, sin generar días).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PayrollRangeArgs {
+    pub date_from: Option<String>,
+    pub date_to: Option<String>,
+}
+
 /// Cost-row for a work type (used to build the work-batch form).
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -2084,6 +2103,156 @@ pub fn payroll_daily(date: String) -> Result<Vec<PayrollDailyRowDto>, String> {
                 employee_id: row.get(0)?,
                 employee_name: row.get(1)?,
                 date: row.get(2)?,
+                total_cost,
+                paid,
+                pending: (total_cost - paid).max(0.0),
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+fn iso_day(value: &str) -> Result<String, String> {
+    let t = value.trim();
+    if t.len() < 10 {
+        return Err("Fecha inválida (formato YYYY-MM-DD)".to_string());
+    }
+    Ok(t[..10].to_string())
+}
+
+fn parse_ymd(iso: &str) -> Result<(i32, u32, u32), String> {
+    let day = iso_day(iso)?;
+    let y: i32 = day[0..4]
+        .parse()
+        .map_err(|_| "Fecha inválida (formato YYYY-MM-DD)".to_string())?;
+    let m: u32 = day[5..7]
+        .parse()
+        .map_err(|_| "Fecha inválida (formato YYYY-MM-DD)".to_string())?;
+    let d: u32 = day[8..10]
+        .parse()
+        .map_err(|_| "Fecha inválida (formato YYYY-MM-DD)".to_string())?;
+    Ok((y, m, d))
+}
+
+fn is_leap_year(year: i32) -> bool {
+    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+}
+
+fn days_in_month(year: i32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            if is_leap_year(year) {
+                29
+            } else {
+                28
+            }
+        }
+        _ => 30,
+    }
+}
+
+fn next_ymd(year: i32, month: u32, day: u32) -> (i32, u32, u32) {
+    if day < days_in_month(year, month) {
+        (year, month, day + 1)
+    } else if month < 12 {
+        (year, month + 1, 1)
+    } else {
+        (year + 1, 1, 1)
+    }
+}
+
+fn cmp_ymd(a: (i32, u32, u32), b: (i32, u32, u32)) -> std::cmp::Ordering {
+    a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2))
+}
+
+fn iso_days_inclusive(from: &str, to: &str) -> Result<Vec<String>, String> {
+    let start = parse_ymd(from)?;
+    let end = parse_ymd(to)?;
+    if cmp_ymd(start, end) == std::cmp::Ordering::Greater {
+        return Err("El rango de fechas es inválido".to_string());
+    }
+    let mut out = Vec::new();
+    let mut cur = start;
+    loop {
+        out.push(format!("{:04}-{:02}-{:02}", cur.0, cur.1, cur.2));
+        if cmp_ymd(cur, end) == std::cmp::Ordering::Equal {
+            break;
+        }
+        if out.len() > 4000 {
+            return Err("El rango de fechas es demasiado amplio".to_string());
+        }
+        cur = next_ymd(cur.0, cur.1, cur.2);
+    }
+    Ok(out)
+}
+
+/// Nómina agregada por empleado en un rango (`dateFrom`/`dateTo` opcionales).
+///
+/// Si el rango tiene 31 días o menos, genera salarios fijos diarios faltantes
+/// (igual que la nómina del día). En rangos más largos o sin fechas solo
+/// agrega lo ya registrado.
+#[tauri::command]
+pub fn payroll_in_range(args: PayrollRangeArgs) -> Result<Vec<PayrollRangeRowDto>, String> {
+    let date_from = args
+        .date_from
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(iso_day)
+        .transpose()?;
+    let date_to = args
+        .date_to
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(iso_day)
+        .transpose()?;
+
+    let conn = db::open_connection()?;
+    if let (Some(from), Some(to)) = (&date_from, &date_to) {
+        let days = iso_days_inclusive(from, to)?;
+        if days.len() <= 31 {
+            for day in &days {
+                ensure_fixed_daily_salaries_for_date(&conn, day)?;
+            }
+        }
+    }
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT employee_id, employee_name,
+                    SUM(total_cost), SUM(paid)
+             FROM (
+               SELECT pb.employee_id AS employee_id, e.name AS employee_name,
+                      pb.total_cost AS total_cost, pb.paid AS paid
+               FROM production_batches pb
+               JOIN employees e ON e.id = pb.employee_id
+               WHERE pb.employee_id IS NOT NULL
+                 AND COALESCE(e.pay_mode, '') NOT IN ('fixed', 'destajo', 'monthly')
+                 AND COALESCE(e.has_fixed_daily_salary, 0) = 0
+                 AND (?1 IS NULL OR substr(pb.date, 1, 10) >= ?1)
+                 AND (?2 IS NULL OR substr(pb.date, 1, 10) <= ?2)
+               UNION ALL
+               SELECT eds.employee_id, e.name, eds.amount_cup, eds.paid
+               FROM employee_daily_salaries eds
+               JOIN employees e ON e.id = eds.employee_id
+               WHERE eds.amount_cup > 1e-9
+                 AND (?1 IS NULL OR substr(eds.date, 1, 10) >= ?1)
+                 AND (?2 IS NULL OR substr(eds.date, 1, 10) <= ?2)
+             )
+             GROUP BY employee_id
+             ORDER BY employee_name COLLATE NOCASE",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![date_from, date_to], |row| {
+            let total_cost: f64 = row.get(2)?;
+            let paid: f64 = row.get(3)?;
+            Ok(PayrollRangeRowDto {
+                employee_id: row.get(0)?,
+                employee_name: row.get(1)?,
                 total_cost,
                 paid,
                 pending: (total_cost - paid).max(0.0),

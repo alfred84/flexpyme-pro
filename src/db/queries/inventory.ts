@@ -80,6 +80,19 @@ export async function fetchInventoryMovementsList(
 }
 
 /**
+ * Movimientos de inventario en un rango ISO (omitido = histórico completo).
+ *
+ * @param args - `dateFrom`/`dateTo` inclusivos.
+ * @returns Movimientos ordenados del más reciente al más antiguo.
+ */
+export async function fetchInventoryMovementsInRange(args: {
+  dateFrom?: string | null;
+  dateTo?: string | null;
+}): Promise<InventoryMovementListDto[]> {
+  return invoke<InventoryMovementListDto[]>("inventory_movements_in_range", { args });
+}
+
+/**
  * Lists material categories.
  */
 export async function fetchMaterialCategories(activeOnly = false): Promise<MaterialCategoryDto[]> {
@@ -212,4 +225,17 @@ export async function fetchInventoryConsumptionSummary(
   period: InventoryConsumptionPeriod,
 ): Promise<InventoryConsumptionRowDto[]> {
   return invoke<InventoryConsumptionRowDto[]>("inventory_consumption_summary", { period });
+}
+
+/**
+ * Kardex de consumo en un rango ISO (omitido = histórico completo).
+ *
+ * @param args - `dateFrom`/`dateTo` inclusivos.
+ * @returns Filas listas para agrupar por tipo de material.
+ */
+export async function fetchInventoryConsumptionInRange(args: {
+  dateFrom?: string | null;
+  dateTo?: string | null;
+}): Promise<InventoryConsumptionRowDto[]> {
+  return invoke<InventoryConsumptionRowDto[]>("inventory_consumption_in_range", { args });
 }
