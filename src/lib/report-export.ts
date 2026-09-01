@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { buildCsvLine, downloadTextFile } from "@/lib/csv";
 import { formatMoney } from "@/lib/format-money";
 import type { InvoiceListDto } from "@/types/invoice";
@@ -41,9 +42,13 @@ export function buildReportTables(
       ["Facturas pagadas", summary.invoicesPaidCount],
       ["Facturas parciales", summary.invoicesPartialCount],
       ["Facturas pendientes", summary.invoicesPendingCount],
-      ["Total facturado", summary.totalBilled],
-      ["Total cobrado", summary.totalPaid],
-      ["Pendiente por cobrar", summary.totalPending],
+      ["Total facturado CUP", summary.totalBilledCup],
+      ["Total facturado USD", summary.totalBilledUsd],
+      ["Pendiente CUP", summary.totalPendingCup],
+      ["Pendiente USD", summary.totalPendingUsd],
+      ["Total facturado (equiv. CUP)", summary.totalBilled],
+      ["Total cobrado (equiv. CUP)", summary.totalPaid],
+      ["Pendiente por cobrar (equiv. CUP)", summary.totalPending],
       ["Promedio factura", summary.averageInvoiceAmount],
       ["Tasa de cobro (cobrado / facturado)", summary.collectionRate],
       ["Clientes con saldo por cobrar (activos)", summary.clientsWithReceivablesCount],
@@ -57,8 +62,8 @@ export function buildReportTables(
   const top: ReportTableSection = {
     name: "TOP_DEUDORES",
     aoa: [
-      ["Codigo", "Cliente", "Balance"],
-      ...debtors.map((d) => [d.clientCode, d.clientName, d.balance]),
+      ["Codigo", "Cliente", "Balance USD", "Balance CUP", "Equiv. CUP"],
+      ...debtors.map((d) => [d.clientCode, d.clientName, d.balanceUsd, d.balanceCup, d.balance]),
     ],
   };
 
@@ -69,13 +74,14 @@ export function buildReportTables(
     out.push({
       name: "FACTURAS_EN_RANGO",
       aoa: [
-        ["Numero", "Cliente", "Fecha", "Total", "Pagado", "Pendiente", "Estado"],
+        ["Numero", "Cliente", "Fecha", "A cobrar USD", "A cobrar CUP", "Pendiente USD", "Pendiente equiv. CUP", "Estado"],
         ...filtered.map((inv) => [
           inv.invoiceNumber,
           inv.clientName,
           inv.date,
-          inv.total,
-          inv.paid,
+          inv.dueUsd,
+          inv.dueCup,
+          inv.balanceUsd,
           inv.balance,
           inv.status,
         ]),
@@ -158,15 +164,48 @@ function sanitizeSheetName(name: string): string {
   return s || "Hoja";
 }
 
-export async function downloadReportsXlsx(baseFilename: string, sections: ReportTableSection[]): Promise<void> {
+/**
+ * Genera un XLSX con una hoja por sección.
+ * En Tauri abre el diálogo nativo de guardar; en el navegador descarga el archivo.
+ *
+ * @param baseFilename - Nombre de archivo (con o sin `.xlsx`).
+ * @param sections - Tablas a exportar.
+ * @returns Ruta o nombre guardado, o `null` si el usuario canceló.
+ */
+export async function downloadReportsXlsx(
+  baseFilename: string,
+  sections: ReportTableSection[],
+): Promise<string | null> {
+  const name = baseFilename.toLowerCase().endsWith(".xlsx")
+    ? baseFilename
+    : `${baseFilename}.xlsx`;
+
+  const isTauri =
+    typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+  if (isTauri) {
+    try {
+      return await invoke<string>("export_operational_xlsx", {
+        fileName: name,
+        sections,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes("cancel")) {
+        return null;
+      }
+      throw new Error(message || "No se pudo guardar el Excel.");
+    }
+  }
+
   const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
   for (const sec of sections) {
     const ws = XLSX.utils.aoa_to_sheet(sec.aoa);
     XLSX.utils.book_append_sheet(wb, ws, sanitizeSheetName(sec.name));
   }
-  const name = baseFilename.toLowerCase().endsWith(".xlsx") ? baseFilename : `${baseFilename}.xlsx`;
   XLSX.writeFile(wb, name);
+  return name;
 }
 
 function escapeHtml(s: string): string {
@@ -212,14 +251,13 @@ function formatPrintCell(secName: string, col: number, rowIdx: number, label: st
 }
 
 /**
- * Abre una ventana con el reporte listo para **Imprimir → Guardar como PDF** (sin dependencias extra).
+ * Construye el HTML imprimible de las secciones del informe.
+ *
+ * @param title - Título del documento.
+ * @param sections - Tablas a renderizar.
+ * @returns Documento HTML completo.
  */
-export function openReportsPrintablePdf(title: string, sections: ReportTableSection[]): void {
-  const w = window.open("", "_blank", "noopener,noreferrer");
-  if (!w) {
-    return;
-  }
-
+function buildReportsPrintHtml(title: string, sections: ReportTableSection[]): string {
   const parts: string[] = [];
   parts.push(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"/><title>${escapeHtml(title)}</title>`);
   parts.push(`<style>
@@ -268,12 +306,51 @@ export function openReportsPrintablePdf(title: string, sections: ReportTableSect
 
   parts.push(`<p style="margin-top:16px;font-size:9pt;color:#555">Use el cuadro de impresión del sistema y elija &quot;Guardar como PDF&quot; o &quot;Microsoft Print to PDF&quot;.</p>`);
   parts.push("</body></html>");
-  w.document.write(parts.join(""));
-  w.document.close();
-  w.focus();
-  requestAnimationFrame(() => {
-    w.print();
-  });
+  return parts.join("");
+}
+
+/**
+ * Abre el cuadro de impresión del sistema (en Tauri: Guardar como PDF).
+ * No usa `window.open` porque WebView2 lo bloquea.
+ *
+ * @param title - Título del informe.
+ * @param sections - Tablas a imprimir.
+ */
+export function openReportsPrintablePdf(title: string, sections: ReportTableSection[]): void {
+  const html = buildReportsPrintHtml(title, sections);
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.setAttribute("title", "Vista de impresión");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "8.5in";
+  iframe.style.height = "11in";
+  iframe.style.opacity = "0";
+  iframe.style.pointerEvents = "none";
+  iframe.style.zIndex = "-1";
+  iframe.style.border = "0";
+  document.body.appendChild(iframe);
+
+  const frameDoc = iframe.contentDocument;
+  const frameWin = iframe.contentWindow;
+  if (!frameDoc || !frameWin) {
+    iframe.remove();
+    throw new Error("No se pudo abrir la vista de impresión.");
+  }
+
+  frameDoc.open();
+  frameDoc.write(html);
+  frameDoc.close();
+
+  const cleanup = () => {
+    iframe.remove();
+  };
+  frameWin.addEventListener("afterprint", cleanup);
+  window.setTimeout(cleanup, 120_000);
+
+  frameWin.focus();
+  frameWin.print();
 }
 
 export function downloadReportsCsv(filename: string, content: string): void {

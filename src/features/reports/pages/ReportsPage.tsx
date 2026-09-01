@@ -6,6 +6,7 @@ import { todayIso } from "@/lib/format-date";
 import { fetchInvoices } from "@/db/queries/invoices";
 import { fetchProductionExportInDateRange } from "@/db/queries/production";
 import { fetchReportsSummary, fetchTopDebtors } from "@/db/queries/reports";
+import { DualPhysicalAmounts } from "@/features/reports/components/ReportKpis";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import {
   buildReportTables,
@@ -182,16 +183,30 @@ export function ReportsPage() {
               <div className="stat-value text-2xl">{s.invoicesCount}</div>
             </div>
             <div className="stat bg-base-100 rounded-box shadow">
-              <div className="stat-title">{moneyHeading("Total facturado")}</div>
-              <div className="stat-value text-2xl">{formatAmount(s.totalBilled)}</div>
+              <div className="stat-title">Total facturado</div>
+              <div className="stat-value text-2xl">
+                <DualPhysicalAmounts amountCup={s.totalBilledCup} amountUsd={s.totalBilledUsd} />
+              </div>
             </div>
             <div className="stat bg-base-100 rounded-box shadow">
-              <div className="stat-title">{moneyHeading("Total cobrado")}</div>
-              <div className="stat-value text-2xl">{formatAmount(s.totalPaid)}</div>
+              <div className="stat-title">Total cobrado</div>
+              <div className="stat-value text-2xl">
+                <DualPhysicalAmounts
+                  amountCup={Math.max(0, s.totalBilledCup - s.totalPendingCup)}
+                  amountUsd={Math.max(0, s.totalBilledUsd - s.totalPendingUsd)}
+                  valueClassName="text-success"
+                />
+              </div>
             </div>
             <div className="stat bg-base-100 rounded-box shadow">
-              <div className="stat-title">{moneyHeading("Pendiente por cobrar")}</div>
-              <div className="stat-value text-2xl">{formatAmount(s.totalPending)}</div>
+              <div className="stat-title">Pendiente por cobrar</div>
+              <div className="stat-value text-2xl">
+                <DualPhysicalAmounts
+                  amountCup={s.totalPendingCup}
+                  amountUsd={s.totalPendingUsd}
+                  valueClassName="text-warning"
+                />
+              </div>
             </div>
             <div className="stat bg-base-100 rounded-box shadow">
               <div className="stat-title">Pagadas / parciales / pendientes</div>
@@ -243,13 +258,14 @@ export function ReportsPage() {
                   <tr>
                     <th>Código</th>
                     <th>Cliente</th>
-                    <th className="text-right">{moneyHeading("Balance")}</th>
+                    <th className="text-right">{moneyHeading("Balance", "USD")}</th>
+                    <th className="text-right">{moneyHeading("Balance", "CUP")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {debtorsQuery.data.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="text-center text-base-content/60">
+                      <td colSpan={4} className="text-center text-base-content/60">
                         No hay balances pendientes.
                       </td>
                     </tr>
@@ -258,7 +274,8 @@ export function ReportsPage() {
                       <tr key={row.clientId}>
                         <td>{row.clientCode}</td>
                         <td>{row.clientName}</td>
-                        <td className="text-right">{formatAmount(row.balance)}</td>
+                        <td className="text-right">{formatAmount(row.balanceUsd)}</td>
+                        <td className="text-right">{formatAmount(row.balanceCup)}</td>
                       </tr>
                     ))
                   )}

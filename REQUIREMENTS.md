@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.34 | Última actualización: 2026-08-31
+### Versión: 2.37 | Última actualización: 2026-08-31
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -165,11 +165,14 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Anulación con motivo y reverso en caja (sin borrado físico)
 - Rutas `/facturas`, impresión y registro de pago
 
-### 3.10 Reportes de producción (v2.5)
+### 3.10 Reportes (v2.36)
 - Entrada de sidebar **Reportes** (encima de Pedidos); ruta `/reportes-produccion`
+- Hub operativo: grupos **Producción** y **Nómina y Contabilidad**; un informe visible a la vez
+- Periodo compartido: **Día**, **Mes**, **Total** o **Rango** (desde/hasta)
+- Producción: por área/formato (pedido vs realizado vs pendiente, factura USD+CUP vs salario CUP), control diario de unidades, **consumo de materiales** (kardex por tipo) y **movimientos de inventario**
+- Nómina y contabilidad: nómina por empleado (CUP), facturación/cobros duales USD+CUP, flujo de caja, otros gastos, cuentas por cobrar (saldo actual USD+CUP)
+- Exportación **Excel** y **PDF** (imprimir → guardar) por informe
 - Tracking por línea: `invoice_items.completed_quantity` / `completed_at` vía lotes (`production_batch_items.invoice_id`)
-- Vista mensual por Área (Impresión/Laminado/Enmarcado), día y formato: Realizado vs Pendiente e importes
-- Comparativa Factura vs Salario vs Diferencia del mes en curso
 
 ### 3.11 Otros gastos (v2.5)
 - Entrada de sidebar **Otros gastos** (tras Precios); ruta `/otros-gastos`
@@ -503,6 +506,16 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 ### v2.34 — Inicio: facturación y cobros duales, gráfico del mes (2026-08)
 - KPIs **Facturación del mes** y **Cobros pendientes** muestran importes físicos CUP y USD (como Facturas/Caja).
 - Gráfico de ingresos por categoría: mes actual (no últimos 30 días) con series CUP y USD.
+
+### v2.35 — Hub de Reportes operativos (2026-08)
+- Reportes (`/reportes-produccion`): grupos Producción y Nómina/Contabilidad, periodos Día/Mes/Total/Rango, un informe a la vez, Excel y PDF por informe.
+
+### v2.36 — Reportes de inventario en el hub (2026-08)
+- Grupo Producción: **Consumo de materiales** (kardex por tipo: existencias, entradas, salidas, mermas, ventas, déficit) y **Movimientos de inventario**, con el mismo periodo e Excel/PDF.
+
+### v2.37 — Reportes: importes USD y CUP (2026-08)
+- Producción por área: factura de venta en USD (precio) y CUP (libro); salario y margen siguen en CUP.
+- Cuentas por cobrar: saldo físico USD y CUP (mismo criterio que Clientes).
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
