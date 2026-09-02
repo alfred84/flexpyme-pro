@@ -1,13 +1,22 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, ArrowLeft, PackageSearch } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileSpreadsheet, FileText, PackageSearch } from "lucide-react";
 import { fetchInventoryConsumptionSummary } from "@/db/queries/inventory";
 import {
   formatConsumptionQty,
   groupConsumptionByCategory,
   type InventoryConsumptionTotals,
 } from "@/features/inventory/lib/consumption-summary";
+import {
+  buildInventoryConsumptionExportSections,
+  inventoryConsumptionPeriodLabel,
+} from "@/features/inventory/lib/inventory-consumption-export";
+import { reportExportBasename } from "@/features/reports/lib/report-period";
+import {
+  downloadReportsXlsx,
+  openReportsPrintablePdf,
+} from "@/lib/report-export";
 import type { InventoryConsumptionPeriod, InventoryConsumptionRowDto } from "@/types/inventory";
 
 const PERIOD_OPTIONS: { id: InventoryConsumptionPeriod; label: string }[] = [
@@ -230,6 +239,9 @@ function ConsumptionTable(props: {
 export function InventoryConsumptionPage() {
   const [period, setPeriod] = useState<InventoryConsumptionPeriod>("mes");
   const [categoryFilter, setCategoryFilter] = useState<string>("todas");
+  const [exporting, setExporting] = useState(false);
+  const [exportFlash, setExportFlash] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const summaryQuery = useQuery({
     queryKey: ["inventory", "consumption-summary", period],
@@ -270,6 +282,61 @@ export function InventoryConsumptionPage() {
 
   const periodLabel =
     PERIOD_OPTIONS.find((opt) => opt.id === period)?.label.toLowerCase() ?? "periodo";
+  const exportPeriodLabel = inventoryConsumptionPeriodLabel(period);
+  const canExport = summaryQuery.isSuccess && !exporting;
+  const categoryFilterLabel =
+    categoryFilter === "todas"
+      ? "Todos"
+      : (visibleGroups[0]?.materialCategoryName ?? "Todos");
+
+  const handleExcel = async () => {
+    if (!canExport) {
+      return;
+    }
+    setExporting(true);
+    setExportError(null);
+    setExportFlash(null);
+    try {
+      const basename = reportExportBasename("Resumen de consumo", exportPeriodLabel);
+      const path = await downloadReportsXlsx(
+        basename,
+        buildInventoryConsumptionExportSections(
+          visibleGroups,
+          exportPeriodLabel,
+          categoryFilterLabel,
+        ),
+      );
+      if (path) {
+        setExportFlash(`Excel guardado: ${path}`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setExportError(message || "No se pudo generar el Excel.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handlePdf = () => {
+    if (!canExport) {
+      return;
+    }
+    setExportError(null);
+    setExportFlash(null);
+    try {
+      openReportsPrintablePdf(
+        `Resumen de consumo · ${exportPeriodLabel}`,
+        buildInventoryConsumptionExportSections(
+          visibleGroups,
+          exportPeriodLabel,
+          categoryFilterLabel,
+        ),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setExportError(message || "No se pudo abrir la impresión PDF.");
+    }
+  };
 
   return (
     <section className="space-y-5">
@@ -285,7 +352,8 @@ export function InventoryConsumptionPage() {
           <p className="max-w-3xl text-sm text-base-content/70">
             Kardex por tipo de material. La existencia inicial se reconstruye con el stock actual y
             los movimientos del {periodLabel}. Solicitados y demanda usan pedidos con fecha en ese
-            mismo periodo. El déficit no se compensa entre formatos.
+            mismo periodo. El déficit no se compensa entre formatos. Excel y PDF usan el periodo y
+            el tipo de material visibles.
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
@@ -320,8 +388,35 @@ export function InventoryConsumptionPage() {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm gap-1"
+            disabled={!canExport}
+            onClick={() => void handleExcel()}
+          >
+            <FileSpreadsheet className="h-4 w-4" /> {exporting ? "Guardando…" : "Excel"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm gap-1"
+            disabled={!canExport}
+            onClick={handlePdf}
+          >
+            <FileText className="h-4 w-4" /> PDF
+          </button>
         </div>
       </div>
+
+      {exportFlash ? (
+        <div className="alert alert-success py-2 text-sm">
+          <span>{exportFlash}</span>
+        </div>
+      ) : null}
+      {exportError ? (
+        <div className="alert alert-error py-2 text-sm">
+          <span>{exportError}</span>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="rounded-xl border border-base-300 bg-base-100 px-3 py-2">
