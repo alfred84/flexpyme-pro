@@ -1,16 +1,22 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Plus, Receipt, Settings2, Trash2 } from "lucide-react";
+import { FileSpreadsheet, FileText, Plus, Receipt, Settings2, Trash2 } from "lucide-react";
 import {
   deleteOtherExpense,
   fetchOtherExpenses,
   fetchOtherExpensesSummary,
 } from "@/db/queries/other-expenses";
 import { ExpenseTypesConfigModal } from "@/features/expenses/components/ExpenseTypesConfigModal";
+import { reportExportBasename } from "@/features/reports/lib/report-period";
 import { formatDate, todayIso } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { popFlashMessage, type FlashMessage } from "@/lib/flash-message";
+import {
+  downloadReportsXlsx,
+  openReportsPrintablePdf,
+  type ReportTableSection,
+} from "@/lib/report-export";
 import type { OtherExpenseDto } from "@/types/other-expense";
 
 /** Periodo rápido del listado de Otros gastos. */
@@ -72,6 +78,69 @@ function periodTotalLabel(period: ExpensePeriodFilter): string {
 }
 
 /**
+ * Etiqueta del periodo para cabeceras y nombres de archivo.
+ *
+ * @param period - Periodo activo.
+ * @returns Texto en español con fecha `dd/mm/aaaa` cuando aplica.
+ */
+function periodExportLabel(period: ExpensePeriodFilter): string {
+  const today = todayIso();
+  switch (period) {
+    case "hoy":
+      return `Día ${formatDate(today)}`;
+    case "mes": {
+      const parts = today.slice(0, 7).split("-");
+      return parts.length === 2 ? `Mes ${parts[1]}/${parts[0]}` : "Mes actual";
+    }
+    default:
+      return "Todos";
+  }
+}
+
+/**
+ * Secciones Excel/PDF del listado filtrado (CUP y USD).
+ *
+ * @param rows - Gastos del periodo.
+ * @param periodLabel - Etiqueta del periodo.
+ * @param totals - Totales físicos CUP/USD.
+ * @returns Tablas para el exporte.
+ */
+function buildExpenseExportSections(
+  rows: OtherExpenseDto[],
+  periodLabel: string,
+  totals: { cup: number; usd: number },
+): ReportTableSection[] {
+  return [
+    {
+      name: "METADATOS",
+      aoa: [
+        ["Campo", "Valor"],
+        ["Periodo", periodLabel],
+        ["Registros", rows.length],
+        ["Total CUP", totals.cup],
+        ["Total USD", totals.usd],
+      ],
+    },
+    {
+      name: "OTROS_GASTOS",
+      aoa: [
+        ["Fecha", "Concepto", "Tipo", "Empleado", "CUP", "USD", "Método"],
+        ...rows.map((row) => [
+          formatDate(row.date),
+          row.concept,
+          row.expenseType,
+          row.employeeName ?? "",
+          row.amountCup,
+          row.amountUsd,
+          row.paymentMethod,
+        ]),
+        ["TOTAL", "", "", "", totals.cup, totals.usd, ""],
+      ],
+    },
+  ];
+}
+
+/**
  * Listado y resumen de Otros gastos. Alta en `/otros-gastos/nuevo`;
  * detalle/edición en rutas anidadas.
  *
@@ -82,6 +151,9 @@ export function OtherExpensesPage() {
   const [showTypesModal, setShowTypesModal] = useState(false);
   const [period, setPeriod] = useState<ExpensePeriodFilter>("hoy");
   const [flash] = useState<FlashMessage | null>(() => popFlashMessage());
+  const [exporting, setExporting] = useState(false);
+  const [exportFlash, setExportFlash] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const expensesQuery = useQuery({
     queryKey: ["other-expenses", "list"],
@@ -117,6 +189,50 @@ export function OtherExpensesPage() {
     },
   });
 
+  const periodLabel = periodExportLabel(period);
+  const canExport = expensesQuery.isSuccess && !exporting;
+
+  const handleExcel = async () => {
+    if (!canExport) {
+      return;
+    }
+    setExporting(true);
+    setExportError(null);
+    setExportFlash(null);
+    try {
+      const basename = reportExportBasename("Otros gastos", periodLabel);
+      const path = await downloadReportsXlsx(
+        basename,
+        buildExpenseExportSections(filteredExpenses, periodLabel, periodTotals),
+      );
+      if (path) {
+        setExportFlash(`Excel guardado: ${path}`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setExportError(message || "No se pudo generar el Excel.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handlePdf = () => {
+    if (!canExport) {
+      return;
+    }
+    setExportError(null);
+    setExportFlash(null);
+    try {
+      openReportsPrintablePdf(
+        `Otros gastos · ${periodLabel}`,
+        buildExpenseExportSections(filteredExpenses, periodLabel, periodTotals),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setExportError(message || "No se pudo abrir la impresión PDF.");
+    }
+  };
+
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -144,6 +260,16 @@ export function OtherExpensesPage() {
           <span>{flash.text}</span>
         </div>
       )}
+      {exportFlash ? (
+        <div className="alert alert-success">
+          <span>{exportFlash}</span>
+        </div>
+      ) : null}
+      {exportError ? (
+        <div className="alert alert-error">
+          <span>{exportError}</span>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <div className="card bg-base-200">
@@ -209,21 +335,40 @@ export function OtherExpensesPage() {
         <div>
           <p className="text-sm font-medium">Periodo del listado</p>
           <p className="text-xs text-base-content/60">
-            Filtra la tabla de forma rápida. Por defecto: día actual.
+            Filtra la tabla de forma rápida. Por defecto: día actual. Excel y PDF usan este mismo
+            periodo.
           </p>
         </div>
-        <div className="join" role="group" aria-label="Filtrar gastos por periodo">
-          {PERIOD_OPTIONS.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              className={`btn btn-sm join-item ${period === opt.id ? "btn-primary" : "btn-ghost"}`}
-              aria-pressed={period === opt.id}
-              onClick={() => setPeriod(opt.id)}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="join" role="group" aria-label="Filtrar gastos por periodo">
+            {PERIOD_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                className={`btn btn-sm join-item ${period === opt.id ? "btn-primary" : "btn-ghost"}`}
+                aria-pressed={period === opt.id}
+                onClick={() => setPeriod(opt.id)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm gap-1"
+            disabled={!canExport}
+            onClick={() => void handleExcel()}
+          >
+            <FileSpreadsheet className="h-4 w-4" /> {exporting ? "Guardando…" : "Excel"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm gap-1"
+            disabled={!canExport}
+            onClick={handlePdf}
+          >
+            <FileText className="h-4 w-4" /> PDF
+          </button>
         </div>
       </div>
 
