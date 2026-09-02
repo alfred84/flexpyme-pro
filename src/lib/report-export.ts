@@ -247,6 +247,46 @@ function formatPrintCell(secName: string, col: number, rowIdx: number, label: st
   if (secName === "PRODUCCION_LINEAS" && col >= 10 && rowIdx >= 1) {
     return escapeHtml(formatMoney(nn));
   }
+  if (secName === "HISTORIAL_CAJA" && (col === 5 || col === 6) && rowIdx >= 1) {
+    return escapeHtml(formatMoney(nn));
+  }
+  if (secName === "CONTROL_RESUMEN" && (col === 1 || col === 2) && rowIdx >= 1) {
+    return escapeHtml(formatMoney(nn));
+  }
+  if (
+    (secName === "CONTROL_DENOM_CUP" || secName === "CONTROL_DENOM_USD") &&
+    rowIdx >= 1
+  ) {
+    if (typeof v === "string" && v !== "" && Number.isNaN(Number(v))) {
+      return escapeHtml(v);
+    }
+    if (col === 0 || col === 5 || label === "TOTAL") {
+      return escapeHtml(formatMoney(nn));
+    }
+  }
+  if (
+    (secName === "CONTROL_INICIAL_CUP" || secName === "CONTROL_INICIAL_USD") &&
+    rowIdx >= 1
+  ) {
+    if (v === "") {
+      return "";
+    }
+    if (typeof v === "string" && Number.isNaN(Number(v))) {
+      return escapeHtml(v);
+    }
+    if (col === 0 || col === 2) {
+      return escapeHtml(formatMoney(nn));
+    }
+  }
+  if (secName === "CONTROL_DIAS" && col >= 1 && col <= 6 && rowIdx >= 1) {
+    return escapeHtml(formatMoney(nn));
+  }
+  if (secName === "NOMINA_TRABAJADORES" && col >= 2 && col <= 4 && rowIdx >= 1) {
+    return escapeHtml(formatMoney(nn));
+  }
+  if (secName === "NOMINA_HISTORIAL" && col >= 4 && col <= 6 && rowIdx >= 1) {
+    return escapeHtml(formatMoney(nn));
+  }
   return escapeHtml(String(v));
 }
 
@@ -295,7 +335,17 @@ function buildReportsPrintHtml(title: string, sections: ReportTableSection[]): s
           (sec.name === "TOP_DEUDORES" && c === 2) ||
           (sec.name === "FACTURAS_EN_RANGO" && c >= 3 && c <= 5) ||
           (sec.name === "PRODUCCION_LOTES" && c >= 4 && c <= 6) ||
-          (sec.name === "PRODUCCION_LINEAS" && c >= 10);
+          (sec.name === "PRODUCCION_LINEAS" && c >= 10) ||
+          (sec.name === "HISTORIAL_CAJA" && c >= 5 && c <= 7) ||
+          (sec.name === "CONTROL_RESUMEN" && c >= 1) ||
+          ((sec.name === "CONTROL_DENOM_CUP" || sec.name === "CONTROL_DENOM_USD") && c >= 0) ||
+          ((sec.name === "CONTROL_INICIAL_CUP" || sec.name === "CONTROL_INICIAL_USD") &&
+            (c === 0 || c === 1 || c === 2)) ||
+          (sec.name === "CONTROL_DIAS" && c >= 1 && c <= 6) ||
+          (sec.name === "MOVIMIENTOS_INVENTARIO" && c === 3) ||
+          (sec.name === "NOMINA_TRABAJADORES" && c >= 1) ||
+          (sec.name === "NOMINA_HISTORIAL" && c >= 4 && c <= 6) ||
+          (String(header[2] ?? "") === "Existencia inicial" && c >= 2);
         const cls = numCols ? ' class="num"' : "";
         parts.push(`<td${cls}>${formatPrintCell(sec.name, c, r + 1, label, raw)}</td>`);
       }
