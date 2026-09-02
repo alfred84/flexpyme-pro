@@ -6,6 +6,29 @@ interface CashTransactionReferenceProps {
 }
 
 /**
+ * Etiqueta de texto de la referencia de una transacción de caja.
+ *
+ * @param referenceType - Tipo de origen (`pedido`, `venta_material`, …).
+ * @param referenceId - Id del origen, si aplica.
+ * @returns Texto para tablas y exportes.
+ */
+export function cashTransactionReferenceLabel(
+  referenceType: string | null,
+  referenceId: number | null,
+): string {
+  if (referenceType === "pedido" && referenceId != null) {
+    return `Pedido #${referenceId}`;
+  }
+  if (referenceType === "venta_material") {
+    return "Venta de material";
+  }
+  if (!referenceType) {
+    return "";
+  }
+  return referenceType;
+}
+
+/**
  * Enlace contextual desde una transacción de caja hacia su origen (pedido, etc.).
  *
  * @param props - Tipo e id de referencia de la transacción.
@@ -17,18 +40,19 @@ export function CashTransactionReference(props: CashTransactionReferenceProps) {
   if (referenceType === "pedido" && referenceId != null) {
     return (
       <Link className="link link-primary text-xs" to="/pedidos/$invoiceId" params={{ invoiceId: String(referenceId) }}>
-        Pedido #{referenceId}
+        {cashTransactionReferenceLabel(referenceType, referenceId)}
       </Link>
     );
   }
 
-  if (referenceType === "venta_material") {
-    return <span>Venta de material</span>;
-  }
-
-  if (!referenceType) {
+  const label = cashTransactionReferenceLabel(referenceType, referenceId);
+  if (!label) {
     return <span>—</span>;
   }
 
-  return <span className="capitalize">{referenceType}</span>;
+  if (referenceType === "venta_material") {
+    return <span>{label}</span>;
+  }
+
+  return <span className="capitalize">{label}</span>;
 }

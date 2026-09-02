@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { FileSpreadsheet, FileText } from "lucide-react";
 import { fetchCashTransactions } from "@/db/queries/cashflow";
 import { CashTransactionReference } from "@/components/cashflow/CashTransactionReference";
 import {
@@ -9,8 +10,17 @@ import {
   formatSignedCashAmount,
   hasCashAmount,
 } from "@/features/cashflow/lib/cash-amount-display";
+import {
+  buildCashHistoryExportSections,
+  cashHistoryPeriodLabel,
+} from "@/features/cashflow/lib/cash-history-export";
+import { reportExportBasename } from "@/features/reports/lib/report-period";
 import { formatDateTime, todayIso } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
+import {
+  downloadReportsXlsx,
+  openReportsPrintablePdf,
+} from "@/lib/report-export";
 
 interface DualCashKpiPanelProps {
   /** Título del panel. */
@@ -80,6 +90,9 @@ export function CashflowHistoryPage() {
   const [concept, setConcept] = useState("");
   const [currency, setCurrency] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportFlash, setExportFlash] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const txQuery = useQuery({
     queryKey: [
@@ -128,19 +141,101 @@ export function CashflowHistoryPage() {
     };
   }, [transactions]);
 
+  const periodLabel = cashHistoryPeriodLabel(dateFrom, dateTo);
+  const canExport = txQuery.isSuccess && !exporting;
+  const exportFilters = {
+    dateFrom,
+    dateTo,
+    type,
+    currency,
+    paymentMethod,
+    concept,
+  };
+
+  const handleExcel = async () => {
+    if (!canExport) {
+      return;
+    }
+    setExporting(true);
+    setExportError(null);
+    setExportFlash(null);
+    try {
+      const basename = reportExportBasename("Historial de caja", periodLabel);
+      const path = await downloadReportsXlsx(
+        basename,
+        buildCashHistoryExportSections(transactions, exportFilters, totals),
+      );
+      if (path) {
+        setExportFlash(`Excel guardado: ${path}`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setExportError(message || "No se pudo generar el Excel.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handlePdf = () => {
+    if (!canExport) {
+      return;
+    }
+    setExportError(null);
+    setExportFlash(null);
+    try {
+      openReportsPrintablePdf(
+        `Historial de caja · ${periodLabel}`,
+        buildCashHistoryExportSections(transactions, exportFilters, totals),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setExportError(message || "No se pudo abrir la impresión PDF.");
+    }
+  };
+
   return (
     <section className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold">Historial de caja</h1>
           <p className="text-sm text-base-content/70">
-            Totales y filas por moneda física (sin convertir entre CUP y USD).
+            Totales y filas por moneda física (sin convertir entre CUP y USD). Excel y PDF
+            usan los filtros activos.
           </p>
         </div>
-        <Link to="/caja" className="btn btn-ghost btn-sm">
-          Volver
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="btn btn-outline btn-sm gap-1"
+            disabled={!canExport}
+            onClick={() => void handleExcel()}
+          >
+            <FileSpreadsheet className="h-4 w-4" /> {exporting ? "Guardando…" : "Excel"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm gap-1"
+            disabled={!canExport}
+            onClick={handlePdf}
+          >
+            <FileText className="h-4 w-4" /> PDF
+          </button>
+          <Link to="/caja" className="btn btn-ghost btn-sm">
+            Volver
+          </Link>
+        </div>
       </div>
+
+      {exportFlash ? (
+        <div className="alert alert-success">
+          <span>{exportFlash}</span>
+        </div>
+      ) : null}
+      {exportError ? (
+        <div className="alert alert-error">
+          <span>{exportError}</span>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-base-300 bg-base-100 p-4">
         <div className="form-control">
