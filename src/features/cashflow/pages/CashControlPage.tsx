@@ -1,13 +1,25 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, ArrowLeft, Banknote, ClipboardList } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Banknote,
+  ClipboardList,
+  FileSpreadsheet,
+  FileText,
+} from "lucide-react";
 import { fetchCashControlSummary } from "@/db/queries/cashflow";
 import { CashDayNavigator } from "@/features/cashflow/components/CashDayNavigator";
 import { CashMonitorTable } from "@/features/cashflow/components/CashMonitorTable";
 import { CashOpeningModal } from "@/features/cashflow/components/CashOpeningModal";
 import { CashOpeningTable } from "@/features/cashflow/components/CashOpeningTable";
 import { CashScopeKpis } from "@/features/cashflow/components/CashScopeKpis";
+import {
+  buildCashControlExportSections,
+  cashControlPeriodLabel,
+} from "@/features/cashflow/lib/cash-control-export";
+import { reportExportBasename } from "@/features/reports/lib/report-period";
 import {
   clampIsoToMonth,
   currentMonthYm,
@@ -17,6 +29,10 @@ import {
   monthStartIso,
   todayIso,
 } from "@/lib/format-date";
+import {
+  downloadReportsXlsx,
+  openReportsPrintablePdf,
+} from "@/lib/report-export";
 import type { DenominationCurrency } from "@/types/cashier";
 
 const LEDGER_GAP_EPS = 1;
@@ -35,6 +51,9 @@ export function CashControlPage() {
   const [currency, setCurrency] = useState<DenominationCurrency>("CUP");
   const [modalOpen, setModalOpen] = useState(false);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportFlash, setExportFlash] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const summaryQuery = useQuery({
     queryKey: ["cashflow", "control", month, day],
@@ -92,6 +111,68 @@ export function CashControlPage() {
     setDay(clampIsoToMonth(nextDay, nextMonth));
   };
 
+  const exportPeriodLabel = cashControlPeriodLabel(monitorMode, month, day);
+  const canExport = summaryQuery.isSuccess && Boolean(summary && cup && usd) && !exporting;
+
+  const handleExcel = async () => {
+    if (!canExport || !summary || !cup || !usd) {
+      return;
+    }
+    setExporting(true);
+    setExportError(null);
+    setExportFlash(null);
+    try {
+      const basename = reportExportBasename("Control de efectivo", exportPeriodLabel);
+      const path = await downloadReportsXlsx(
+        basename,
+        buildCashControlExportSections({
+          scope: monitorMode,
+          periodLabel,
+          cup,
+          usd,
+          openingUpdatedAt: openingStamp ?? null,
+          notes: openingNotes ?? null,
+          days: summary.days,
+          showLedgerGapWarning: showsGapWarning,
+        }),
+      );
+      if (path) {
+        setExportFlash(`Excel guardado: ${path}`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setExportError(message || "No se pudo generar el Excel.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handlePdf = () => {
+    if (!canExport || !summary || !cup || !usd) {
+      return;
+    }
+    setExportError(null);
+    setExportFlash(null);
+    try {
+      openReportsPrintablePdf(
+        `Control de efectivo · ${exportPeriodLabel}`,
+        buildCashControlExportSections({
+          scope: monitorMode,
+          periodLabel,
+          cup,
+          usd,
+          openingUpdatedAt: openingStamp ?? null,
+          notes: openingNotes ?? null,
+          days: summary.days,
+          showLedgerGapWarning: showsGapWarning,
+        }),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setExportError(message || "No se pudo abrir la impresión PDF.");
+    }
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -100,7 +181,8 @@ export function CashControlPage() {
             <Banknote className="h-6 w-6" /> Control de efectivo
           </h1>
           <p className="text-sm text-base-content/70">
-            {isDay ? "Control del día" : "Control del mes"} · {periodLabel}
+            {isDay ? "Control del día" : "Control del mes"} · {periodLabel}. Excel y PDF
+            exportan CUP y USD del alcance activo (Mes o Día).
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -137,6 +219,22 @@ export function CashControlPage() {
               aria-label="Mes"
             />
           )}
+          <button
+            type="button"
+            className="btn btn-outline btn-sm gap-1"
+            disabled={!canExport}
+            onClick={() => void handleExcel()}
+          >
+            <FileSpreadsheet className="h-4 w-4" /> {exporting ? "Guardando…" : "Excel"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm gap-1"
+            disabled={!canExport}
+            onClick={handlePdf}
+          >
+            <FileText className="h-4 w-4" /> PDF
+          </button>
           <button type="button" className="btn btn-primary btn-sm gap-1" onClick={() => setModalOpen(true)}>
             <ClipboardList className="h-4 w-4" />
             {hasOpening ? "Editar saldo inicial" : "Registrar saldo inicial"}
@@ -146,6 +244,17 @@ export function CashControlPage() {
           </Link>
         </div>
       </div>
+
+      {exportFlash ? (
+        <div className="alert alert-success py-2 text-sm">
+          <span>{exportFlash}</span>
+        </div>
+      ) : null}
+      {exportError ? (
+        <div className="alert alert-error py-2 text-sm">
+          <span>{exportError}</span>
+        </div>
+      ) : null}
 
       {savedNotice ? (
         <div className="alert alert-success py-2 text-sm">
