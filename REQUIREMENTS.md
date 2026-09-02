@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.37 | Última actualización: 2026-08-31
+### Versión: 2.43 | Última actualización: 2026-09-02
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -102,6 +102,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
   - **Salario fijo mensual**: importe CUP predefinido; **no** entra solo en la nómina. Desde el listado, **Habilitar** abre un modal para elegir el **día del mes**; entonces aparece como pendiente ese día. Un cobro por mes calendario. **Deshacer** solo el día en que se pagó
   - Los lotes de trabajo de empleados fijo/destajo/mensual se registran con costo 0 para no duplicar el pago
 - Historial de pagos al empleado
+- **Historial de nómina (v2.43)**: desde Empleados, listado de pagos (lotes y salarios fijos/destajo/mensual) y resumen por trabajador. Filtros por periodo (día, mes, rango o todos), trabajador, estado y concepto. **Excel y PDF** del listado filtrado (CUP)
 - Dar de baja (soft delete, no eliminar)
 - **Multi-rol (v2.5)**: cada empleado tiene un rol principal (`employees.role_id`) y puede tener roles adicionales (`employee_extra_roles`) para cuando cubre otra Área
 - **Nómina diaria (v2.5 / v2.12)**: vista de salario por empleado del día seleccionado (por defecto hoy; selector de fecha), con total, pagado, pendiente y botón **Pagar** por empleado (modal de denominaciones Efectivo/CUP). **Deshacer** (solo el día actual) revierte el pago con ingreso compensatorio en caja
@@ -112,7 +113,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Categorías de material** (CRUD del usuario): obligatorias antes de dar de alta ítems; se gestionan desde la opción **Categorías** en Inventario (modal); el listado agrupa ítems en acordeón por categoría
 - Campos del ítem: categoría (obligatoria), nombre, **formato** (catálogo de Configuración; por defecto **Sin formato**), unidad, stock; **stock mínimo, costo unitario (CUP y/o USD, independientes) y proveedor opcionales**; descripción/apuntes; **edición** de datos del ítem (el stock solo cambia con movimientos)
 - Stock mínimo `0` o vacío = **Sin establecer** (sin alertas de stock bajo). Alertas solo si mínimo &gt; 0 y cantidad ≤ mínimo
-- Listado: mosaico compacto por categoría de material; al entrar, tabla de ítems y alta de ítem; sección **Movimientos** (día/mes/todos, **por defecto mes actual**) con método Manual vs Rebaja por Pedido vs Merma vs **Venta**; **Resumen** de consumo por tipo de material; **salida manual** (sin pedido) con **motivo obligatorio**; **venta de material** (sin pedido) con precio USD/CUP/mixto; **normas** desde la opción **Normas** (modal)
+- Listado: mosaico compacto por categoría de material; al entrar, tabla de ítems y alta de ítem; sección **Movimientos** (día/mes/todos, **por defecto mes actual**) con método Manual vs Rebaja por Pedido vs Merma vs **Venta**; **Excel y PDF** del periodo activo; **Resumen** de consumo por tipo de material; **salida manual** (sin pedido) con **motivo obligatorio**; **venta de material** (sin pedido) con precio USD/CUP/mixto; **normas** desde la opción **Normas** (modal)
 - Historial de movimientos por ítem (salidas con motivo obligatorio)
 - **Normas de producción**: por categoría de pedido + tipo de trabajo (tabs) + formato/acabado + material y cantidad/unidad; editables (solo afectan pedidos futuros); desactivadas ocultas con opción de ver/reactivar
 - En **Pedidos**, por línea: asignar materiales manualmente desde almacén (opción por defecto) **o** aplicar norma (se fijan materiales al crear el pedido). Solo materiales **existentes** (stock 0 o insuficiente permitido; no crear ítems desde el modal)
@@ -120,7 +121,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Mermas de producción**: desde el pedido (editar o detalle) se registra merma eligiendo material, cantidad y motivo (Error de impresión, Material defectuoso, Error de corte, Otro). Descuenta almacén (salida estricta, sin stock negativo), guarda el costo snapshot (CUP/USD del costo unitario del ítem × cantidad) y **no altera el precio al cliente**. Si ya hay mermas, el pedido muestra el historial. Al anular el pedido no se revierte el stock de merma (pérdida física). Inventario clasifica esas salidas como método **Merma**.
 - **Déficit al asignar (v2.16)**: si al guardar el pedido el stock no cubre `cant./ud. × cantidad de línea`, se permite guardar y se marca `resource_missing` (línea y pedido) con nota de materiales faltantes. **No** se puede marcar Listo (línea ni pedido) hasta reponer con una **entrada** en Inventario; tras la entrada se recalculan las banderas. Inventario muestra alerta de demanda pendiente (necesario &gt; disponible)
 - **Ventas de material (v2.28)**: desde Inventario, **Venta de material** (junto a salida manual). Descuenta stock con salida estricta (sin negativo), registra el **precio de venta** en USD, CUP o mixto (cajones independientes; tasa solo auditoría) e **ingreso** en Flujo de caja. Efectivo por defecto en USD; transferencia en CUP. No crea pedido ni factura. Inventario clasifica esas salidas como método **Venta**.
-- **Resumen de consumo (v2.29)**: vista `/inventario/resumen` agrupada por tipo de material. Periodos Día actual / Mes actual (en curso) / Total. Columnas: Formato (nombre del ítem), existencia inicial y final, entradas, salidas, solicitados (pedidos del periodo), mermas, ventas, demanda pendiente, déficit y disponible. La existencia inicial se reconstruye desde el stock actual y el libro de movimientos (no hay snapshot histórico). El déficit no se compensa entre formatos.
+- **Resumen de consumo (v2.29)**: vista `/inventario/resumen` agrupada por tipo de material. Periodos Día actual / Mes actual (en curso) / Total. Columnas: Formato (nombre del ítem), existencia inicial y final, entradas, salidas, solicitados (pedidos del periodo), mermas, ventas, demanda pendiente, déficit y disponible. La existencia inicial se reconstruye desde el stock actual y el libro de movimientos (no hay snapshot histórico). El déficit no se compensa entre formatos. **Excel y PDF** del periodo y tipo de material visibles
 
 ### 3.6 Flujo de Caja
 - Registro de todas las entradas y salidas de dinero
@@ -134,11 +135,11 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Módulo de cobro de facturas: ingresa billetes → exceso como **vuelto** (desglose; neto caja = recibido − vuelto) o como **saldo a favor** del cliente (ingreso completo en caja)
 - **Anticipo de pedido**: CUP o USD, efectivo (con denominaciones) o transferencia; se registra como ingreso en caja
 - **KPIs**: flujo neto del día y de los últimos 30 días en CUP y USD (más serie diaria dual)
-- Historial de movimientos con filtros por fecha, tipo, concepto, moneda (CUP/USD/Mixto) y método; columnas CUP, USD y tasa
+- Historial de movimientos con filtros por fecha, tipo, concepto, moneda (CUP/USD/Mixto) y método; columnas CUP, USD y tasa. **Excel y PDF** del listado filtrado (metadatos + filas; CUP/USD firmados)
 - Resumen diario/mensual por moneda
 - Movimientos manuales y Otros gastos en USD afectan solo el cajón USD (`amount_cup = 0`)
 - **Venta de material**: ingreso vinculado (`reference_type = venta_material`); mismos cajones físicos que el resto de caja
-- **Control de efectivo (v2.30–v2.32)**: desde Flujo de caja, conteo físico por denominaciones (CUP y USD). Se puede registrar un **saldo inicial del mes** y un **saldo inicial del día**. El monitoreo (Mes o Día) muestra inicial, entradas, salidas y estimado. Si el día no tiene conteo, el inicial se estima desde el mes. Transferencias y efectivo sin desglose no entran en el conteo de billetes
+- **Control de efectivo (v2.30–v2.32)**: desde Flujo de caja, conteo físico por denominaciones (CUP y USD). Se puede registrar un **saldo inicial del mes** y un **saldo inicial del día**. El monitoreo (Mes o Día) muestra inicial, entradas, salidas y estimado. Si el día no tiene conteo, el inicial se estima desde el mes. Transferencias y efectivo sin desglose no entran en el conteo de billetes. **Excel y PDF** del alcance activo (Mes o Día): resumen dual, denominaciones y saldo inicial CUP/USD; en Mes también el detalle por día
 
 ### 3.7 Configuración
 - Datos del negocio (nombre, dirección, teléfono, logo)
@@ -178,7 +179,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Entrada de sidebar **Otros gastos** (tras Precios); ruta `/otros-gastos`
 - Alta en pantalla dedicada `/otros-gastos/nuevo` (botón «Registrar gasto»); el listado muestra KPIs y el historial
 - Detalle `/otros-gastos/:id` y edición `/otros-gastos/:id/editar` (la edición sincroniza el egreso en `cash_transactions`)
-- Filtro rápido de periodo en el listado: **Día actual** (por defecto), **Mes actual** o **Todos**
+- Filtro rápido de periodo en el listado: **Día actual** (por defecto), **Mes actual** o **Todos**; exportación **Excel** y **PDF** del listado filtrado
 - Tabla `other_expenses` (fecha, concepto, tipo, empleado opcional, montos CUP/USD, método, desglose de denominaciones)
 - Cada gasto genera un `cash_transactions` (egreso) que afecta el balance de caja
 - Vistas diaria y mensual
@@ -516,6 +517,24 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 ### v2.37 — Reportes: importes USD y CUP (2026-08)
 - Producción por área: factura de venta en USD (precio) y CUP (libro); salario y margen siguen en CUP.
 - Cuentas por cobrar: saldo físico USD y CUP (mismo criterio que Clientes).
+
+### v2.38 — Otros gastos: Excel y PDF del listado (2026-09)
+- Listado de Otros gastos: exportar a Excel o PDF el periodo activo (día actual, mes actual o todos).
+
+### v2.39 — Historial de caja: Excel y PDF (2026-09)
+- Flujo de caja → Historial de caja: exportar a Excel o PDF el listado con los filtros activos (fechas, tipo, moneda, método y concepto).
+
+### v2.40 — Control de efectivo: Excel y PDF (2026-09)
+- Flujo de caja → Control de efectivo: exportar a Excel o PDF el alcance activo (Mes o Día), con CUP y USD, denominaciones y saldo inicial.
+
+### v2.41 — Inventario: Excel y PDF de movimientos (2026-09)
+- Inventario → Movimientos de materiales: exportar a Excel o PDF el periodo activo (día actual, mes actual o todos).
+
+### v2.42 — Inventario: Excel y PDF del resumen de consumo (2026-09)
+- Inventario → Resumen de consumo: exportar a Excel o PDF el kardex visible (periodo y tipo de material).
+
+### v2.43 — Historial de nómina (2026-09)
+- Empleados → Historial de nómina: pagos por trabajador y detalle de movimientos, con filtros y Excel/PDF.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
