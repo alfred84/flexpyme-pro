@@ -492,6 +492,34 @@ pub struct PayrollRangeArgs {
     pub date_to: Option<String>,
 }
 
+/// Fila de historial de nómina (lote de producción o salario diario/mensual).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PayrollHistoryRowDto {
+    pub id: i64,
+    /// `lote` | `salario`.
+    pub source: String,
+    pub employee_id: i64,
+    pub employee_name: String,
+    pub date: String,
+    /// Tipo de trabajo o `salario_fijo` / `salario_destajo` / `salario_mensual`.
+    pub concept_key: String,
+    pub total_cost: f64,
+    pub paid: f64,
+    pub pending: f64,
+    /// `pagado` | `pendiente`.
+    pub status: String,
+}
+
+/// Filtros del historial de nómina.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PayrollHistoryArgs {
+    pub date_from: Option<String>,
+    pub date_to: Option<String>,
+    pub employee_id: Option<i64>,
+}
+
 /// Cost-row for a work type (used to build the work-batch form).
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -2256,6 +2284,110 @@ pub fn payroll_in_range(args: PayrollRangeArgs) -> Result<Vec<PayrollRangeRowDto
                 total_cost,
                 paid,
                 pending: (total_cost - paid).max(0.0),
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Historial de nómina: lotes de producción y salarios fijos/destajo/mensual.
+///
+/// Si el rango tiene 31 días o menos, genera salarios fijos diarios faltantes
+/// (igual que la nómina del día).
+#[tauri::command]
+pub fn payroll_history(args: PayrollHistoryArgs) -> Result<Vec<PayrollHistoryRowDto>, String> {
+    let date_from = args
+        .date_from
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(iso_day)
+        .transpose()?;
+    let date_to = args
+        .date_to
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(iso_day)
+        .transpose()?;
+    let employee_id = args.employee_id.filter(|id| *id > 0);
+
+    let conn = db::open_connection()?;
+    if let (Some(from), Some(to)) = (&date_from, &date_to) {
+        if let Ok(days) = iso_days_inclusive(from, to) {
+            if days.len() <= 31 {
+                for day in &days {
+                    ensure_fixed_daily_salaries_for_date(&conn, day)?;
+                }
+            }
+        }
+    }
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, source, employee_id, employee_name, date, concept_key,
+                    total_cost, paid
+             FROM (
+               SELECT pb.id AS id,
+                      'lote' AS source,
+                      pb.employee_id AS employee_id,
+                      e.name AS employee_name,
+                      substr(pb.date, 1, 10) AS date,
+                      COALESCE(pb.work_type_snapshot, pb.type, 'produccion') AS concept_key,
+                      pb.total_cost AS total_cost,
+                      pb.paid AS paid
+               FROM production_batches pb
+               JOIN employees e ON e.id = pb.employee_id
+               WHERE pb.employee_id IS NOT NULL
+                 AND COALESCE(e.pay_mode, '') NOT IN ('fixed', 'destajo', 'monthly')
+                 AND COALESCE(e.has_fixed_daily_salary, 0) = 0
+                 AND (?1 IS NULL OR substr(pb.date, 1, 10) >= ?1)
+                 AND (?2 IS NULL OR substr(pb.date, 1, 10) <= ?2)
+                 AND (?3 IS NULL OR pb.employee_id = ?3)
+               UNION ALL
+               SELECT eds.id,
+                      'salario' AS source,
+                      eds.employee_id,
+                      e.name,
+                      substr(eds.date, 1, 10),
+                      CASE COALESCE(eds.kind, 'fixed')
+                        WHEN 'destajo' THEN 'salario_destajo'
+                        WHEN 'monthly' THEN 'salario_mensual'
+                        ELSE 'salario_fijo'
+                      END,
+                      eds.amount_cup,
+                      eds.paid
+               FROM employee_daily_salaries eds
+               JOIN employees e ON e.id = eds.employee_id
+               WHERE eds.amount_cup > 1e-9
+                 AND (?1 IS NULL OR substr(eds.date, 1, 10) >= ?1)
+                 AND (?2 IS NULL OR substr(eds.date, 1, 10) <= ?2)
+                 AND (?3 IS NULL OR eds.employee_id = ?3)
+             )
+             ORDER BY date DESC, employee_name COLLATE NOCASE, id DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![date_from, date_to, employee_id], |row| {
+            let total_cost: f64 = row.get(6)?;
+            let paid: f64 = row.get(7)?;
+            let pending = (total_cost - paid).max(0.0);
+            let status = if pending <= 1e-9 {
+                "pagado".to_string()
+            } else {
+                "pendiente".to_string()
+            };
+            Ok(PayrollHistoryRowDto {
+                id: row.get(0)?,
+                source: row.get(1)?,
+                employee_id: row.get(2)?,
+                employee_name: row.get(3)?,
+                date: row.get(4)?,
+                concept_key: row.get(5)?,
+                total_cost,
+                paid,
+                pending,
+                status,
             })
         })
         .map_err(|e| e.to_string())?;

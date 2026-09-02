@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { CalendarDays, Banknote, Undo2, UserCog, UserPlus } from "lucide-react";
+import { CalendarDays, Banknote, ClipboardList, Undo2, UserCog, UserPlus } from "lucide-react";
 import {
   deactivateEmployee,
   fetchDestajoPendingForDate,
@@ -321,6 +321,9 @@ export function EmployeesListPage() {
               onChange={(e) => setPayrollDate(e.target.value || today)}
             />
           </label>
+          <Link to="/empleados/historial-nomina" className="btn btn-outline btn-sm gap-1">
+            <ClipboardList className="h-4 w-4" /> Historial de nómina
+          </Link>
           <Link to="/empleados/nuevo" className="btn btn-primary btn-sm gap-1">
             <UserPlus className="h-4 w-4" /> Nuevo empleado
           </Link>
@@ -441,6 +444,9 @@ export function EmployeesListPage() {
                 {formatDate(payrollDate)}
               </span>
             </h2>
+            <Link to="/empleados/historial-nomina" className="link link-hover text-sm">
+              Ver historial
+            </Link>
           </div>
           <p className="text-xs text-base-content/60">
             El salario fijo mensual no aparece solo: pulsa Habilitar en la tabla de empleados,

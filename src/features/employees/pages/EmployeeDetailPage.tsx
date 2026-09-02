@@ -81,6 +81,9 @@ export function EmployeeDetailPage() {
           >
             Editar
           </Link>
+          <Link to="/empleados/historial-nomina" className="btn btn-ghost btn-sm">
+            Historial de nómina
+          </Link>
           <Link to="/empleados" className="btn btn-ghost btn-sm">
             Volver
           </Link>

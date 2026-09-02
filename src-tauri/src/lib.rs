@@ -166,6 +166,7 @@ pub fn run() {
             commands::employees::employee_extra_role_remove,
             commands::employees::payroll_daily,
             commands::employees::payroll_in_range,
+            commands::employees::payroll_history,
             commands::other_expenses::other_expenses_list,
             commands::other_expenses::other_expenses_summary,
             commands::other_expenses::other_expense_get_by_id,

@@ -25,6 +25,7 @@ import { EmployeeNewPage } from "@/features/employees/pages/EmployeeNewPage";
 import { EmployeeEditPage } from "@/features/employees/pages/EmployeeEditPage";
 import { EmployeeDetailPage } from "@/features/employees/pages/EmployeeDetailPage";
 import { EmployeeWorkBatchPage } from "@/features/employees/pages/EmployeeWorkBatchPage";
+import { PayrollHistoryPage } from "@/features/employees/pages/PayrollHistoryPage";
 import { InventoryListPage } from "@/features/inventory/pages/InventoryListPage";
 import { InventoryNewPage } from "@/features/inventory/pages/InventoryNewPage";
 import { InventoryCategoryPage } from "@/features/inventory/pages/InventoryCategoryPage";
@@ -249,6 +250,12 @@ const employeeNewRoute = createRoute({
   component: EmployeeNewPage,
 });
 
+const payrollHistoryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "empleados/historial-nomina",
+  component: PayrollHistoryPage,
+});
+
 const employeeDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "empleados/$employeeId",
@@ -386,6 +393,7 @@ const routeTree = rootRoute.addChildren([
   invoiceDetailRoute,
   employeesListRoute,
   employeeNewRoute,
+  payrollHistoryRoute,
   employeeDetailRoute,
   employeeEditRoute,
   employeeWorkBatchRoute,

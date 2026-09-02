@@ -115,6 +115,34 @@ export interface PayrollRangeRowDto {
 }
 
 /**
+ * Fila del historial de nómina (lote o salario diario/mensual).
+ */
+export interface PayrollHistoryRowDto {
+  id: number;
+  /** `lote` | `salario`. */
+  source: string;
+  employeeId: number;
+  employeeName: string;
+  date: string;
+  /** Tipo de trabajo o `salario_fijo` / `salario_destajo` / `salario_mensual`. */
+  conceptKey: string;
+  totalCost: number;
+  paid: number;
+  pending: number;
+  /** `pagado` | `pendiente`. */
+  status: string;
+}
+
+/**
+ * Filtros del historial de nómina.
+ */
+export interface PayrollHistoryFilters {
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  employeeId?: number | null;
+}
+
+/**
  * Tipos de trabajo retribuibles a empleados.
  */
 export const WORK_TYPES = ["laminado", "enmarcado", "respaldo", "impresion"] as const;

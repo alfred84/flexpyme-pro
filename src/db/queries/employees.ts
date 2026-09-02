@@ -8,6 +8,8 @@ import type {
   InvoiceWorkBatchDto,
   MonthlySalaryStatusDto,
   PayrollDailyRowDto,
+  PayrollHistoryFilters,
+  PayrollHistoryRowDto,
   PayrollRangeRowDto,
   UpdateEmployeePayload,
   WorkBatchDto,
@@ -245,4 +247,16 @@ export async function fetchPayrollInRange(args: {
   dateTo?: string | null;
 }): Promise<PayrollRangeRowDto[]> {
   return invoke<PayrollRangeRowDto[]>("payroll_in_range", { args });
+}
+
+/**
+ * Historial de nómina (lotes y salarios) en un rango, opcionalmente de un trabajador.
+ *
+ * @param filters - Fechas ISO y empleado; omitidos = histórico registrado.
+ * @returns Filas ordenadas de la más reciente a la más antigua.
+ */
+export async function fetchPayrollHistory(
+  filters: PayrollHistoryFilters,
+): Promise<PayrollHistoryRowDto[]> {
+  return invoke<PayrollHistoryRowDto[]>("payroll_history", { args: filters });
 }
