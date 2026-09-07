@@ -49,8 +49,8 @@ export function CashflowPage() {
 
   const netTodayCup = formatCashNet(net?.netTodayCup ?? 0);
   const netTodayUsd = formatCashNet(net?.netTodayUsd ?? 0);
-  const net30Cup = formatCashNet(net?.net30DaysCup ?? 0);
-  const net30Usd = formatCashNet(net?.net30DaysUsd ?? 0);
+  const netMonthCup = formatCashNet(net?.netMonthCup ?? 0);
+  const netMonthUsd = formatCashNet(net?.netMonthUsd ?? 0);
 
   return (
     <section className="space-y-6">
@@ -107,15 +107,15 @@ export function CashflowPage() {
           </div>
         </div>
         <div className="rounded-lg border border-base-300 bg-base-100 p-4">
-          <p className="mb-2 text-xs uppercase text-base-content/60">Flujo neto (últimos 30 días)</p>
+          <p className="mb-2 text-xs uppercase text-base-content/60">Flujo neto (mes actual)</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="text-xs text-base-content/50">{moneyHeading("Neto", "CUP")}</p>
-              <p className={`text-xl ${net30Cup.className}`}>{net30Cup.text}</p>
+              <p className={`text-xl ${netMonthCup.className}`}>{netMonthCup.text}</p>
             </div>
             <div>
               <p className="text-xs text-base-content/50">{moneyHeading("Neto", "USD")}</p>
-              <p className={`text-xl ${net30Usd.className}`}>{net30Usd.text}</p>
+              <p className={`text-xl ${netMonthUsd.className}`}>{netMonthUsd.text}</p>
             </div>
           </div>
         </div>
@@ -165,7 +165,7 @@ export function CashflowPage() {
       </div>
 
       <div className="rounded-lg border border-base-300 bg-base-100 p-4">
-        <h2 className="mb-3 text-base font-semibold">Flujo neto diario (30 días)</h2>
+        <h2 className="mb-3 text-base font-semibold">Flujo neto diario (mes actual)</h2>
         {seriesQuery.isLoading ? (
           <div className="h-64 animate-pulse rounded-lg bg-base-300" />
         ) : series.length === 0 ? (

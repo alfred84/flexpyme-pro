@@ -26,7 +26,7 @@ export async function fetchCashTransactions(filters?: CashFilters): Promise<Cash
 }
 
 /**
- * Loads the 30-day net cash-flow series.
+ * Loads the current-month net cash-flow series (one point per day with movement).
  */
 export async function fetchCashDailySeries(): Promise<CashDailyPointDto[]> {
   return invoke<CashDailyPointDto[]>("cash_daily_series");

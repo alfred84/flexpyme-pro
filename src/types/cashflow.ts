@@ -36,13 +36,13 @@ export interface CashDailyPointDto {
 }
 
 /**
- * Flujo neto del día actual y de los últimos 30 días.
+ * Flujo neto del día actual y del mes calendario en curso.
  */
 export interface CashNetSummaryDto {
   netTodayCup: number;
   netTodayUsd: number;
-  net30DaysCup: number;
-  net30DaysUsd: number;
+  netMonthCup: number;
+  netMonthUsd: number;
 }
 
 /**

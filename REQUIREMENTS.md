@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.43 | Última actualización: 2026-09-02
+### Versión: 2.44 | Última actualización: 2026-09-03
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -134,7 +134,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Balance actual de caja (CUP y USD por separado); ingresos/egresos/neto también duales
 - Módulo de cobro de facturas: ingresa billetes → exceso como **vuelto** (desglose; neto caja = recibido − vuelto) o como **saldo a favor** del cliente (ingreso completo en caja)
 - **Anticipo de pedido**: CUP o USD, efectivo (con denominaciones) o transferencia; se registra como ingreso en caja
-- **KPIs**: flujo neto del día y de los últimos 30 días en CUP y USD (más serie diaria dual)
+- **KPIs**: flujo neto del día y del mes actual en CUP y USD (más serie diaria dual del mes)
 - Historial de movimientos con filtros por fecha, tipo, concepto, moneda (CUP/USD/Mixto) y método; columnas CUP, USD y tasa. **Excel y PDF** del listado filtrado (metadatos + filas; CUP/USD firmados)
 - Resumen diario/mensual por moneda
 - Movimientos manuales y Otros gastos en USD afectan solo el cajón USD (`amount_cup = 0`)
@@ -535,6 +535,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.43 — Historial de nómina (2026-09)
 - Empleados → Historial de nómina: pagos por trabajador y detalle de movimientos, con filtros y Excel/PDF.
+
+### v2.44 — Flujo de caja: neto del mes actual (2026-09)
+- Flujo de caja: KPI de flujo neto y serie diaria cubren el **mes calendario actual** (no los últimos 30 días).
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

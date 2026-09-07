@@ -12,7 +12,7 @@ La fuente de verdad de requisitos es [`REQUIREMENTS.md`](./REQUIREMENTS.md) (**v
 - **Clientes**: CRUD, balance y ficha con historial.
 - **Empleados**: CRUD con baja (soft delete), multi-rol, lotes de trabajo, nómina diaria y pago de salarios desde `cost_list`.
 - **Inventario**: ítems, movimientos, recetas de producción; descuento al **concluir cada línea/servicio**; déficit permitido con bandera en línea y pedido.
-- **Flujo de Caja**: balance CUP/USD, neto del día + neto de 30 días, serie diaria, movimientos con denominaciones, historial filtrable y enlaces a pedidos.
+- **Flujo de Caja**: balance CUP/USD, neto del día + neto del mes actual, serie diaria, movimientos con denominaciones, historial filtrable y enlaces a pedidos.
 - **Precios** y **Costos**: entradas del sidebar (debajo de Flujo de Caja).
 - **Otros gastos** (`/otros-gastos`): listado y KPIs; alta en `/otros-gastos/nuevo`; detalle y edición por gasto; tipos configurables; cada gasto genera egreso en caja.
 - **Reportes**: exportes y resúmenes generales.

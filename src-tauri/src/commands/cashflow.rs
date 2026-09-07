@@ -36,7 +36,7 @@ pub struct CashTransactionDto {
     pub date: String,
 }
 
-/// One point of the 30-day cash-flow series (net per currency).
+/// One point of the current-month cash-flow series (net per currency).
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CashDailyPointDto {
@@ -45,14 +45,14 @@ pub struct CashDailyPointDto {
     pub net_usd: f64,
 }
 
-/// Net cash flow for the current day and the last 30 days.
+/// Net cash flow for the current day and the current calendar month.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CashNetSummaryDto {
     pub net_today_cup: f64,
     pub net_today_usd: f64,
-    pub net_30_days_cup: f64,
-    pub net_30_days_usd: f64,
+    pub net_month_cup: f64,
+    pub net_month_usd: f64,
 }
 
 /// Payload for creating a manual cash transaction.
@@ -204,7 +204,7 @@ pub fn cash_transactions_list(filters: Option<CashFilters>) -> Result<Vec<CashTr
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
-/// Net cash flow per day over the last 30 days (for the dashboard chart).
+/// Net cash flow per day in the current calendar month (for the dashboard chart).
 #[tauri::command]
 pub fn cash_daily_series() -> Result<Vec<CashDailyPointDto>, String> {
     let conn = db::open_connection()?;
@@ -214,7 +214,8 @@ pub fn cash_daily_series() -> Result<Vec<CashDailyPointDto>, String> {
                     COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount_cup ELSE -amount_cup END), 0),
                     COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount_usd ELSE -amount_usd END), 0)
              FROM cash_transactions
-             WHERE date(date) >= date('now', '-30 days')
+             WHERE date(date) >= date('now', 'localtime', 'start of month')
+               AND date(date) < date('now', 'localtime', 'start of month', '+1 month')
              GROUP BY d
              ORDER BY d",
         )
@@ -231,7 +232,7 @@ pub fn cash_daily_series() -> Result<Vec<CashDailyPointDto>, String> {
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
-/// Net cash flow for the current day and the rolling last 30 days.
+/// Net cash flow for the current day and the current calendar month.
 #[tauri::command]
 pub fn cash_net_summary() -> Result<CashNetSummaryDto, String> {
     let conn = db::open_connection()?;
@@ -246,13 +247,14 @@ pub fn cash_net_summary() -> Result<CashNetSummaryDto, String> {
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .map_err(|e| e.to_string())?;
-    let (net_30_days_cup, net_30_days_usd): (f64, f64) = conn
+    let (net_month_cup, net_month_usd): (f64, f64) = conn
         .query_row(
             "SELECT
                 COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount_cup ELSE -amount_cup END), 0),
                 COALESCE(SUM(CASE WHEN type = 'ingreso' THEN amount_usd ELSE -amount_usd END), 0)
              FROM cash_transactions
-             WHERE date(date) >= date('now', 'localtime', '-30 days')",
+             WHERE date(date) >= date('now', 'localtime', 'start of month')
+               AND date(date) < date('now', 'localtime', 'start of month', '+1 month')",
             [],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
@@ -260,8 +262,8 @@ pub fn cash_net_summary() -> Result<CashNetSummaryDto, String> {
     Ok(CashNetSummaryDto {
         net_today_cup,
         net_today_usd,
-        net_30_days_cup,
-        net_30_days_usd,
+        net_month_cup,
+        net_month_usd,
     })
 }
 
