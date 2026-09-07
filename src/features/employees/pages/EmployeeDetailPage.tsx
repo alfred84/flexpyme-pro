@@ -7,6 +7,7 @@ import {
   payWorkBatch,
 } from "@/db/queries/employees";
 import { EmployeePayCashierModal } from "@/features/employees/components/EmployeePayCashierModal";
+import { invalidatePayrollQueries } from "@/features/employees/lib/invalidate-payroll";
 import { formatDate } from "@/lib/format-date";
 import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
@@ -199,7 +200,7 @@ export function EmployeeDetailPage() {
             amountCup: data.amountCup,
             amountUsd: data.amountUsd,
           });
-          await queryClient.invalidateQueries({ queryKey: ["employees", "batches", employeeId] });
+          await invalidatePayrollQueries(queryClient);
           await queryClient.invalidateQueries({ queryKey: ["cashflow"] });
           pushFlashMessage({ kind: "success", text: "Pago registrado." });
         }}

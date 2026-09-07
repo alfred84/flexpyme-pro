@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import { fetchCostListForWorkType } from "@/db/queries/employees";
 import { markInvoiceItemListo } from "@/db/queries/invoices";
+import { invalidatePayrollQueries } from "@/features/employees/lib/invalidate-payroll";
 import { payQuantityForAssignedWorker } from "@/features/invoices/lib/assignment-quantity";
 import { todayIso } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
@@ -128,11 +129,10 @@ export function ConfirmCompleteWorkModal(props: ConfirmCompleteWorkModalProps) {
       });
     },
     onSuccess: async () => {
-      // Listo descuenta stock: refrescar movimientos, listados y demanda pendiente.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["inventory"] }),
         queryClient.invalidateQueries({ queryKey: ["invoices"] }),
-        queryClient.invalidateQueries({ queryKey: ["employees", "batches"] }),
+        invalidatePayrollQueries(queryClient),
       ]);
       onSuccess();
       onClose();

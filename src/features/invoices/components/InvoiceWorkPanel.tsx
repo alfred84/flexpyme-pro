@@ -8,6 +8,7 @@ import {
   fetchEmployees,
   fetchWorkBatchesForInvoice,
 } from "@/db/queries/employees";
+import { invalidatePayrollQueries } from "@/features/employees/lib/invalidate-payroll";
 import { serviceMatchesWorkType } from "@/features/invoices/lib/work-type-match";
 import { pushFlashMessage } from "@/lib/flash-message";
 import { formatDate, todayIso } from "@/lib/format-date";
@@ -106,7 +107,7 @@ export function InvoiceWorkPanel(props: InvoiceWorkPanelProps) {
       setQuantities({});
       setFormError(null);
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["employees", "batches", "invoice", invoiceId] }),
+        invalidatePayrollQueries(queryClient),
         queryClient.invalidateQueries({ queryKey: ["cashflow"] }),
         queryClient.invalidateQueries({ queryKey: ["invoices"] }),
         queryClient.invalidateQueries({ queryKey: ["inventory"] }),

@@ -8,6 +8,7 @@ import {
   fetchCostListForWorkType,
   fetchEmployeeById,
 } from "@/db/queries/employees";
+import { invalidatePayrollQueries } from "@/features/employees/lib/invalidate-payroll";
 import { pushFlashMessage } from "@/lib/flash-message";
 import { todayIso } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
@@ -69,7 +70,7 @@ export function EmployeeWorkBatchPage() {
   const mutation = useMutation({
     mutationFn: createWorkBatch,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["employees", "batches", employeeId] });
+      await invalidatePayrollQueries(queryClient);
       await queryClient.invalidateQueries({ queryKey: ["cashflow"] });
       await queryClient.invalidateQueries({ queryKey: ["invoices"] });
       await queryClient.invalidateQueries({ queryKey: ["inventory"] });
