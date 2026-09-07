@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.44 | Última actualización: 2026-09-03
+### Versión: 2.45 | Última actualización: 2026-09-07
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -97,7 +97,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Cálculo automático del salario a pagar (tarifa de Precios o personalizada en la asignación del pedido)
 - **Forma de salario (excluyente)**: en alta/edición, el empleado elige una de:
   - **Por producción**: cobra según tarifas de trabajo
-  - **Salario fijo diario**: importe CUP predefinido; se genera cada día y se paga desde la nómina diaria (botón Pagar por empleado)
+  - **Salario fijo diario**: importe CUP predefinido; **no** entra solo en la nómina. Desde el listado, **Habilitar** abre un modal para elegir el **día trabajado**; entonces aparece como pendiente ese día. Se puede habilitar más de un día al mes. **Deshacer** solo el día en que se pagó
   - **Salario por destajo diario**: importe CUP editable en alta/edición (igual que el fijo); debe quedar definido cada día (botón **Definir** en el listado o al guardar el empleado) antes de pagar
   - **Salario fijo mensual**: importe CUP predefinido; **no** entra solo en la nómina. Desde el listado, **Habilitar** abre un modal para elegir el **día del mes**; entonces aparece como pendiente ese día. Un cobro por mes calendario. **Deshacer** solo el día en que se pagó
   - Los lotes de trabajo de empleados fijo/destajo/mensual se registran con costo 0 para no duplicar el pago
@@ -538,6 +538,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.44 — Flujo de caja: neto del mes actual (2026-09)
 - Flujo de caja: KPI de flujo neto y serie diaria cubren el **mes calendario actual** (no los últimos 30 días).
+
+### v2.45 — Salario fijo diario: habilitar por día trabajado (2026-09)
+- Empleados con salario fijo diario: el importe no se genera solo cada día. Desde el listado, **Habilitar** elige el día laborable (igual que el fijo mensual) y entonces entra a la nómina. Varios días por mes; un cobro por día habilitado.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

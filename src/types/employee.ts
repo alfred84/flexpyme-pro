@@ -1,7 +1,7 @@
 /**
  * Modo de pago del empleado.
  * - `production`: tarifas por trabajo realizado
- * - `fixed`: salario fijo diario predefinido
+ * - `fixed`: salario fijo diario predefinido (se habilita por cada día trabajado)
  * - `destajo`: importe a definir obligatoriamente cada día
  * - `monthly`: salario fijo mensual (se habilita eligiendo el día del mes)
  */
@@ -80,6 +80,24 @@ export interface MonthlySalaryStatusDto {
   amountCup: number;
   /** `true` si el salario de ese mes ya está pagado. */
   isPaid: boolean;
+}
+
+/**
+ * Un día habilitado de salario fijo diario.
+ */
+export interface FixedDailyDayStatusDto {
+  date: string;
+  isPaid: boolean;
+}
+
+/**
+ * Estado del salario fijo diario de un empleado en el mes de una fecha.
+ */
+export interface FixedDailyStatusDto {
+  employeeId: number;
+  employeeName: string;
+  amountCup: number;
+  days: FixedDailyDayStatusDto[];
 }
 
 /**

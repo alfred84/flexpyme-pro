@@ -161,6 +161,8 @@ pub fn run() {
             commands::employees::set_destajo_daily_salary,
             commands::employees::monthly_salary_status_for_date,
             commands::employees::schedule_monthly_salary,
+            commands::employees::fixed_daily_status_for_date,
+            commands::employees::schedule_fixed_daily_salary,
             commands::employees::employee_extra_roles_list,
             commands::employees::employee_extra_role_add,
             commands::employees::employee_extra_role_remove,

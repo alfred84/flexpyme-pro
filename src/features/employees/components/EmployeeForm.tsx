@@ -197,7 +197,8 @@ export function EmployeeForm(props: EmployeeFormProps) {
                 <span className="label-text">
                   <span className="font-medium">Salario fijo diario</span>
                   <span className="mt-0.5 block text-xs text-base-content/60">
-                    Cobro diario con un importe fijo predefinido.
+                    Importe fijo por cada día trabajado. En el listado, Habilitar elige el día y
+                    luego se paga en la nómina (no se genera solo todos los días).
                   </span>
                 </span>
               </label>

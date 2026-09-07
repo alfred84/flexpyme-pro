@@ -6,18 +6,21 @@ import {
   deactivateEmployee,
   fetchDestajoPendingForDate,
   fetchEmployees,
+  fetchFixedDailyStatusForDate,
   fetchMonthlySalaryStatusForDate,
   fetchPayrollDaily,
   fetchUnpaidBatchesForDate,
   payWorkBatchesMany,
   reactivateEmployee,
   reverseEmployeePayment,
+  scheduleFixedDailySalary,
   scheduleMonthlySalary,
   setDestajoDailySalary,
   type UnpaidBatchDto,
 } from "@/db/queries/employees";
 import { DestajoDefineModal } from "@/features/employees/components/DestajoDefineModal";
 import { EmployeePayCashierModal } from "@/features/employees/components/EmployeePayCashierModal";
+import { FixedDailyEnableModal } from "@/features/employees/components/FixedDailyEnableModal";
 import { MonthlyEnableModal } from "@/features/employees/components/MonthlyEnableModal";
 import { formatDate, todayIso } from "@/lib/format-date";
 import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
@@ -26,6 +29,12 @@ import type { EmployeePayMode } from "@/types/employee";
 
 /** Empleado seleccionado para pagar en el modal de caja. */
 interface PayEmployeeTarget {
+  employeeId: number;
+  employeeName: string;
+}
+
+/** Empleado seleccionado para habilitar el salario fijo diario. */
+interface FixedDailyTarget {
   employeeId: number;
   employeeName: string;
 }
@@ -54,6 +63,7 @@ export function EmployeesListPage() {
   const [payTarget, setPayTarget] = useState<PayEmployeeTarget | null>(null);
   const [destajoTarget, setDestajoTarget] = useState<DestajoTarget | null>(null);
   const [monthlyTarget, setMonthlyTarget] = useState<MonthlyTarget | null>(null);
+  const [fixedDailyTarget, setFixedDailyTarget] = useState<FixedDailyTarget | null>(null);
   const today = todayIso();
   const [payrollDate, setPayrollDate] = useState(today);
 
@@ -75,6 +85,11 @@ export function EmployeesListPage() {
   const monthlyStatusQuery = useQuery({
     queryKey: ["employees", "monthly-status", today.slice(0, 7)],
     queryFn: () => fetchMonthlySalaryStatusForDate(today),
+  });
+
+  const fixedDailyStatusQuery = useQuery({
+    queryKey: ["employees", "fixed-daily-status", payrollDate.slice(0, 7)],
+    queryFn: () => fetchFixedDailyStatusForDate(payrollDate),
   });
 
   const deactivateMutation = useMutation({
@@ -106,6 +121,20 @@ export function EmployeesListPage() {
       pushFlashMessage({
         kind: "success",
         text: `Salario mensual habilitado para el ${formatDate(date)}.`,
+      });
+    },
+  });
+
+  const scheduleFixedDailyMutation = useMutation({
+    mutationFn: scheduleFixedDailySalary,
+    onSuccess: async (_id, variables) => {
+      const date = variables.date ?? today;
+      setPayrollDate(date);
+      await queryClient.invalidateQueries({ queryKey: ["employees"] });
+      await queryClient.invalidateQueries({ queryKey: ["payroll-daily"] });
+      pushFlashMessage({
+        kind: "success",
+        text: `Salario diario habilitado para el ${formatDate(date)}.`,
       });
     },
   });
@@ -163,6 +192,17 @@ export function EmployeesListPage() {
     return map;
   }, [monthlyStatusQuery.data]);
 
+  const fixedDailyByEmployee = useMemo(() => {
+    const map = new Map<number, { pendingDates: string[]; paidDates: string[] }>();
+    for (const row of fixedDailyStatusQuery.data ?? []) {
+      map.set(row.employeeId, {
+        pendingDates: row.days.filter((day) => !day.isPaid).map((day) => day.date.slice(0, 10)),
+        paidDates: row.days.filter((day) => day.isPaid).map((day) => day.date.slice(0, 10)),
+      });
+    }
+    return map;
+  }, [fixedDailyStatusQuery.data]);
+
   const payItems = useMemo(() => {
     if (!payTarget) {
       return [] as UnpaidBatchDto[];
@@ -207,10 +247,39 @@ export function EmployeesListPage() {
     isActive: boolean,
   ) => {
     if (payMode === "fixed") {
+      const status = fixedDailyByEmployee.get(employeeId);
+      const payrollDay = payrollDate.slice(0, 10);
+      const paidThatDay = Boolean(status?.paidDates.includes(payrollDay));
+      const pendingThatDay = Boolean(status?.pendingDates.includes(payrollDay));
       return (
-        <span className="badge badge-info badge-sm">
-          Fijo {formatMoney(fixedCup)}/día
-        </span>
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="badge badge-info badge-sm">
+            Fijo {formatMoney(fixedCup)}/día
+          </span>
+          {paidThatDay ? (
+            <span className="badge badge-success badge-sm">
+              Pagado {formatDate(payrollDay)}
+            </span>
+          ) : pendingThatDay ? (
+            <span className="badge badge-info badge-sm">
+              En nómina {formatDate(payrollDay)}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="btn btn-outline btn-xs"
+            disabled={!isActive || scheduleFixedDailyMutation.isPending}
+            title="Habilitar un día trabajado en la nómina"
+            onClick={() =>
+              setFixedDailyTarget({
+                employeeId,
+                employeeName,
+              })
+            }
+          >
+            Habilitar
+          </button>
+        </div>
       );
     }
     if (payMode === "monthly") {
@@ -449,8 +518,8 @@ export function EmployeesListPage() {
             </Link>
           </div>
           <p className="text-xs text-base-content/60">
-            El salario fijo mensual no aparece solo: pulsa Habilitar en la tabla de empleados,
-            elige el día del mes y luego págalo aquí.
+            El salario fijo diario y el mensual no aparecen solos: pulsa Habilitar en la tabla,
+            elige el día y luego págalo aquí. El diario se habilita por cada día trabajado.
           </p>
           {payrollQuery.isLoading ? (
             <p className="py-6 text-center text-sm text-base-content/60">Cargando nómina...</p>
@@ -571,6 +640,33 @@ export function EmployeesListPage() {
           }
           await scheduleMonthlyMutation.mutateAsync({
             employeeId: monthlyTarget.employeeId,
+            date: dateIso,
+          });
+        }}
+      />
+
+      <FixedDailyEnableModal
+        open={fixedDailyTarget !== null}
+        employeeName={fixedDailyTarget?.employeeName ?? ""}
+        referenceDate={payrollDate}
+        pendingDates={
+          fixedDailyTarget
+            ? (fixedDailyByEmployee.get(fixedDailyTarget.employeeId)?.pendingDates ?? [])
+            : []
+        }
+        paidDates={
+          fixedDailyTarget
+            ? (fixedDailyByEmployee.get(fixedDailyTarget.employeeId)?.paidDates ?? [])
+            : []
+        }
+        isSubmitting={scheduleFixedDailyMutation.isPending}
+        onClose={() => setFixedDailyTarget(null)}
+        onConfirm={async (dateIso) => {
+          if (!fixedDailyTarget) {
+            return;
+          }
+          await scheduleFixedDailyMutation.mutateAsync({
+            employeeId: fixedDailyTarget.employeeId,
             date: dateIso,
           });
         }}

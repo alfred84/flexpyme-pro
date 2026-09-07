@@ -5,6 +5,7 @@ import type {
   DestajoPendingDto,
   EmployeeDto,
   EmployeeExtraRoleDto,
+  FixedDailyStatusDto,
   InvoiceWorkBatchDto,
   MonthlySalaryStatusDto,
   PayrollDailyRowDto,
@@ -172,6 +173,32 @@ export async function scheduleMonthlySalary(payload: {
   date?: string;
 }): Promise<number> {
   return invoke<number>("schedule_monthly_salary", { payload });
+}
+
+/**
+ * Estado del salario fijo diario en el mes de una fecha (por defecto hoy).
+ *
+ * @param date - Fecha ISO opcional.
+ */
+export async function fetchFixedDailyStatusForDate(
+  date?: string,
+): Promise<FixedDailyStatusDto[]> {
+  return invoke<FixedDailyStatusDto[]>("fixed_daily_status_for_date", {
+    date: date ?? null,
+  });
+}
+
+/**
+ * Habilita el salario fijo diario de un empleado en la nómina de una fecha.
+ *
+ * @param payload - Empleado y fecha ISO (día trabajado).
+ * @returns Id del registro diario.
+ */
+export async function scheduleFixedDailySalary(payload: {
+  employeeId: number;
+  date?: string;
+}): Promise<number> {
+  return invoke<number>("schedule_fixed_daily_salary", { payload });
 }
 
 /**
