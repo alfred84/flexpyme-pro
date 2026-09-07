@@ -124,8 +124,8 @@ export function InventoryCategoryPage() {
                 <th className="text-right">Stock</th>
                 <th>Unidad</th>
                 <th className="text-right">Stock mín.</th>
-                <th className="text-right">{moneyHeading("Costo unit.")}</th>
                 <th className="text-right">{moneyHeading("Costo unit.", "USD")}</th>
+                <th className="text-right">{moneyHeading("Costo unit.")}</th>
                 <th>Estado</th>
                 <th />
               </tr>
@@ -150,8 +150,8 @@ export function InventoryCategoryPage() {
                   </td>
                   <td>{item.unit}</td>
                   <td className="text-right">{formatMinStock(item.minStock)}</td>
-                  <td className="text-right">{formatCost(item.costPerUnit)}</td>
                   <td className="text-right">{formatCost(item.costPerUnitUsd)}</td>
+                  <td className="text-right">{formatCost(item.costPerUnit)}</td>
                   <td>
                     {demand ? (
                       <span className="badge badge-sm badge-warning">Pedido en espera</span>

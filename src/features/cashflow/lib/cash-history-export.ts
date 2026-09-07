@@ -138,18 +138,18 @@ export function buildCashHistoryExportSections(
         ["Método", methodFilterLabel(filters.paymentMethod)],
         ["Concepto", conceptLabel],
         ["Registros", rows.length],
-        ["Ingresos CUP", totals.incomeCup],
         ["Ingresos USD", totals.incomeUsd],
-        ["Egresos CUP", totals.expenseCup],
+        ["Ingresos CUP", totals.incomeCup],
         ["Egresos USD", totals.expenseUsd],
-        ["Neto CUP", totals.netCup],
+        ["Egresos CUP", totals.expenseCup],
         ["Neto USD", totals.netUsd],
+        ["Neto CUP", totals.netCup],
       ],
     },
     {
       name: "HISTORIAL_CAJA",
       aoa: [
-        ["Fecha", "Tipo", "Concepto", "Referencia", "Método", "CUP", "USD", "Tasa"],
+        ["Fecha", "Tipo", "Concepto", "Referencia", "Método", "USD", "CUP", "Tasa"],
         ...rows.map((tx) => {
           const isIncome = tx.transactionType === "ingreso";
           const reference = cashTransactionReferenceLabel(tx.referenceType, tx.referenceId);
@@ -163,8 +163,8 @@ export function buildCashHistoryExportSections(
             tx.paymentMethod
               ? tx.paymentMethod.charAt(0).toUpperCase() + tx.paymentMethod.slice(1)
               : "",
-            signedCashAmount(tx.amountCup, isIncome),
             signedCashAmount(tx.amountUsd, isIncome),
+            signedCashAmount(tx.amountCup, isIncome),
             rate,
           ];
         }),
@@ -174,8 +174,8 @@ export function buildCashHistoryExportSections(
           "",
           "",
           "",
-          totals.netCup,
           totals.netUsd,
+          totals.netCup,
           "",
         ],
       ],

@@ -26,8 +26,8 @@ export function CashScopeKpis(props: CashScopeKpisProps) {
         <thead>
           <tr>
             <th />
-            <th className="text-right">CUP</th>
             <th className="text-right">USD</th>
+            <th className="text-right">CUP</th>
           </tr>
         </thead>
         <tbody>
@@ -42,28 +42,28 @@ export function CashScopeKpis(props: CashScopeKpisProps) {
                 <span className="ml-2 badge badge-success badge-xs">Registrado</span>
               )}
             </td>
-            <td className="text-right tabular-nums">{formatAmount(cup.openingTotal)}</td>
             <td className="text-right tabular-nums">{formatAmount(usd.openingTotal)}</td>
+            <td className="text-right tabular-nums">{formatAmount(cup.openingTotal)}</td>
           </tr>
           <tr>
             <td className="text-base-content/70">Entradas</td>
-            <td className="text-right tabular-nums text-success">{formatAmount(cup.inTotal)}</td>
             <td className="text-right tabular-nums text-success">{formatAmount(usd.inTotal)}</td>
+            <td className="text-right tabular-nums text-success">{formatAmount(cup.inTotal)}</td>
           </tr>
           <tr>
             <td className="text-base-content/70">Salidas</td>
-            <td className="text-right tabular-nums">{formatAmount(cup.outTotal)}</td>
             <td className="text-right tabular-nums">{formatAmount(usd.outTotal)}</td>
+            <td className="text-right tabular-nums">{formatAmount(cup.outTotal)}</td>
           </tr>
         </tbody>
         <tfoot>
           <tr className="bg-warning/20">
             <td className="font-semibold">{estimadoLabel}</td>
             <td className="text-right text-lg font-semibold tabular-nums">
-              {formatAmount(cup.estimatedTotal)}
+              {formatAmount(usd.estimatedTotal)}
             </td>
             <td className="text-right text-lg font-semibold tabular-nums">
-              {formatAmount(usd.estimatedTotal)}
+              {formatAmount(cup.estimatedTotal)}
             </td>
           </tr>
         </tfoot>

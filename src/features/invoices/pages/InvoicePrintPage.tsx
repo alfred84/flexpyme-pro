@@ -213,21 +213,15 @@ export function InvoicePrintPage() {
               </h2>
               <dl className="space-y-1.5 text-sm">
                 <div className="flex justify-between gap-4">
-                  <dt>{moneyHeading("Total", "CUP")}</dt>
-                  <dd className="tabular-nums">
-                    {formatInvoiceAmountOrDash(dual.dueCup, formatAmount)}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-4">
                   <dt>{moneyHeading("Total", "USD")}</dt>
                   <dd className="tabular-nums">
                     {formatInvoiceAmountOrDash(dual.dueUsd, formatAmount)}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt>{moneyHeading("Pagado", "CUP")}</dt>
+                  <dt>{moneyHeading("Total", "CUP")}</dt>
                   <dd className="tabular-nums">
-                    {formatInvoiceAmountOrDash(dual.paidCup, formatAmount)}
+                    {formatInvoiceAmountOrDash(dual.dueCup, formatAmount)}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4">
@@ -236,16 +230,22 @@ export function InvoicePrintPage() {
                     {formatInvoiceAmountOrDash(dual.paidUsd, formatAmount)}
                   </dd>
                 </div>
-                <div className="flex justify-between gap-4 border-t border-base-300 pt-2 font-semibold print:border-gray-300">
-                  <dt>{moneyHeading("Pendiente", "CUP")}</dt>
+                <div className="flex justify-between gap-4">
+                  <dt>{moneyHeading("Pagado", "CUP")}</dt>
                   <dd className="tabular-nums">
-                    {formatInvoiceAmountOrDash(dual.balanceCup, formatAmount)}
+                    {formatInvoiceAmountOrDash(dual.paidCup, formatAmount)}
                   </dd>
                 </div>
-                <div className="flex justify-between gap-4 font-semibold">
+                <div className="flex justify-between gap-4 border-t border-base-300 pt-2 font-semibold print:border-gray-300">
                   <dt>{moneyHeading("Pendiente", "USD")}</dt>
                   <dd className="tabular-nums">
                     {formatInvoiceAmountOrDash(dual.balanceUsd, formatAmount)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4 font-semibold">
+                  <dt>{moneyHeading("Pendiente", "CUP")}</dt>
+                  <dd className="tabular-nums">
+                    {formatInvoiceAmountOrDash(dual.balanceCup, formatAmount)}
                   </dd>
                 </div>
               </dl>

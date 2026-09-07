@@ -112,18 +112,6 @@ export function CashOpeningModal(props: CashOpeningModalProps) {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="rounded-lg border border-base-300 p-3">
                 <DenominationGrid
-                  currency="CUP"
-                  counts={cupCounts}
-                  onChange={setCupCounts}
-                  label={moneyHeading("Conteo", "CUP")}
-                  hideTotal
-                />
-                <p className="mt-2 text-right text-sm font-semibold">
-                  Total CUP: {formatAmount(cupTotal)}
-                </p>
-              </div>
-              <div className="rounded-lg border border-base-300 p-3">
-                <DenominationGrid
                   currency="USD"
                   counts={usdCounts}
                   onChange={setUsdCounts}
@@ -132,6 +120,18 @@ export function CashOpeningModal(props: CashOpeningModalProps) {
                 />
                 <p className="mt-2 text-right text-sm font-semibold">
                   Total USD: {formatAmount(usdTotal)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-base-300 p-3">
+                <DenominationGrid
+                  currency="CUP"
+                  counts={cupCounts}
+                  onChange={setCupCounts}
+                  label={moneyHeading("Conteo", "CUP")}
+                  hideTotal
+                />
+                <p className="mt-2 text-right text-sm font-semibold">
+                  Total CUP: {formatAmount(cupTotal)}
                 </p>
               </div>
             </div>

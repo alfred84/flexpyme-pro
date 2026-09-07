@@ -36,7 +36,7 @@ interface DualKpiPanelProps {
 }
 
 /**
- * Panel KPI de Facturas con CUP a la izquierda y USD a la derecha (montos reales).
+ * Panel KPI de Facturas con USD a la izquierda y CUP a la derecha (montos reales).
  *
  * @param props - Título, importes y conteo.
  * @returns Bloque compacto dual.
@@ -51,15 +51,15 @@ function DualKpiPanel(props: DualKpiPanelProps) {
       ) : (
         <div className="mt-1 flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs text-base-content/50">{moneyHeading("Importe", "CUP")}</p>
-            <p className={`text-xl font-semibold tabular-nums ${valueClassName}`}>
-              {formatAmount(amountCup)}
-            </p>
-          </div>
-          <div className="text-right">
             <p className="text-xs text-base-content/50">{moneyHeading("Importe", "USD")}</p>
             <p className={`text-xl font-semibold tabular-nums ${valueClassName}`}>
               {formatAmount(amountUsd)}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-base-content/50">{moneyHeading("Importe", "CUP")}</p>
+            <p className={`text-xl font-semibold tabular-nums ${valueClassName}`}>
+              {formatAmount(amountCup)}
             </p>
           </div>
         </div>

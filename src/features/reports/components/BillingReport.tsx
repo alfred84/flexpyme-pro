@@ -34,12 +34,12 @@ export function BillingReport(props: OperationalReportViewProps) {
       {
         name: "FACTURACION",
         aoa: [
-          ["Métrica", "CUP", "USD"],
+          ["Métrica", "USD", "CUP"],
           ["Periodo", periodLabel, ""],
           ["Facturas", s.invoicesCount, ""],
-          ["Facturado", s.totalBilledCup, s.totalBilledUsd],
-          ["Cobrado (estimado físico)", paidCup, paidUsd],
-          ["Pendiente", s.totalPendingCup, s.totalPendingUsd],
+          ["Facturado", s.totalBilledUsd, s.totalBilledCup],
+          ["Cobrado (estimado físico)", paidUsd, paidCup],
+          ["Pendiente", s.totalPendingUsd, s.totalPendingCup],
           ["Tasa de cobro", s.collectionRate, ""],
           ["Pagadas / parciales / pendientes", `${s.invoicesPaidCount} / ${s.invoicesPartialCount} / ${s.invoicesPendingCount}`, ""],
         ],

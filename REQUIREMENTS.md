@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.45 | Última actualización: 2026-09-07
+### Versión: 2.46 | Última actualización: 2026-09-07
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -46,8 +46,8 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 ## 3. Módulos del Sistema
 
 ### 3.1 Inicio
-- KPIs: facturación del mes en CUP y USD (montos físicos de cobro, sin conversión), pedidos pendientes, cobros pendientes en CUP y USD
-- Gráfico de ingresos por categoría del **mes actual**, con barras CUP y USD (ejes independientes)
+- KPIs: facturación del mes en USD y CUP (montos físicos de cobro, sin conversión; **USD a la izquierda**), pedidos pendientes, cobros pendientes en USD y CUP
+- Gráfico de ingresos por categoría del **mes actual**, con barras USD y CUP (ejes independientes; USD izquierda, CUP derecha)
 - Lista de pedidos recientes con estado
 - Accesos rápidos a las acciones más frecuentes
 
@@ -131,11 +131,11 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Denominaciones CUP disponibles: 1, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000
 - Denominaciones USD disponibles: 100, 50, 20, 10, 5, 2, 1
 - Cajeros físicos independientes: `amount_cup` y `amount_usd` en `cash_transactions` son flujo real de cada moneda (no se escribe el equivalente convertido en la otra). La tasa se guarda por operación solo para auditoría
-- Balance actual de caja (CUP y USD por separado); ingresos/egresos/neto también duales
+- Balance actual de caja (USD y CUP por separado; **USD a la izquierda**); ingresos/egresos/neto también duales
 - Módulo de cobro de facturas: ingresa billetes → exceso como **vuelto** (desglose; neto caja = recibido − vuelto) o como **saldo a favor** del cliente (ingreso completo en caja)
 - **Anticipo de pedido**: CUP o USD, efectivo (con denominaciones) o transferencia; se registra como ingreso en caja
-- **KPIs**: flujo neto del día y del mes actual en CUP y USD (más serie diaria dual del mes)
-- Historial de movimientos con filtros por fecha, tipo, concepto, moneda (CUP/USD/Mixto) y método; columnas CUP, USD y tasa. **Excel y PDF** del listado filtrado (metadatos + filas; CUP/USD firmados)
+- **KPIs**: flujo neto del día y del mes actual en USD y CUP (más serie diaria dual del mes; USD izquierda)
+- Historial de movimientos con filtros por fecha, tipo, concepto, moneda (CUP/USD/Mixto) y método; columnas USD, CUP y tasa. **Excel y PDF** del listado filtrado (metadatos + filas; USD/CUP firmados)
 - Resumen diario/mensual por moneda
 - Movimientos manuales y Otros gastos en USD afectan solo el cajón USD (`amount_cup = 0`)
 - **Venta de material**: ingreso vinculado (`reference_type = venta_material`); mismos cajones físicos que el resto de caja
@@ -541,6 +541,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.45 — Salario fijo diario: habilitar por día trabajado (2026-09)
 - Empleados con salario fijo diario: el importe no se genera solo cada día. Desde el listado, **Habilitar** elige el día laborable (igual que el fijo mensual) y entonces entra a la nómina. Varios días por mes; un cobro por día habilitado.
+
+### v2.46 — Orden de monedas en UI dual (2026-09)
+- En paneles, gráficos y tablas duales, **USD a la izquierda** (principal) y **CUP a la derecha**. Nómina y tarifas de pago siguen solo en CUP.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

@@ -146,15 +146,15 @@ export function FacturaDetailPage() {
                   <p className="text-xs uppercase text-base-content/60">Total facturado</p>
                   <div className="mt-1 flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-xs text-base-content/50">{moneyHeading("Total", "CUP")}</p>
-                      <p className="text-lg font-semibold tabular-nums">
-                        {formatInvoiceAmountOrDash(dual.dueCup, formatAmount)}
-                      </p>
-                    </div>
-                    <div className="text-right">
                       <p className="text-xs text-base-content/50">{moneyHeading("Total", "USD")}</p>
                       <p className="text-lg font-semibold tabular-nums">
                         {formatInvoiceAmountOrDash(dual.dueUsd, formatAmount)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-base-content/50">{moneyHeading("Total", "CUP")}</p>
+                      <p className="text-lg font-semibold tabular-nums">
+                        {formatInvoiceAmountOrDash(dual.dueCup, formatAmount)}
                       </p>
                     </div>
                   </div>
@@ -163,15 +163,15 @@ export function FacturaDetailPage() {
                   <p className="text-xs uppercase text-base-content/60">Pagado</p>
                   <div className="mt-1 flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-xs text-base-content/50">{moneyHeading("Pagado", "CUP")}</p>
-                      <p className="text-lg font-semibold tabular-nums text-success">
-                        {formatInvoiceAmountOrDash(dual.paidCup, formatAmount)}
-                      </p>
-                    </div>
-                    <div className="text-right">
                       <p className="text-xs text-base-content/50">{moneyHeading("Pagado", "USD")}</p>
                       <p className="text-lg font-semibold tabular-nums text-success">
                         {formatInvoiceAmountOrDash(dual.paidUsd, formatAmount)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-base-content/50">{moneyHeading("Pagado", "CUP")}</p>
+                      <p className="text-lg font-semibold tabular-nums text-success">
+                        {formatInvoiceAmountOrDash(dual.paidCup, formatAmount)}
                       </p>
                     </div>
                   </div>
@@ -180,15 +180,15 @@ export function FacturaDetailPage() {
                   <p className="text-xs uppercase text-base-content/60">Saldo</p>
                   <div className="mt-1 flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-xs text-base-content/50">{moneyHeading("Saldo", "CUP")}</p>
-                      <p className="text-lg font-semibold tabular-nums text-warning">
-                        {formatInvoiceAmountOrDash(dual.balanceCup, formatAmount)}
-                      </p>
-                    </div>
-                    <div className="text-right">
                       <p className="text-xs text-base-content/50">{moneyHeading("Saldo", "USD")}</p>
                       <p className="text-lg font-semibold tabular-nums text-warning">
                         {formatInvoiceAmountOrDash(dual.balanceUsd, formatAmount)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-base-content/50">{moneyHeading("Saldo", "CUP")}</p>
+                      <p className="text-lg font-semibold tabular-nums text-warning">
+                        {formatInvoiceAmountOrDash(dual.balanceCup, formatAmount)}
                       </p>
                     </div>
                   </div>
@@ -264,8 +264,8 @@ export function FacturaDetailPage() {
                         <th>Fecha</th>
                         <th>Concepto</th>
                         <th>Método</th>
-                        <th className="text-right">{moneyHeading("Importe", "CUP")}</th>
                         <th className="text-right">{moneyHeading("Importe", "USD")}</th>
+                        <th className="text-right">{moneyHeading("Importe", "CUP")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -275,13 +275,13 @@ export function FacturaDetailPage() {
                           <td>{p.concept}</td>
                           <td className="capitalize">{p.paymentMethod}</td>
                           <td className="text-right tabular-nums text-success">
-                            {hasInvoiceAmount(p.amountCup)
-                              ? `+${formatAmount(p.amountCup)}`
+                            {hasInvoiceAmount(p.amountUsd)
+                              ? `+${formatAmount(p.amountUsd)}`
                               : "—"}
                           </td>
                           <td className="text-right tabular-nums text-success">
-                            {hasInvoiceAmount(p.amountUsd)
-                              ? `+${formatAmount(p.amountUsd)}`
+                            {hasInvoiceAmount(p.amountCup)
+                              ? `+${formatAmount(p.amountCup)}`
                               : "—"}
                           </td>
                         </tr>

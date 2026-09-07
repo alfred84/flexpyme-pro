@@ -117,24 +117,24 @@ function buildExpenseExportSections(
         ["Campo", "Valor"],
         ["Periodo", periodLabel],
         ["Registros", rows.length],
-        ["Total CUP", totals.cup],
         ["Total USD", totals.usd],
+        ["Total CUP", totals.cup],
       ],
     },
     {
       name: "OTROS_GASTOS",
       aoa: [
-        ["Fecha", "Concepto", "Tipo", "Empleado", "CUP", "USD", "Método"],
+        ["Fecha", "Concepto", "Tipo", "Empleado", "USD", "CUP", "Método"],
         ...rows.map((row) => [
           formatDate(row.date),
           row.concept,
           row.expenseType,
           row.employeeName ?? "",
-          row.amountCup,
           row.amountUsd,
+          row.amountCup,
           row.paymentMethod,
         ]),
-        ["TOTAL", "", "", "", totals.cup, totals.usd, ""],
+        ["TOTAL", "", "", "", totals.usd, totals.cup, ""],
       ],
     },
   ];
@@ -277,15 +277,15 @@ export function OtherExpensesPage() {
             <p className="text-xs uppercase text-base-content/60">Gasto de hoy</p>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs text-base-content/50">{moneyHeading("Gasto", "CUP")}</p>
-                <p className="text-xl font-semibold tabular-nums text-error">
-                  {formatAmount(summary?.todayCup ?? 0)}
-                </p>
-              </div>
-              <div className="text-right">
                 <p className="text-xs text-base-content/50">{moneyHeading("Gasto", "USD")}</p>
                 <p className="text-xl font-semibold tabular-nums text-error">
                   {formatAmount(summary?.todayUsd ?? 0)}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-base-content/50">{moneyHeading("Gasto", "CUP")}</p>
+                <p className="text-xl font-semibold tabular-nums text-error">
+                  {formatAmount(summary?.todayCup ?? 0)}
                 </p>
               </div>
             </div>
@@ -296,15 +296,15 @@ export function OtherExpensesPage() {
             <p className="text-xs uppercase text-base-content/60">Gasto del mes</p>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs text-base-content/50">{moneyHeading("Gasto", "CUP")}</p>
-                <p className="text-xl font-semibold tabular-nums text-error">
-                  {formatAmount(summary?.monthCup ?? 0)}
-                </p>
-              </div>
-              <div className="text-right">
                 <p className="text-xs text-base-content/50">{moneyHeading("Gasto", "USD")}</p>
                 <p className="text-xl font-semibold tabular-nums text-error">
                   {formatAmount(summary?.monthUsd ?? 0)}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-base-content/50">{moneyHeading("Gasto", "CUP")}</p>
+                <p className="text-xl font-semibold tabular-nums text-error">
+                  {formatAmount(summary?.monthCup ?? 0)}
                 </p>
               </div>
             </div>
@@ -315,15 +315,15 @@ export function OtherExpensesPage() {
             <p className="text-xs uppercase text-base-content/60">{periodTotalLabel(period)}</p>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs text-base-content/50">{moneyHeading("Total", "CUP")}</p>
-                <p className="text-xl font-semibold tabular-nums">
-                  {formatAmount(periodTotals.cup)}
-                </p>
-              </div>
-              <div className="text-right">
                 <p className="text-xs text-base-content/50">{moneyHeading("Total", "USD")}</p>
                 <p className="text-xl font-semibold tabular-nums">
                   {formatAmount(periodTotals.usd)}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-base-content/50">{moneyHeading("Total", "CUP")}</p>
+                <p className="text-xl font-semibold tabular-nums">
+                  {formatAmount(periodTotals.cup)}
                 </p>
               </div>
             </div>
@@ -390,8 +390,8 @@ export function OtherExpensesPage() {
               <th>Tipo</th>
               <th>Empleado</th>
               <th>Método</th>
-              <th className="text-right">{moneyHeading("Importe", "CUP")}</th>
               <th className="text-right">{moneyHeading("Importe", "USD")}</th>
+              <th className="text-right">{moneyHeading("Importe", "CUP")}</th>
               <th className="text-right">Acciones</th>
             </tr>
           </thead>
@@ -412,10 +412,10 @@ export function OtherExpensesPage() {
                 <td>{exp.employeeName ?? "—"}</td>
                 <td className="capitalize">{exp.paymentMethod}</td>
                 <td className="text-right tabular-nums">
-                  {exp.amountCup > 0.001 ? formatAmount(exp.amountCup) : "—"}
+                  {exp.amountUsd > 0.001 ? formatAmount(exp.amountUsd) : "—"}
                 </td>
                 <td className="text-right tabular-nums">
-                  {exp.amountUsd > 0.001 ? formatAmount(exp.amountUsd) : "—"}
+                  {exp.amountCup > 0.001 ? formatAmount(exp.amountCup) : "—"}
                 </td>
                 <td className="text-right">
                   <div className="flex justify-end gap-1">

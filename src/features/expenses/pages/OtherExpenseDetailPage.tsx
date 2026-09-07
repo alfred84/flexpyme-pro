@@ -123,18 +123,18 @@ export function OtherExpenseDetailPage() {
               </div>
               <div>
                 <dt className="text-xs uppercase text-base-content/60">
-                  {moneyHeading("Importe", "CUP")}
-                </dt>
-                <dd className="font-mono font-semibold text-error">
-                  {expense.amountCup > 0.001 ? formatAmount(expense.amountCup) : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase text-base-content/60">
                   {moneyHeading("Importe", "USD")}
                 </dt>
                 <dd className="font-mono font-semibold text-error">
                   {expense.amountUsd > 0.001 ? formatAmount(expense.amountUsd) : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase text-base-content/60">
+                  {moneyHeading("Importe", "CUP")}
+                </dt>
+                <dd className="font-mono font-semibold text-error">
+                  {expense.amountCup > 0.001 ? formatAmount(expense.amountCup) : "—"}
                 </dd>
               </div>
               <div>

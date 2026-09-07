@@ -23,17 +23,17 @@ export function formatInventoryItemName(
  * (CUP y/o USD independientes) para distinguir ítems con el mismo nombre.
  *
  * @param item - Ítem de inventario.
- * @returns Texto para `<option>` / listas, p. ej. `Vinilo · 5x7 (12 m · $ 50,00 CUP · $ 1,20 USD)`.
+ * @returns Texto para `<option>` / listas, p. ej. `Vinilo · 5x7 (12 m · $ 1,20 USD · $ 50,00 CUP)`.
  */
 export function formatInventoryMaterialOptionLabel(item: InventoryItemDto): string {
   const namePart = formatInventoryItemName(item);
   const stockPart = `${item.quantity} ${item.unit}`;
   const costParts: string[] = [];
-  if (item.costPerUnit > 0) {
-    costParts.push(formatMoney(item.costPerUnit, "CUP"));
-  }
   if (item.costPerUnitUsd > 0) {
     costParts.push(formatMoney(item.costPerUnitUsd, "USD"));
+  }
+  if (item.costPerUnit > 0) {
+    costParts.push(formatMoney(item.costPerUnit, "CUP"));
   }
   if (costParts.length === 0) {
     return `${namePart} (${stockPart})`;

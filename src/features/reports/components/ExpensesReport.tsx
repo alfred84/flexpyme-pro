@@ -65,17 +65,17 @@ export function ExpensesReport(props: OperationalReportViewProps) {
         name: "OTROS_GASTOS",
         aoa: [
           ["Periodo", periodLabel],
-          ["Fecha", "Concepto", "Tipo", "Empleado", "CUP", "USD", "Método"],
+          ["Fecha", "Concepto", "Tipo", "Empleado", "USD", "CUP", "Método"],
           ...rows.map((row) => [
             row.date,
             row.concept,
             row.expenseType,
             row.employeeName ?? "",
-            row.amountCup,
             row.amountUsd,
+            row.amountCup,
             row.paymentMethod,
           ]),
-          ["TOTAL", "", "", "", totals.cup, totals.usd, ""],
+          ["TOTAL", "", "", "", totals.usd, totals.cup, ""],
         ],
       },
     ];
@@ -115,8 +115,8 @@ export function ExpensesReport(props: OperationalReportViewProps) {
                 <th>Fecha</th>
                 <th>Concepto</th>
                 <th>Tipo</th>
-                <th className="text-right">{moneyHeading("Importe", "CUP")}</th>
                 <th className="text-right">{moneyHeading("Importe", "USD")}</th>
+                <th className="text-right">{moneyHeading("Importe", "CUP")}</th>
               </tr>
             </thead>
             <tbody>
@@ -125,8 +125,8 @@ export function ExpensesReport(props: OperationalReportViewProps) {
                   <td>{formatDate(row.date)}</td>
                   <td className="max-w-[14rem] truncate">{row.concept}</td>
                   <td>{row.expenseType}</td>
-                  <td className="text-right tabular-nums">{formatAmount(row.amountCup)}</td>
                   <td className="text-right tabular-nums">{formatAmount(row.amountUsd)}</td>
+                  <td className="text-right tabular-nums">{formatAmount(row.amountCup)}</td>
                 </tr>
               ))}
             </tbody>

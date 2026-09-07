@@ -79,15 +79,15 @@ export function CashflowPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="rounded-lg border border-base-300 bg-base-100 p-4">
-          <p className="text-xs uppercase text-base-content/60">{moneyHeading("En caja", "CUP")}</p>
-          <p className="text-3xl font-semibold tabular-nums">
-            {formatAmount(balance?.balanceCup ?? 0)}
-          </p>
-        </div>
-        <div className="rounded-lg border border-base-300 bg-base-100 p-4">
           <p className="text-xs uppercase text-base-content/60">{moneyHeading("En caja", "USD")}</p>
           <p className="text-3xl font-semibold tabular-nums">
             {formatAmount(balance?.balanceUsd ?? 0)}
+          </p>
+        </div>
+        <div className="rounded-lg border border-base-300 bg-base-100 p-4">
+          <p className="text-xs uppercase text-base-content/60">{moneyHeading("En caja", "CUP")}</p>
+          <p className="text-3xl font-semibold tabular-nums">
+            {formatAmount(balance?.balanceCup ?? 0)}
           </p>
         </div>
       </div>
@@ -97,12 +97,12 @@ export function CashflowPage() {
           <p className="mb-2 text-xs uppercase text-base-content/60">Flujo neto (hoy)</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs text-base-content/50">{moneyHeading("Neto", "CUP")}</p>
-              <p className={`text-xl ${netTodayCup.className}`}>{netTodayCup.text}</p>
-            </div>
-            <div>
               <p className="text-xs text-base-content/50">{moneyHeading("Neto", "USD")}</p>
               <p className={`text-xl ${netTodayUsd.className}`}>{netTodayUsd.text}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-base-content/50">{moneyHeading("Neto", "CUP")}</p>
+              <p className={`text-xl ${netTodayCup.className}`}>{netTodayCup.text}</p>
             </div>
           </div>
         </div>
@@ -110,12 +110,12 @@ export function CashflowPage() {
           <p className="mb-2 text-xs uppercase text-base-content/60">Flujo neto (mes actual)</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs text-base-content/50">{moneyHeading("Neto", "CUP")}</p>
-              <p className={`text-xl ${netMonthCup.className}`}>{netMonthCup.text}</p>
-            </div>
-            <div>
               <p className="text-xs text-base-content/50">{moneyHeading("Neto", "USD")}</p>
               <p className={`text-xl ${netMonthUsd.className}`}>{netMonthUsd.text}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-base-content/50">{moneyHeading("Neto", "CUP")}</p>
+              <p className={`text-xl ${netMonthCup.className}`}>{netMonthCup.text}</p>
             </div>
           </div>
         </div>
@@ -129,15 +129,15 @@ export function CashflowPage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs text-base-content/50">{moneyHeading("Ingresos", "CUP")}</p>
-              <p className="text-lg font-semibold tabular-nums text-success">
-                {formatAmount(balance?.totalIncomeCup ?? 0)}
-              </p>
-            </div>
-            <div>
               <p className="text-xs text-base-content/50">{moneyHeading("Ingresos", "USD")}</p>
               <p className="text-lg font-semibold tabular-nums text-success">
                 {formatAmount(balance?.totalIncomeUsd ?? 0)}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-base-content/50">{moneyHeading("Ingresos", "CUP")}</p>
+              <p className="text-lg font-semibold tabular-nums text-success">
+                {formatAmount(balance?.totalIncomeCup ?? 0)}
               </p>
             </div>
           </div>
@@ -149,15 +149,15 @@ export function CashflowPage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs text-base-content/50">{moneyHeading("Egresos", "CUP")}</p>
-              <p className="text-lg font-semibold tabular-nums text-error">
-                {formatAmount(balance?.totalExpenseCup ?? 0)}
-              </p>
-            </div>
-            <div>
               <p className="text-xs text-base-content/50">{moneyHeading("Egresos", "USD")}</p>
               <p className="text-lg font-semibold tabular-nums text-error">
                 {formatAmount(balance?.totalExpenseUsd ?? 0)}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-base-content/50">{moneyHeading("Egresos", "CUP")}</p>
+              <p className="text-lg font-semibold tabular-nums text-error">
+                {formatAmount(balance?.totalExpenseCup ?? 0)}
               </p>
             </div>
           </div>
@@ -179,40 +179,40 @@ export function CashflowPage() {
                 <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                 <YAxis
-                  yAxisId="cup"
-                  tick={{ fontSize: 11 }}
-                  width={64}
-                  label={{ value: "CUP", angle: -90, position: "insideLeft", fontSize: 10 }}
-                />
-                <YAxis
                   yAxisId="usd"
-                  orientation="right"
                   tick={{ fontSize: 11 }}
                   width={48}
-                  label={{ value: "USD", angle: 90, position: "insideRight", fontSize: 10 }}
+                  label={{ value: "USD", angle: -90, position: "insideLeft", fontSize: 10 }}
+                />
+                <YAxis
+                  yAxisId="cup"
+                  orientation="right"
+                  tick={{ fontSize: 11 }}
+                  width={64}
+                  label={{ value: "CUP", angle: 90, position: "insideRight", fontSize: 10 }}
                 />
                 <Tooltip
                   formatter={(value, name) => [
                     formatAmount(Number(value)),
-                    name === "netCup" ? "Neto CUP" : "Neto USD",
+                    name === "netUsd" ? "Neto USD" : "Neto CUP",
                   ]}
                 />
                 <Legend
-                  formatter={(value) => (value === "netCup" ? "Neto CUP" : "Neto USD")}
-                />
-                <Line
-                  yAxisId="cup"
-                  type="monotone"
-                  dataKey="netCup"
-                  stroke="#0d9488"
-                  strokeWidth={2}
-                  dot={false}
+                  formatter={(value) => (value === "netUsd" ? "Neto USD" : "Neto CUP")}
                 />
                 <Line
                   yAxisId="usd"
                   type="monotone"
                   dataKey="netUsd"
                   stroke="#2563eb"
+                  strokeWidth={2}
+                  dot={false}
+                />
+                <Line
+                  yAxisId="cup"
+                  type="monotone"
+                  dataKey="netCup"
+                  stroke="#0d9488"
                   strokeWidth={2}
                   dot={false}
                 />
@@ -237,8 +237,8 @@ export function CashflowPage() {
                 <th>Concepto</th>
                 <th>Referencia</th>
                 <th>Método</th>
-                <th className="text-right">{moneyHeading("Importe", "CUP")}</th>
                 <th className="text-right">{moneyHeading("Importe", "USD")}</th>
+                <th className="text-right">{moneyHeading("Importe", "CUP")}</th>
                 <th className="text-right">Tasa</th>
               </tr>
             </thead>
@@ -256,11 +256,11 @@ export function CashflowPage() {
                       />
                     </td>
                     <td className="capitalize">{tx.paymentMethod}</td>
-                    <td className={`text-right ${cashAmountClassName(tx.amountCup, isIncome)}`}>
-                      {formatSignedCashAmount(tx.amountCup, isIncome)}
-                    </td>
                     <td className={`text-right ${cashAmountClassName(tx.amountUsd, isIncome)}`}>
                       {formatSignedCashAmount(tx.amountUsd, isIncome)}
+                    </td>
+                    <td className={`text-right ${cashAmountClassName(tx.amountCup, isIncome)}`}>
+                      {formatSignedCashAmount(tx.amountCup, isIncome)}
                     </td>
                     <td className="text-right tabular-nums text-base-content/70">
                       {hasCashAmount(tx.amountUsd) && hasCashAmount(tx.exchangeRate)

@@ -36,7 +36,7 @@ interface DualCashKpiPanelProps {
 }
 
 /**
- * Panel compacto de caja: CUP a la izquierda y USD a la derecha.
+ * Panel compacto de caja: USD a la izquierda y CUP a la derecha.
  *
  * @param props - Título e importes físicos.
  * @returns Bloque KPI dual.
@@ -50,18 +50,6 @@ function DualCashKpiPanel(props: DualCashKpiPanelProps) {
       <p className="text-xs uppercase text-base-content/60">{title}</p>
       <div className="mt-1 flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs text-base-content/50">{moneyHeading(title, "CUP")}</p>
-          <p
-            className={
-              cupNet
-                ? `text-xl ${cupNet.className}`
-                : `text-xl font-semibold tabular-nums ${valueClassName}`
-            }
-          >
-            {cupNet ? cupNet.text : formatAmount(amountCup)}
-          </p>
-        </div>
-        <div className="text-right">
           <p className="text-xs text-base-content/50">{moneyHeading(title, "USD")}</p>
           <p
             className={
@@ -71,6 +59,18 @@ function DualCashKpiPanel(props: DualCashKpiPanelProps) {
             }
           >
             {usdNet ? usdNet.text : formatAmount(amountUsd)}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-base-content/50">{moneyHeading(title, "CUP")}</p>
+          <p
+            className={
+              cupNet
+                ? `text-xl ${cupNet.className}`
+                : `text-xl font-semibold tabular-nums ${valueClassName}`
+            }
+          >
+            {cupNet ? cupNet.text : formatAmount(amountCup)}
           </p>
         </div>
       </div>
@@ -359,8 +359,8 @@ export function CashflowHistoryPage() {
               <th>Concepto</th>
               <th>Referencia</th>
               <th>Método</th>
-              <th className="text-right">{moneyHeading("Importe", "CUP")}</th>
               <th className="text-right">{moneyHeading("Importe", "USD")}</th>
+              <th className="text-right">{moneyHeading("Importe", "CUP")}</th>
               <th className="text-right">Tasa</th>
             </tr>
           </thead>
@@ -378,11 +378,11 @@ export function CashflowHistoryPage() {
                     />
                   </td>
                   <td className="capitalize">{tx.paymentMethod}</td>
-                  <td className={`text-right ${cashAmountClassName(tx.amountCup, isIncome)}`}>
-                    {formatSignedCashAmount(tx.amountCup, isIncome)}
-                  </td>
                   <td className={`text-right ${cashAmountClassName(tx.amountUsd, isIncome)}`}>
                     {formatSignedCashAmount(tx.amountUsd, isIncome)}
+                  </td>
+                  <td className={`text-right ${cashAmountClassName(tx.amountCup, isIncome)}`}>
+                    {formatSignedCashAmount(tx.amountCup, isIncome)}
                   </td>
                   <td className="text-right tabular-nums text-base-content/70">
                     {hasCashAmount(tx.amountUsd) && hasCashAmount(tx.exchangeRate)

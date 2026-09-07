@@ -25,6 +25,7 @@ import { fetchInvoices } from "@/db/queries/invoices";
 import { fetchBackupOverview } from "@/db/queries/settings";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { cupToUsd } from "@/lib/currency";
+import { DualPhysicalAmounts } from "@/components/common/DualPhysicalAmounts";
 import { formatDate, formatDateTime, todayIso } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
@@ -70,35 +71,6 @@ function KpiCard(props: {
   );
 }
 
-/**
- * Importes físicos CUP y USD (sin conversión), mismo patrón que Caja y Facturas.
- *
- * @param props - Montos por moneda y clase opcional del valor.
- * @returns Bloque dual CUP | USD.
- */
-function DualPhysicalAmounts(props: {
-  amountCup: number;
-  amountUsd: number;
-  valueClassName?: string;
-}) {
-  const { amountCup, amountUsd, valueClassName = "" } = props;
-  return (
-    <div className="mt-0.5 grid grid-cols-2 gap-3">
-      <div>
-        <p className="text-[10px] font-normal uppercase tracking-wide text-base-content/50">
-          {moneyHeading("Importe", "CUP")}
-        </p>
-        <p className={`text-lg tabular-nums ${valueClassName}`}>{formatAmount(amountCup)}</p>
-      </div>
-      <div>
-        <p className="text-[10px] font-normal uppercase tracking-wide text-base-content/50">
-          {moneyHeading("Importe", "USD")}
-        </p>
-        <p className={`text-lg tabular-nums ${valueClassName}`}>{formatAmount(amountUsd)}</p>
-      </div>
-    </div>
-  );
-}
 
 /**
  * Pantalla de Inicio: KPIs del mes, ingresos por categoría, pedidos recientes y alertas.
@@ -168,6 +140,7 @@ export function DashboardPage() {
           label="Facturación del mes"
           value={
             <DualPhysicalAmounts
+              className="mt-0.5"
               amountCup={summary?.totalBilledCup ?? 0}
               amountUsd={summary?.totalBilledUsd ?? 0}
             />
@@ -185,6 +158,7 @@ export function DashboardPage() {
           label="Cobros pendientes"
           value={
             <DualPhysicalAmounts
+              className="mt-0.5"
               amountCup={summary?.totalPendingCup ?? 0}
               amountUsd={summary?.totalPendingUsd ?? 0}
               valueClassName="text-error"
@@ -215,39 +189,39 @@ export function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
                   <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                   <YAxis
-                    yAxisId="cup"
-                    tick={{ fontSize: 11 }}
-                    width={72}
-                    tickFormatter={(value: number) => formatAmount(Number(value))}
-                    label={{ value: "CUP", angle: -90, position: "insideLeft", fontSize: 10 }}
-                  />
-                  <YAxis
                     yAxisId="usd"
-                    orientation="right"
                     tick={{ fontSize: 11 }}
                     width={56}
                     tickFormatter={(value: number) => formatAmount(Number(value))}
-                    label={{ value: "USD", angle: 90, position: "insideRight", fontSize: 10 }}
+                    label={{ value: "USD", angle: -90, position: "insideLeft", fontSize: 10 }}
+                  />
+                  <YAxis
+                    yAxisId="cup"
+                    orientation="right"
+                    tick={{ fontSize: 11 }}
+                    width={72}
+                    tickFormatter={(value: number) => formatAmount(Number(value))}
+                    label={{ value: "CUP", angle: 90, position: "insideRight", fontSize: 10 }}
                   />
                   <Tooltip
                     formatter={(value, name) => [
                       formatAmount(Number(value)),
-                      name === "totalCup" ? "CUP" : "USD",
+                      name === "totalUsd" ? "USD" : "CUP",
                     ]}
                   />
-                  <Legend formatter={(value) => (value === "totalCup" ? "CUP" : "USD")} />
-                  <Bar
-                    yAxisId="cup"
-                    dataKey="totalCup"
-                    name="totalCup"
-                    fill="#0d9488"
-                    radius={[4, 4, 0, 0]}
-                  />
+                  <Legend formatter={(value) => (value === "totalUsd" ? "USD" : "CUP")} />
                   <Bar
                     yAxisId="usd"
                     dataKey="totalUsd"
                     name="totalUsd"
                     fill="#3b82f6"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar
+                    yAxisId="cup"
+                    dataKey="totalCup"
+                    name="totalCup"
+                    fill="#0d9488"
                     radius={[4, 4, 0, 0]}
                   />
                 </BarChart>

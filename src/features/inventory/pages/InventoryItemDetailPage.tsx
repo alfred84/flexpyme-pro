@@ -141,15 +141,15 @@ export function InventoryItemDetailPage() {
               </div>
             </div>
             <div className="stat">
-              <div className="stat-title">{moneyHeading("Costo unitario")}</div>
-              <div className="stat-value text-2xl text-base">
-                {item.costPerUnit > 0 ? formatAmount(item.costPerUnit) : "Sin establecer"}
-              </div>
-            </div>
-            <div className="stat">
               <div className="stat-title">{moneyHeading("Costo unitario", "USD")}</div>
               <div className="stat-value text-2xl text-base">
                 {item.costPerUnitUsd > 0 ? formatAmount(item.costPerUnitUsd) : "Sin establecer"}
+              </div>
+            </div>
+            <div className="stat">
+              <div className="stat-title">{moneyHeading("Costo unitario")}</div>
+              <div className="stat-value text-2xl text-base">
+                {item.costPerUnit > 0 ? formatAmount(item.costPerUnit) : "Sin establecer"}
               </div>
             </div>
           </div>

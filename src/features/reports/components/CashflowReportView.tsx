@@ -58,23 +58,23 @@ export function CashflowReportView(props: OperationalReportViewProps) {
       {
         name: "CAJA_RESUMEN",
         aoa: [
-          ["Métrica", "CUP", "USD"],
+          ["Métrica", "USD", "CUP"],
           ["Periodo", periodLabel, ""],
-          ["Ingresos", totals.incomeCup, totals.incomeUsd],
-          ["Egresos", totals.expenseCup, totals.expenseUsd],
-          ["Neto", totals.netCup, totals.netUsd],
+          ["Ingresos", totals.incomeUsd, totals.incomeCup],
+          ["Egresos", totals.expenseUsd, totals.expenseCup],
+          ["Neto", totals.netUsd, totals.netCup],
         ],
       },
       {
         name: "CAJA_MOVIMIENTOS",
         aoa: [
-          ["Fecha", "Tipo", "Concepto", "CUP", "USD", "Método"],
+          ["Fecha", "Tipo", "Concepto", "USD", "CUP", "Método"],
           ...query.data.map((tx) => [
             tx.date,
             tx.transactionType,
             tx.concept,
-            tx.amountCup,
             tx.amountUsd,
+            tx.amountCup,
             tx.paymentMethod,
           ]),
         ],
@@ -140,8 +140,8 @@ export function CashflowReportView(props: OperationalReportViewProps) {
                 <th>Fecha</th>
                 <th>Tipo</th>
                 <th>Concepto</th>
-                <th className="text-right">{moneyHeading("Importe", "CUP")}</th>
                 <th className="text-right">{moneyHeading("Importe", "USD")}</th>
+                <th className="text-right">{moneyHeading("Importe", "CUP")}</th>
               </tr>
             </thead>
             <tbody>
@@ -150,8 +150,8 @@ export function CashflowReportView(props: OperationalReportViewProps) {
                   <td className="whitespace-nowrap">{formatDate(tx.date)}</td>
                   <td className="capitalize">{tx.transactionType}</td>
                   <td className="max-w-[16rem] truncate">{tx.concept}</td>
-                  <td className="text-right tabular-nums">{formatAmount(tx.amountCup)}</td>
                   <td className="text-right tabular-nums">{formatAmount(tx.amountUsd)}</td>
+                  <td className="text-right tabular-nums">{formatAmount(tx.amountCup)}</td>
                 </tr>
               ))}
             </tbody>

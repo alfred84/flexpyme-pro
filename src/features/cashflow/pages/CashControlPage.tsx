@@ -48,7 +48,7 @@ export function CashControlPage() {
   const [month, setMonth] = useState(() => currentMonthYm());
   const [day, setDay] = useState(() => clampIsoToMonth(todayIso(), currentMonthYm()));
   const [monitorMode, setMonitorMode] = useState<MonitorMode>("mes");
-  const [currency, setCurrency] = useState<DenominationCurrency>("CUP");
+  const [currency, setCurrency] = useState<DenominationCurrency>("USD");
   const [modalOpen, setModalOpen] = useState(false);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -318,17 +318,17 @@ export function CashControlPage() {
             <div className="join">
               <button
                 type="button"
-                className={`btn btn-xs join-item ${currency === "CUP" ? "btn-primary" : "btn-ghost"}`}
-                onClick={() => setCurrency("CUP")}
-              >
-                CUP
-              </button>
-              <button
-                type="button"
                 className={`btn btn-xs join-item ${currency === "USD" ? "btn-primary" : "btn-ghost"}`}
                 onClick={() => setCurrency("USD")}
               >
                 USD
+              </button>
+              <button
+                type="button"
+                className={`btn btn-xs join-item ${currency === "CUP" ? "btn-primary" : "btn-ghost"}`}
+                onClick={() => setCurrency("CUP")}
+              >
+                CUP
               </button>
             </div>
           </div>
