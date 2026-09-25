@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { ArrowLeft, Plus, Settings2 } from "lucide-react";
+import { ArrowLeft, Plus, Search, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import {
@@ -20,13 +20,17 @@ import {
 } from "@/db/queries/categories";
 import { createPrice, fetchFormats, fetchPrices, updatePrice } from "@/db/queries/prices";
 import {
+  buildPriceCategoryRows,
+  filterPriceCategoryRows,
+} from "@/features/products/lib/price-category-rows";
+import {
   buildPriceTableRows,
   type PriceTableRow,
 } from "@/features/products/lib/price-table-rows";
 import { CategoryConfigModal } from "@/features/settings/components/CategoryConfigModal";
 import { CategoryFormModal } from "@/features/settings/components/CategoryFormModal";
 import { useAppSettings } from "@/hooks/use-app-settings";
-import { categoryMosaicTone, resolveCategoryIcon } from "@/lib/category-icons";
+import { resolveCategoryIcon } from "@/lib/category-icons";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { isSinFormatoLabel, SIN_FORMATO_LABEL } from "@/lib/formats";
 import type { CategoryWorkTypeDto, ProductCategoryDto } from "@/types/category";
@@ -86,12 +90,11 @@ const DEFAULT_PRICE_TABLE_SORTING: SortingState = [
 ];
 
 /**
- * Precios: mosaico por categoría → tipos de trabajo → tabla.
+ * Precios: tabla de categorías → tipos de trabajo → tabla de precios.
  * El precio de venta CUP/USD es único por formato y acabado (producto terminado);
  * la tarifa de pago es por tipo de trabajo.
- * La categoría activa vive en `?categoria=` para que el sidebar vuelva siempre al mosaico.
- * Desde el mosaico se puede dar de alta una categoría; desde el detalle se abre el mismo
- * modal de Configuración para tipos, formatos y acabados.
+ * La categoría activa vive en `?categoria=` para que el sidebar vuelva siempre al listado.
+ * Desde el listado se puede dar de alta una categoría o configurar tipos, formatos y acabados.
  * Por defecto las filas nuevas ofertan USD; CUP es opcional.
  *
  * @returns Pantalla de administración de precios.
@@ -106,6 +109,7 @@ export function PricesListPage() {
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [configuring, setConfiguring] = useState<ProductCategoryDto | null>(null);
   const [includeInactive, setIncludeInactive] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_PRICE_TABLE_SORTING);
   const [editing, setEditing] = useState<PriceTableRow | null>(null);
@@ -130,13 +134,11 @@ export function PricesListPage() {
   const categoryFormatsQuery = useQuery({
     queryKey: ["category-formats", "all"],
     queryFn: fetchAllCategoryFormats,
-    enabled: selectedCategoryId != null,
   });
 
   const categoryFinishesQuery = useQuery({
     queryKey: ["category-finishes", "all"],
     queryFn: fetchCategoryFinishes,
-    enabled: selectedCategoryId != null,
   });
 
   const formatsQuery = useQuery({
@@ -148,7 +150,6 @@ export function PricesListPage() {
   const pricesQuery = useQuery({
     queryKey: ["prices", "list", includeInactive],
     queryFn: () => fetchPrices(includeInactive),
-    enabled: selectedCategoryId != null,
   });
 
   const saveMutation = useMutation({
@@ -201,6 +202,29 @@ export function PricesListPage() {
   const categories = useMemo(
     () => (categoriesQuery.data ?? []).filter((c) => c.isActive),
     [categoriesQuery.data],
+  );
+
+  const categoryRows = useMemo(
+    () =>
+      buildPriceCategoryRows({
+        categories,
+        workTypes: workTypesQuery.data ?? [],
+        formats: categoryFormatsQuery.data ?? [],
+        finishes: categoryFinishesQuery.data ?? [],
+        prices: pricesQuery.data ?? [],
+      }),
+    [
+      categories,
+      workTypesQuery.data,
+      categoryFormatsQuery.data,
+      categoryFinishesQuery.data,
+      pricesQuery.data,
+    ],
+  );
+
+  const filteredCategoryRows = useMemo(
+    () => filterPriceCategoryRows(categoryRows, categoryFilter),
+    [categoryRows, categoryFilter],
   );
 
   const selectedCategory = useMemo(
@@ -366,7 +390,7 @@ export function PricesListPage() {
     void navigate({ search: { categoria: category.id } });
   };
 
-  const handleBackToMosaic = () => {
+  const handleBackToList = () => {
     setSelectedWorkTypeId(null);
     setConfiguring(null);
     setGlobalFilter("");
@@ -380,7 +404,12 @@ export function PricesListPage() {
    */
   const handleCloseCategoryConfig = () => {
     setConfiguring(null);
-    void queryClient.invalidateQueries({ queryKey: ["prices"] });
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["prices"] }),
+      queryClient.invalidateQueries({ queryKey: ["category-work-types"] }),
+      queryClient.invalidateQueries({ queryKey: ["category-formats"] }),
+      queryClient.invalidateQueries({ queryKey: ["category-finishes"] }),
+    ]);
   };
 
   /**
@@ -488,22 +517,39 @@ export function PricesListPage() {
   if (selectedCategory == null) {
     return (
       <section className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold">Precios</h1>
             <p className="text-sm text-base-content/70">
-              Elige una categoría para gestionar precios de venta (CUP y/o USD) y tarifas de pago a
+              Elige una categoría para gestionar precios de venta (USD y/o CUP) y tarifas de pago a
               trabajadores.
             </p>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm gap-2"
-            onClick={() => setCreatingCategory(true)}
-          >
-            <Plus className="h-4 w-4" />
-            Nueva categoría
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {categoryRows.length > 0 && (
+              <label className="form-control w-full sm:max-w-xs">
+                <span className="sr-only">Buscar categoría</span>
+                <span className="input input-bordered input-sm flex items-center gap-2">
+                  <Search className="h-4 w-4 shrink-0 text-base-content/50" />
+                  <input
+                    type="search"
+                    className="grow bg-transparent outline-none"
+                    placeholder="Buscar categoría…"
+                    value={categoryFilter}
+                    onChange={(event) => setCategoryFilter(event.target.value)}
+                  />
+                </span>
+              </label>
+            )}
+            <button
+              type="button"
+              className="btn btn-primary btn-sm gap-2"
+              onClick={() => setCreatingCategory(true)}
+            >
+              <Plus className="h-4 w-4" />
+              Nueva categoría
+            </button>
+          </div>
         </div>
 
         {categoriesQuery.isLoading && <p>Cargando categorías...</p>}
@@ -512,31 +558,160 @@ export function PricesListPage() {
             <span>No se pudieron cargar las categorías.</span>
           </div>
         )}
+        {!categoriesQuery.isError &&
+          (workTypesQuery.isError ||
+            categoryFormatsQuery.isError ||
+            categoryFinishesQuery.isError ||
+            pricesQuery.isError) && (
+          <div className="alert alert-warning">
+            <span>
+              No se pudo cargar el detalle de tipos, formatos o precios. Puedes entrar a cada
+              categoría igual.
+            </span>
+          </div>
+        )}
 
-        {!categoriesQuery.isLoading && !categoriesQuery.isError && (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {categories.map((category, index) => {
-              const Icon = resolveCategoryIcon(category.icon);
-              return (
-                <button
-                  key={category.id}
-                  type="button"
-                  className={`flex min-h-28 flex-col items-center justify-center gap-3 rounded-xl border p-4 text-center transition ${categoryMosaicTone(index)}`}
-                  onClick={() => handleSelectCategory(category)}
-                >
-                  <Icon className="h-8 w-8 opacity-90" aria-hidden />
-                  <span className="text-sm font-semibold leading-tight">{category.name}</span>
-                </button>
-              );
-            })}
+        {!categoriesQuery.isLoading && !categoriesQuery.isError && categoryRows.length === 0 && (
+          <div className="rounded-lg border border-dashed border-base-300 p-6 text-center text-base-content/60">
+            <p>No hay categorías de producto activas.</p>
             <button
               type="button"
-              className="flex min-h-28 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-base-300 bg-base-200/40 p-4 text-center text-base-content/70 transition hover:border-primary hover:bg-primary/10 hover:text-primary"
+              className="btn btn-link btn-sm mt-1"
               onClick={() => setCreatingCategory(true)}
             >
-              <Plus className="h-8 w-8" aria-hidden />
-              <span className="text-sm font-semibold leading-tight">Nueva categoría</span>
+              Nueva categoría
             </button>
+          </div>
+        )}
+
+        {categoryRows.length > 0 && (
+          <div className="overflow-x-auto rounded-lg border border-base-300 bg-base-100">
+            <table className="table table-zebra table-sm">
+              <thead>
+                <tr>
+                  <th>Categoría</th>
+                  <th>Descripción</th>
+                  <th>Tipos de trabajo</th>
+                  <th className="text-right">Formatos</th>
+                  <th className="text-right">Acabados</th>
+                  <th>Precios</th>
+                  <th>Monedas</th>
+                  <th className="text-right">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCategoryRows.map((row) => {
+                  const category = categories.find((item) => item.id === row.id);
+                  const Icon = resolveCategoryIcon(row.icon);
+                  const extraWorkTypes = Math.max(0, row.workTypeNames.length - 3);
+                  return (
+                    <tr key={row.id} className="hover">
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-4 w-4 shrink-0 text-base-content/70" aria-hidden />
+                          <div className="min-w-0">
+                            <button
+                              type="button"
+                              className="link link-hover font-medium"
+                              onClick={() => category && handleSelectCategory(category)}
+                            >
+                              {row.name}
+                            </button>
+                            <p className="text-xs text-base-content/50">{row.code}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="max-w-xs text-sm text-base-content/70">
+                        {row.description?.trim() ? row.description : "—"}
+                      </td>
+                      <td>
+                        {row.workTypeNames.length === 0 ? (
+                          <span className="badge badge-warning badge-sm">Sin tipos</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {row.workTypeNames.slice(0, 3).map((name) => (
+                              <span key={name} className="badge badge-ghost badge-sm">
+                                {name}
+                              </span>
+                            ))}
+                            {extraWorkTypes > 0 && (
+                              <span className="badge badge-ghost badge-sm">+{extraWorkTypes}</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="text-right tabular-nums">{row.formatCount}</td>
+                      <td className="text-right tabular-nums">{row.finishCount}</td>
+                      <td>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span className="tabular-nums">
+                            {row.definedPriceCount}/{row.expectedPriceCount}
+                          </span>
+                          {row.pendingPriceCount > 0 && (
+                            <span className="badge badge-warning badge-sm">
+                              {row.pendingPriceCount} pendiente
+                              {row.pendingPriceCount === 1 ? "" : "s"}
+                            </span>
+                          )}
+                          {row.pendingPriceCount === 0 && row.definedPriceCount > 0 && (
+                            <span className="badge badge-success badge-sm">Completo</span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        {row.hasUsd || row.hasCup ? (
+                          <div className="flex flex-wrap gap-1">
+                            {row.hasUsd && <span className="badge badge-outline badge-sm">USD</span>}
+                            {row.hasCup && <span className="badge badge-outline badge-sm">CUP</span>}
+                          </div>
+                        ) : (
+                          <span className="text-base-content/40">—</span>
+                        )}
+                      </td>
+                      <td className="text-right">
+                        <div className="flex flex-wrap justify-end gap-1">
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-xs"
+                            onClick={() => category && handleSelectCategory(category)}
+                          >
+                            Ver precios
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-xs gap-1"
+                            title="Configurar tipos de trabajo, formatos y acabados"
+                            onClick={() => category && setConfiguring(category)}
+                          >
+                            <Settings2 className="h-3.5 w-3.5" />
+                            Configurar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredCategoryRows.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="py-6 text-center text-base-content/60">
+                      Ninguna categoría coincide con «{categoryFilter.trim()}».
+                    </td>
+                  </tr>
+                )}
+                <tr>
+                  <td colSpan={8}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm gap-2 text-base-content/70"
+                      onClick={() => setCreatingCategory(true)}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Nueva categoría
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         )}
 
@@ -546,6 +721,9 @@ export function PricesListPage() {
             onClose={() => setCreatingCategory(false)}
             onSaved={handleSelectCategory}
           />
+        )}
+        {configuring && (
+          <CategoryConfigModal category={configuring} onClose={handleCloseCategoryConfig} />
         )}
       </section>
     );
@@ -561,7 +739,7 @@ export function PricesListPage() {
     <section className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
-          <button type="button" className="btn btn-ghost btn-sm gap-2 px-0" onClick={handleBackToMosaic}>
+          <button type="button" className="btn btn-ghost btn-sm gap-2 px-0" onClick={handleBackToList}>
             <ArrowLeft className="h-4 w-4" />
             Todas las categorías
           </button>

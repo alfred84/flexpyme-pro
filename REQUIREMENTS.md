@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.47 | Última actualización: 2026-09-25
+### Versión: 2.48 | Última actualización: 2026-09-25
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -144,7 +144,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 ### 3.7 Configuración
 - Datos del negocio (nombre, dirección, teléfono, logo)
 - Tasa de cambio USD → CUP (actualizable desde cabecera o Configuración; histórico de cambios)
-- **Precios** como entrada del sidebar (debajo de Flujo de Caja), no como tab de Configuración. Incluye precios de venta (**USD por defecto**; CUP opcional, activables por fila) y **tarifas de pago** a trabajadores en CUP (antes «Costos»); la ruta legacy `/costos` redirige a `/precios`. El precio de venta CUP/USD es **único del producto terminado** (categoría + formato + acabado); las pestañas por tipo de trabajo lo muestran como referencia y no pueden divergir. La tarifa de pago sí es por tipo de trabajo. Cada moneda se define de forma independiente; se puede aplicar la tasa vigente de la app para derivar un precio a partir del otro. En el mosaico, **Nueva categoría** abre el mismo formulario que Configuración → Categorías de productos. Al entrar a una categoría, **Configurar** abre el mismo modal de tipos de trabajo, formatos y acabados.
+- **Precios** como entrada del sidebar (debajo de Flujo de Caja), no como tab de Configuración. Incluye precios de venta (**USD por defecto**; CUP opcional, activables por fila) y **tarifas de pago** a trabajadores en CUP (antes «Costos»); la ruta legacy `/costos` redirige a `/precios`. El precio de venta CUP/USD es **único del producto terminado** (categoría + formato + acabado); las pestañas por tipo de trabajo lo muestran como referencia y no pueden divergir. La tarifa de pago sí es por tipo de trabajo. Cada moneda se define de forma independiente; se puede aplicar la tasa vigente de la app para derivar un precio a partir del otro. En el listado (tabla), **Nueva categoría** abre el mismo formulario que Configuración → Categorías de productos. **Configurar** (en la fila o al entrar a una categoría) abre el mismo modal de tipos de trabajo, formatos y acabados.
 - **Categorías** de productos (CRUD con `is_system`, snapshot en pedidos)
 - **Roles de empleados**: catálogo `employee_roles`; cada rol puede asociarse a uno o más **tipos de trabajo** (`role_work_types`) que definen qué trabajos pueden realizar los empleados con ese rol (principal o secundario)
 - **Tipos de trabajo, formatos y acabados por categoría**: tablas `category_work_types`, `category_formats` y `category_finishes` (vinculadas a los catálogos `work_types`, `formats` y `finishes`). Catálogo global de acabados en Configuración → Acabados. Al crear líneas se preseleccionan tipos y acabados «por defecto»; cada tipo se expande en un `invoice_item` para producción, pero el cobro es una sola vez (precio del producto).
@@ -367,10 +367,10 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.6 — Precios y tarifas de pago (2026-07)
 - **Costos** retirado del sidebar; gestión unificada en **Precios** (ruta `/costos` → `/precios`).
-- **UX Precios**: mosaico por categoría → pestañas por tipo de trabajo de la categoría → tabla (formato, acabado, precio CUP, precio USD, tarifa de pago).
+- **UX Precios**: tabla por categoría (descripción, tipos, formatos, acabados, cobertura de precios) → pestañas por tipo de trabajo → tabla (formato, acabado, precio USD, precio CUP, tarifa de pago).
 - Columna/modal **Tarifa de Pago** (obligatoria, default 0); al guardar se sincroniza `cost_list` para salarios.
 - Formato base **Sin formato** (0×0); filas pendientes en Precios cuando hay tipos de trabajo sin precio definido.
-- Click en Precios del sidebar limpia `?categoria=` y vuelve al mosaico.
+- Click en Precios del sidebar limpia `?categoria=` y vuelve al listado de categorías.
 
 ### v2.8 — Precios duales CUP/USD (2026-07)
 - `price_list`: `price_cup`, `price_usd`, `is_cup_active`, `is_usd_active` (columna legada `price` espejo de CUP).
@@ -474,7 +474,7 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 - En Precios, al entrar a una categoría, **Configurar** abre el mismo modal de tipos de trabajo, formatos y acabados que Configuración → Categorías de productos.
 
 ### v2.24 — Alta de categoría desde Precios (2026-08)
-- En el mosaico de Precios, **Nueva categoría** (botón y ficha) usa el mismo formulario que Configuración → Categorías de productos.
+- En el listado de Precios, **Nueva categoría** (botón y fila) usa el mismo formulario que Configuración → Categorías de productos.
 
 ### v2.25 — Precio único del producto terminado (2026-08)
 - Precios: CUP/USD únicos por categoría + formato + acabado (visibles en cada tipo de trabajo; al guardar se sincronizan). La tarifa de pago sigue por tipo.
@@ -547,6 +547,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.47 — Inventario: categorías en tabla (2026-09)
 - Inventario → Materiales por categoría: listado en **tabla** (categoría, descripción, ítems, alertas y Ver materiales), con búsqueda. Deja de usarse el mosaico.
+
+### v2.48 — Precios: categorías en tabla (2026-09)
+- Precios: listado en **tabla** (categoría, descripción, tipos de trabajo, formatos, acabados, cobertura de precios, monedas, Ver precios y Configurar), con búsqueda. Deja de usarse el mosaico.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
