@@ -9,6 +9,7 @@ import {
   Package,
   PackageMinus,
   PackageSearch,
+  Search,
 } from "lucide-react";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import { fetchInventoryItems, fetchMaterialCategories, fetchInventoryPendingOrderDemand } from "@/db/queries/inventory";
@@ -17,11 +18,11 @@ import { InventoryMovementsSection } from "@/features/inventory/components/Inven
 import { ManualOutboundModal } from "@/features/inventory/components/ManualOutboundModal";
 import { MaterialSaleModal } from "@/features/inventory/components/MaterialSaleModal";
 import { MaterialCategoriesPanel } from "@/features/inventory/components/MaterialCategoriesPanel";
-import { categoryMosaicTone } from "@/lib/category-icons";
 
 type InventoryManagePanel = "categorias" | "normas" | null;
 
-interface CategoryTile {
+/** Fila del listado de categorías de material. */
+interface CategoryRow {
   id: number;
   name: string;
   description: string | null;
@@ -31,7 +32,7 @@ interface CategoryTile {
 }
 
 /**
- * Pantalla principal de inventario: mosaico de categorías de material.
+ * Pantalla principal de inventario: tabla de categorías de material.
  * Categorías y normas se gestionan desde opciones (modales).
  *
  * @returns Página de inventario.
@@ -40,6 +41,7 @@ export function InventoryListPage() {
   const [showOutbound, setShowOutbound] = useState(false);
   const [showMaterialSale, setShowMaterialSale] = useState(false);
   const [managePanel, setManagePanel] = useState<InventoryManagePanel>(null);
+  const [categoryFilter, setCategoryFilter] = useState("");
 
   const itemsQuery = useQuery({
     queryKey: ["inventory", "list"],
@@ -60,7 +62,7 @@ export function InventoryListPage() {
   const pendingDemand = pendingDemandQuery.data ?? [];
   const pendingDemandCount = pendingDemand.length;
 
-  const tiles = useMemo((): CategoryTile[] => {
+  const tiles = useMemo((): CategoryRow[] => {
     const cats = (categoriesQuery.data ?? []).filter((c) => c.isActive);
     return cats
       .map((cat) => {
@@ -76,6 +78,17 @@ export function InventoryListPage() {
       })
       .sort((a, b) => a.name.localeCompare(b.name, "es"));
   }, [items, categoriesQuery.data]);
+
+  const filteredTiles = useMemo(() => {
+    const query = categoryFilter.trim().toLowerCase();
+    if (!query) {
+      return tiles;
+    }
+    return tiles.filter((tile) => {
+      const description = tile.description?.toLowerCase() ?? "";
+      return tile.name.toLowerCase().includes(query) || description.includes(query);
+    });
+  }, [tiles, categoryFilter]);
 
   return (
     <section className="space-y-6">
@@ -162,11 +175,28 @@ export function InventoryListPage() {
       )}
 
       <div className="space-y-3">
-        <div>
-          <h2 className="text-lg font-semibold">Materiales por categoría</h2>
-          <p className="text-sm text-base-content/70">
-            Elige una categoría para ver sus materiales y dar de alta ítems.
-          </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Materiales por categoría</h2>
+            <p className="text-sm text-base-content/70">
+              Elige una categoría para ver sus materiales y dar de alta ítems.
+            </p>
+          </div>
+          {tiles.length > 0 && (
+            <label className="form-control w-full sm:max-w-xs">
+              <span className="sr-only">Buscar categoría</span>
+              <span className="input input-bordered input-sm flex items-center gap-2">
+                <Search className="h-4 w-4 shrink-0 text-base-content/50" />
+                <input
+                  type="search"
+                  className="grow bg-transparent outline-none"
+                  placeholder="Buscar categoría…"
+                  value={categoryFilter}
+                  onChange={(event) => setCategoryFilter(event.target.value)}
+                />
+              </span>
+            </label>
+          )}
         </div>
 
         {(itemsQuery.isLoading || categoriesQuery.isLoading) && <p>Cargando inventario...</p>}
@@ -190,35 +220,71 @@ export function InventoryListPage() {
         )}
 
         {tiles.length > 0 && (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {tiles.map((tile, index) => (
-              <Link
-                key={tile.id}
-                to="/inventario/categoria/$categoryId"
-                params={{ categoryId: String(tile.id) }}
-                className={`flex min-h-[5.5rem] flex-col items-start justify-center gap-1 rounded-xl border px-3 py-2.5 text-left transition ${categoryMosaicTone(index)}`}
-              >
-                <div className="flex w-full flex-wrap items-center gap-1.5">
-                  <span className="text-sm font-semibold leading-tight">{tile.name}</span>
-                  <span className="badge badge-xs badge-primary h-auto px-2 py-1 leading-none">
-                    {tile.itemCount} ítem(s)
-                  </span>
-                  {tile.deficitCount > 0 && (
-                    <span className="badge badge-xs badge-error">Déficit</span>
-                  )}
-                  {tile.lowCount > 0 && (
-                    <span className="badge badge-xs badge-warning">Bajo</span>
-                  )}
-                </div>
-                {tile.description ? (
-                  <p className="line-clamp-2 w-full text-xs leading-snug text-base-content/60">
-                    {tile.description}
-                  </p>
-                ) : (
-                  <p className="text-xs text-base-content/40">Sin descripción</p>
+          <div className="overflow-x-auto rounded-lg border border-base-300 bg-base-100">
+            <table className="table table-zebra table-sm">
+              <thead>
+                <tr>
+                  <th>Categoría</th>
+                  <th>Descripción</th>
+                  <th className="text-right">Ítems</th>
+                  <th>Alertas</th>
+                  <th className="text-right">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTiles.map((tile) => (
+                  <tr key={tile.id} className="hover">
+                    <td className="font-medium">
+                      <Link
+                        to="/inventario/categoria/$categoryId"
+                        params={{ categoryId: String(tile.id) }}
+                        className="link link-hover"
+                      >
+                        {tile.name}
+                      </Link>
+                    </td>
+                    <td className="max-w-md text-sm text-base-content/70">
+                      {tile.description?.trim() ? tile.description : "—"}
+                    </td>
+                    <td className="text-right tabular-nums">{tile.itemCount}</td>
+                    <td>
+                      {tile.deficitCount > 0 || tile.lowCount > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {tile.deficitCount > 0 && (
+                            <span className="badge badge-error badge-sm">
+                              Déficit {tile.deficitCount}
+                            </span>
+                          )}
+                          {tile.lowCount > 0 && (
+                            <span className="badge badge-warning badge-sm">
+                              Bajo {tile.lowCount}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-base-content/40">—</span>
+                      )}
+                    </td>
+                    <td className="text-right">
+                      <Link
+                        to="/inventario/categoria/$categoryId"
+                        params={{ categoryId: String(tile.id) }}
+                        className="btn btn-outline btn-xs"
+                      >
+                        Ver materiales
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+                {filteredTiles.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-6 text-center text-base-content/60">
+                      Ninguna categoría coincide con «{categoryFilter.trim()}».
+                    </td>
+                  </tr>
                 )}
-              </Link>
-            ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
