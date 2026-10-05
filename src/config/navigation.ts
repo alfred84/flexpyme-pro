@@ -9,6 +9,7 @@ import {
   Tag,
   Receipt,
   BarChart3,
+  ClipboardList,
   PieChart,
   Settings,
   type LucideIcon,
@@ -38,7 +39,7 @@ export interface NavItem {
  */
 export const PRIMARY_NAV: NavItem[] = [
   { to: "/", label: "Inicio", icon: LayoutDashboard, exact: true },
-  { to: "/reportes-produccion", label: "Reportes", icon: BarChart3 },
+  { to: "/reportes-produccion", label: "Reportes", icon: ClipboardList },
   { to: "/pedidos", label: "Pedidos", icon: ShoppingCart, badge: "pedidosAtencion" },
   { to: "/facturas", label: "Facturas", icon: FileText, badge: "facturasPendientes" },
   { to: "/clientes", label: "Clientes", icon: Users },

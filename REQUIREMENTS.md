@@ -197,7 +197,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - La restauración manual permite seleccionar un fichero `.db` compatible, valida integridad/esquema, crea un backup de seguridad previo y reemplaza la BD activa conservando el nombre `flexpyme.db`.
 
 ### 3.13 Estadísticas (v2.49)
-- Entrada de sidebar **Estadísticas** (debajo de Reportes globales); ruta `/estadisticas`; icono de gráfico de barras (el mismo que **Reportes**)
+- Entrada de sidebar **Estadísticas** (debajo de Reportes globales); ruta `/estadisticas`; icono de gráfico de barras
 - Gráfico de ingresos por categoría del **mes actual**, con barras USD y CUP (ejes independientes; USD izquierda, CUP derecha)
 
 ---

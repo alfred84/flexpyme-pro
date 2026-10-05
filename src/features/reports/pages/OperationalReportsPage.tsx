@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { BarChart3, FileSpreadsheet, FileText } from "lucide-react";
+import { ClipboardList, FileSpreadsheet, FileText } from "lucide-react";
 import { BillingReport } from "@/features/reports/components/BillingReport";
 import { CashflowReportView } from "@/features/reports/components/CashflowReportView";
 import { ExpensesReport } from "@/features/reports/components/ExpensesReport";
@@ -108,7 +108,7 @@ export function OperationalReportsPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <BarChart3 className="h-6 w-6" /> Reportes
+            <ClipboardList className="h-6 w-6" /> Reportes
           </h1>
           <p className="text-sm text-base-content/60">{periodLabel}</p>
         </div>
