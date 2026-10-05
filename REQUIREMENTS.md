@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.48 | Última actualización: 2026-09-25
+### Versión: 2.49 | Última actualización: 2026-10-05
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -47,7 +47,6 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 
 ### 3.1 Inicio
 - KPIs: facturación del mes en USD y CUP (montos físicos de cobro, sin conversión; **USD a la izquierda**), pedidos pendientes, cobros pendientes en USD y CUP
-- Gráfico de ingresos por categoría del **mes actual**, con barras USD y CUP (ejes independientes; USD izquierda, CUP derecha)
 - Lista de pedidos recientes con estado
 - Accesos rápidos a las acciones más frecuentes
 
@@ -197,6 +196,10 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - Inicio y Configuración > Backup muestran el histórico de los 5 últimos backups.
 - La restauración manual permite seleccionar un fichero `.db` compatible, valida integridad/esquema, crea un backup de seguridad previo y reemplaza la BD activa conservando el nombre `flexpyme.db`.
 
+### 3.13 Estadísticas (v2.49)
+- Entrada de sidebar **Estadísticas** (debajo de Reportes globales); ruta `/estadisticas`; icono de gráfico de barras (el mismo que **Reportes**)
+- Gráfico de ingresos por categoría del **mes actual**, con barras USD y CUP (ejes independientes; USD izquierda, CUP derecha)
+
 ---
 
 ## 4. Moneda y Pagos
@@ -224,7 +227,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 
 - **Estilo**: Dashboard profesional, limpio, moderno — inspirado en Odoo/FacturaScript
 - **Modo**: Dark mode por defecto (con opción de light mode en Configuración)
-- **Sidebar**: Inicio, Reportes, Pedidos, Facturas, Clientes, Empleados, Inventario, Caja, Precios, Otros gastos, Reportes globales, Configuración
+- **Sidebar**: Inicio, Reportes, Pedidos, Facturas, Clientes, Empleados, Inventario, Caja, Precios, Otros gastos, Reportes globales, Estadísticas, Configuración
 - **Fechas en UI (v2.5)**: siempre `dd/mm/aaaa` vía `formatDate` / `formatDateTime` (`src/lib/format-date.ts`)
 - **Importes en UI (v2.14)**: moneda en la etiqueta/columna vía `moneyHeading('…')` y valor limpio con `formatAmount`; usar `formatMoney(valor, 'CUP'|'USD')` solo en mensajes, badges, tooltips o contextos mixtos sin encabezado (`src/lib/format-money.ts`)
 - **Iconos**: Lucide React en todos los menús, botones y acciones
@@ -550,6 +553,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.48 — Precios: categorías en tabla (2026-09)
 - Precios: listado en **tabla** (categoría, descripción, tipos de trabajo, formatos, acabados, cobertura de precios, monedas, Ver precios y Configurar), con búsqueda. Deja de usarse el mosaico.
+
+### v2.49 — Estadísticas: gráfico de ingresos (2026-10)
+- El gráfico **Ingresos por categoría (mes actual)** sale del Inicio y vive en **Estadísticas** (`/estadisticas`), debajo de Reportes globales, con el icono de barras de Reportes.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

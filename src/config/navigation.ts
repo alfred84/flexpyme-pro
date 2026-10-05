@@ -48,6 +48,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { to: "/precios", label: "Precios", icon: Tag },
   { to: "/otros-gastos", label: "Otros gastos", icon: Receipt },
   { to: "/reportes", label: "Reportes globales", icon: PieChart },
+  { to: "/estadisticas", label: "Estadísticas", icon: BarChart3 },
 ];
 
 /**

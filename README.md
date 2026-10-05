@@ -5,7 +5,7 @@ La fuente de verdad de requisitos es [`REQUIREMENTS.md`](./REQUIREMENTS.md) (**v
 
 ## Módulos (v2.5)
 
-- **Inicio**: KPIs del mes, ingresos por categoría (Recharts), pedidos recientes y alertas.
+- **Inicio**: KPIs del mes, pedidos recientes y alertas.
 - **Pedidos** (`/pedidos`): alta multi-producto con servicios auto-seleccionados por categoría (línea → varios `invoice_items`), detalle con registro de trabajo, impresión, cobro integrado (CUP/USD + vuelto) y filtros (en producción, listos, pendiente cobro). `/stock` redirige al filtro listos.
 - **Reportes de producción** (`/reportes-produccion`): por Área/día/formato (Realizado vs Pendiente) y comparativa Factura vs Salario.
 - **Facturas** (`/facturas`): vista financiera sobre los mismos pedidos (cobrada/parcial/pendiente/anulada).
@@ -16,6 +16,7 @@ La fuente de verdad de requisitos es [`REQUIREMENTS.md`](./REQUIREMENTS.md) (**v
 - **Precios** y **Costos**: entradas del sidebar (debajo de Flujo de Caja).
 - **Otros gastos** (`/otros-gastos`): listado y KPIs; alta en `/otros-gastos/nuevo`; detalle y edición por gasto; tipos configurables; cada gasto genera egreso en caja.
 - **Reportes**: exportes y resúmenes generales.
+- **Estadísticas** (`/estadisticas`): ingresos por categoría del mes actual (Recharts).
 - **Configuración**: tabs General, Tasa de cambio, Roles, Categorías (servicios/acabados), Unidades, Formatos, Tipos de trabajo y Backup.
 
 ## Moneda

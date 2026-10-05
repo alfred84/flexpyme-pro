@@ -2,16 +2,6 @@ import { useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
   AlertTriangle,
   ArrowRight,
   CircleDollarSign,
@@ -20,28 +10,15 @@ import {
   Package,
   Receipt,
 } from "lucide-react";
-import { fetchIncomeByCategory, fetchReportsSummary } from "@/db/queries/reports";
+import { fetchReportsSummary } from "@/db/queries/reports";
 import { fetchInvoices } from "@/db/queries/invoices";
 import { fetchBackupOverview } from "@/db/queries/settings";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { cupToUsd } from "@/lib/currency";
 import { DualPhysicalAmounts } from "@/components/common/DualPhysicalAmounts";
-import { formatDate, formatDateTime, todayIso } from "@/lib/format-date";
+import { formatDate, formatDateTime, monthEndIso, monthStartIso, todayIso } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { pedidosListSearch } from "@/lib/pedidos-search";
-
-/**
- * Devuelve una fecha en formato `YYYY-MM-DD` (calendario local).
- *
- * @param date - Fecha a formatear.
- * @returns Cadena ISO de solo fecha.
- */
-function isoDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 /**
  * Tarjeta KPI del dashboard.
@@ -73,7 +50,7 @@ function KpiCard(props: {
 
 
 /**
- * Pantalla de Inicio: KPIs del mes, ingresos por categoría, pedidos recientes y alertas.
+ * Pantalla de Inicio: KPIs del mes, pedidos recientes y alertas.
  *
  * @returns Página de inicio.
  */
@@ -81,19 +58,13 @@ export function DashboardPage() {
   const settings = useAppSettings();
   const rate = settings.usdExchangeRate;
 
-  const now = new Date();
-  const monthStart = isoDate(new Date(now.getFullYear(), now.getMonth(), 1));
-  const monthEnd = isoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
   const today = todayIso();
+  const monthStart = monthStartIso(today);
+  const monthEnd = monthEndIso(today);
 
   const summaryQuery = useQuery({
     queryKey: ["reports", "summary", monthStart, monthEnd],
     queryFn: () => fetchReportsSummary({ dateFrom: monthStart, dateTo: monthEnd }),
-  });
-
-  const incomeQuery = useQuery({
-    queryKey: ["reports", "income-by-category", monthStart, monthEnd],
-    queryFn: () => fetchIncomeByCategory({ dateFrom: monthStart, dateTo: monthEnd }),
   });
 
   const invoicesQuery = useQuery({
@@ -115,16 +86,6 @@ export function DashboardPage() {
   );
   const unpaidCount = invoices.filter((inv) => inv.balance > 0).length;
   const todayCount = invoices.filter((inv) => inv.date === today).length;
-
-  const chartData = useMemo(
-    () =>
-      (incomeQuery.data ?? []).map((row) => ({
-        name: row.label,
-        totalCup: row.totalCup,
-        totalUsd: row.totalUsd,
-      })),
-    [incomeQuery.data],
-  );
 
   const backups = backupOverviewQuery.data?.backups ?? [];
 
@@ -173,62 +134,6 @@ export function DashboardPage() {
           icon={Package}
           accent="bg-success/15 text-success"
         />
-      </div>
-
-      <div className="card bg-base-200">
-        <div className="card-body">
-          <h3 className="card-title text-base">Ingresos por categoría (mes actual)</h3>
-          {incomeQuery.isLoading ? (
-            <div className="h-72 animate-pulse rounded-lg bg-base-300" />
-          ) : chartData.length === 0 ? (
-            <p className="py-12 text-center text-sm text-base-content/60">Sin datos en el período.</p>
-          ) : (
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis
-                    yAxisId="usd"
-                    tick={{ fontSize: 11 }}
-                    width={56}
-                    tickFormatter={(value: number) => formatAmount(Number(value))}
-                    label={{ value: "USD", angle: -90, position: "insideLeft", fontSize: 10 }}
-                  />
-                  <YAxis
-                    yAxisId="cup"
-                    orientation="right"
-                    tick={{ fontSize: 11 }}
-                    width={72}
-                    tickFormatter={(value: number) => formatAmount(Number(value))}
-                    label={{ value: "CUP", angle: 90, position: "insideRight", fontSize: 10 }}
-                  />
-                  <Tooltip
-                    formatter={(value, name) => [
-                      formatAmount(Number(value)),
-                      name === "totalUsd" ? "USD" : "CUP",
-                    ]}
-                  />
-                  <Legend formatter={(value) => (value === "totalUsd" ? "USD" : "CUP")} />
-                  <Bar
-                    yAxisId="usd"
-                    dataKey="totalUsd"
-                    name="totalUsd"
-                    fill="#3b82f6"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Bar
-                    yAxisId="cup"
-                    dataKey="totalCup"
-                    name="totalCup"
-                    fill="#0d9488"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
