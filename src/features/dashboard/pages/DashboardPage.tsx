@@ -4,53 +4,79 @@ import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
   ArrowRight,
+  ArrowLeftRight,
+  Banknote,
+  CalendarDays,
+  CheckCircle2,
   CircleDollarSign,
   ClipboardList,
   DatabaseBackup,
   Package,
+  PackageSearch,
   Receipt,
+  Tag,
+  UserCog,
+  Users,
+  type LucideIcon,
 } from "lucide-react";
+import { fetchCategories } from "@/db/queries/categories";
+import { fetchClients } from "@/db/queries/clients";
+import { fetchEmployees, fetchPayrollDaily, fetchPayrollInRange } from "@/db/queries/employees";
+import { fetchInventoryItems, fetchInventoryMovementsList, fetchInventoryConsumptionSummary } from "@/db/queries/inventory";
+import { formatConsumptionQty } from "@/features/inventory/lib/consumption-summary";
+import { fetchInvoiceMetrics, fetchInvoices } from "@/db/queries/invoices";
+import { fetchPrices } from "@/db/queries/prices";
 import { fetchReportsSummary } from "@/db/queries/reports";
-import { fetchInvoices } from "@/db/queries/invoices";
 import { fetchBackupOverview } from "@/db/queries/settings";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { cupToUsd } from "@/lib/currency";
 import { DualPhysicalAmounts } from "@/components/common/DualPhysicalAmounts";
 import { formatDate, formatDateTime, monthEndIso, monthStartIso, todayIso } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
+import { facturasListSearch } from "@/lib/facturas-search";
 import { pedidosListSearch } from "@/lib/pedidos-search";
 
 /**
- * Tarjeta KPI del dashboard.
+ * Tarjeta KPI del dashboard (contenido interno; el enlace lo pone el padre).
  *
- * @param props - Etiqueta, valor, icono y color de acento.
- * @returns Tarjeta de indicador.
+ * @param props - Etiqueta, valor, pie opcional, icono y estilo.
+ * @returns Cuerpo del indicador.
  */
 function KpiCard(props: {
   label: string;
   value: ReactNode;
-  icon: typeof Receipt;
+  caption?: ReactNode;
+  icon: LucideIcon;
   accent: string;
 }) {
-  const { label, value, icon: Icon, accent } = props;
+  const { label, value, caption, icon: Icon, accent } = props;
   return (
-    <div className="card bg-base-200">
-      <div className="card-body flex-row items-center gap-4 p-4">
-        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg ${accent}`}>
-          <Icon className="h-6 w-6" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-xs uppercase tracking-wide text-base-content/60">{label}</p>
-          <div className="text-xl font-semibold leading-tight">{value}</div>
+    <div className="card-body h-full flex-row items-center gap-3 px-3 py-2.5">
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${accent}`}>
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col justify-center">
+        <p className="truncate text-[11px] uppercase leading-tight tracking-wide text-base-content/60">
+          {label}
+        </p>
+        <div className="flex min-h-[1.75rem] w-full min-w-0 items-center text-lg font-semibold leading-none">
+          {value}
         </div>
+        <p className="mt-0.5 truncate text-[11px] font-normal leading-tight text-base-content/60">
+          {caption ?? "\u00a0"}
+        </p>
       </div>
     </div>
   );
 }
 
+/** Clases compartidas de los paneles KPI clicables del Inicio. */
+const KPI_LINK_CLASS =
+  "card flex h-full min-h-[5.75rem] bg-base-200 transition hover:bg-base-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
+
 
 /**
- * Pantalla de Inicio: KPIs del mes, pedidos recientes y alertas.
+ * Pantalla de Inicio: KPIs clicables, pedidos recientes y alertas.
  *
  * @returns Página de inicio.
  */
@@ -67,9 +93,59 @@ export function DashboardPage() {
     queryFn: () => fetchReportsSummary({ dateFrom: monthStart, dateTo: monthEnd }),
   });
 
+  const metricsQuery = useQuery({
+    queryKey: ["invoices", "metrics"],
+    queryFn: fetchInvoiceMetrics,
+  });
+
   const invoicesQuery = useQuery({
     queryKey: ["invoices", "list"],
     queryFn: fetchInvoices,
+  });
+
+  const clientsQuery = useQuery({
+    queryKey: ["clients", "list"],
+    queryFn: fetchClients,
+  });
+
+  const employeesQuery = useQuery({
+    queryKey: ["employees", "list"],
+    queryFn: () => fetchEmployees(false),
+  });
+
+  const payrollTodayQuery = useQuery({
+    queryKey: ["payroll-daily", today],
+    queryFn: () => fetchPayrollDaily(today),
+  });
+
+  const payrollMonthQuery = useQuery({
+    queryKey: ["employees", "payroll-range", monthStart, monthEnd],
+    queryFn: () => fetchPayrollInRange({ dateFrom: monthStart, dateTo: monthEnd }),
+  });
+
+  const inventoryQuery = useQuery({
+    queryKey: ["inventory", "list"],
+    queryFn: fetchInventoryItems,
+  });
+
+  const inventoryMovementsQuery = useQuery({
+    queryKey: ["inventory", "movements", "list", "mes"],
+    queryFn: () => fetchInventoryMovementsList("mes"),
+  });
+
+  const consumptionQuery = useQuery({
+    queryKey: ["inventory", "consumption-summary", "mes"],
+    queryFn: () => fetchInventoryConsumptionSummary("mes"),
+  });
+
+  const categoriesQuery = useQuery({
+    queryKey: ["categories", "active"],
+    queryFn: () => fetchCategories(true),
+  });
+
+  const pricesQuery = useQuery({
+    queryKey: ["prices", "list", false],
+    queryFn: () => fetchPrices(false),
   });
 
   const backupOverviewQuery = useQuery({
@@ -85,7 +161,48 @@ export function DashboardPage() {
     [invoices],
   );
   const unpaidCount = invoices.filter((inv) => inv.balance > 0).length;
-  const todayCount = invoices.filter((inv) => inv.date === today).length;
+  const processedThisMonthCount = invoices.filter((inv) => {
+    if (inv.status === "anulada") {
+      return false;
+    }
+    if (inv.date < monthStart || inv.date > monthEnd) {
+      return false;
+    }
+    return inv.productionStatus === "listo";
+  }).length;
+  const inProductionCount = invoices.filter(
+    (inv) => inv.status !== "anulada" && inv.productionStatus === "en_produccion",
+  ).length;
+  const registeredClientsCount = clientsQuery.data?.length ?? 0;
+  const activeEmployeesCount = (employeesQuery.data ?? []).filter((emp) => emp.isActive).length;
+  const payrollTodayRows = payrollTodayQuery.data ?? [];
+  const payrollTodayTotals = payrollTodayRows.reduce(
+    (acc, row) => ({
+      pending: acc.pending + row.pending,
+      paid: acc.paid + row.paid,
+      workers: acc.workers + 1,
+    }),
+    { pending: 0, paid: 0, workers: 0 },
+  );
+  const payrollMonthPaid = (payrollMonthQuery.data ?? []).reduce(
+    (sum, row) => sum + row.paid,
+    0,
+  );
+  const payrollMonthWorkers = payrollMonthQuery.data?.length ?? 0;
+  const inventoryItems = inventoryQuery.data ?? [];
+  const materialesCount = inventoryItems.length;
+  const materialesLowStockCount = inventoryItems.filter((item) => item.lowStock).length;
+  const materialesDeficitCount = inventoryItems.filter((item) => item.deficit).length;
+  const movimientosMes = inventoryMovementsQuery.data ?? [];
+  const movimientosMesCount = movimientosMes.length;
+  const movimientosEntradasCount = movimientosMes.filter((mov) => mov.movementType === "entrada").length;
+  const movimientosSalidasCount = movimientosMesCount - movimientosEntradasCount;
+  const consumoMes = consumptionQuery.data ?? [];
+  const consumoSalidas = consumoMes.reduce((sum, row) => sum + row.salidas, 0);
+  const consumoMermas = consumoMes.reduce((sum, row) => sum + row.mermas, 0);
+  const consumoVentas = consumoMes.reduce((sum, row) => sum + row.ventas, 0);
+  const categoriasPreciosCount = categoriesQuery.data?.length ?? 0;
+  const preciosDefinidosCount = pricesQuery.data?.length ?? 0;
 
   const backups = backupOverviewQuery.data?.backups ?? [];
 
@@ -96,44 +213,162 @@ export function DashboardPage() {
         <p className="text-sm text-base-content/60">Resumen del mes en curso</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          label="Facturación del mes"
-          value={
-            <DualPhysicalAmounts
-              className="mt-0.5"
-              amountCup={summary?.totalBilledCup ?? 0}
-              amountUsd={summary?.totalBilledUsd ?? 0}
-            />
-          }
-          icon={Receipt}
-          accent="bg-primary/15 text-primary"
-        />
-        <KpiCard
-          label="Pedidos pendientes"
-          value={String(unpaidCount)}
-          icon={ClipboardList}
-          accent="bg-warning/15 text-warning"
-        />
-        <KpiCard
-          label="Cobros pendientes"
-          value={
-            <DualPhysicalAmounts
-              className="mt-0.5"
-              amountCup={summary?.totalPendingCup ?? 0}
-              amountUsd={summary?.totalPendingUsd ?? 0}
-              valueClassName="text-error"
-            />
-          }
-          icon={CircleDollarSign}
-          accent="bg-error/15 text-error"
-        />
-        <KpiCard
-          label="Facturas de hoy"
-          value={String(todayCount)}
-          icon={Package}
-          accent="bg-success/15 text-success"
-        />
+      <div className="grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Link to="/facturas" search={facturasListSearch} title="Ir a Facturas" className={KPI_LINK_CLASS}>
+          <KpiCard
+            label="Facturación del mes"
+            value={
+              <DualPhysicalAmounts
+                compact
+                amountCup={summary?.totalBilledCup ?? 0}
+                amountUsd={summary?.totalBilledUsd ?? 0}
+              />
+            }
+            caption="Mes en curso"
+            icon={Receipt}
+            accent="bg-primary/15 text-primary"
+          />
+        </Link>
+        <Link
+          to="/facturas"
+          search={{ estado: "pendiente" }}
+          title="Ir a Facturas pendientes"
+          className={KPI_LINK_CLASS}
+        >
+          <KpiCard
+            label="Facturación Pendiente"
+            value={
+              <DualPhysicalAmounts
+                compact
+                amountCup={metricsQuery.data?.pendientesAmountCup ?? 0}
+                amountUsd={metricsQuery.data?.pendientesAmountUsd ?? 0}
+                valueClassName="text-error"
+              />
+            }
+            caption={`${metricsQuery.data?.pendientesCount ?? 0} factura${
+              (metricsQuery.data?.pendientesCount ?? 0) === 1 ? "" : "s"
+            }`}
+            icon={Receipt}
+            accent="bg-error/15 text-error"
+          />
+        </Link>
+        <Link to="/pedidos" search={pedidosListSearch} title="Ir a Pedidos" className={KPI_LINK_CLASS}>
+          <KpiCard
+            label="Pedidos procesados"
+            value={processedThisMonthCount}
+            caption={`${processedThisMonthCount === 1 ? "pedido listo" : "pedidos listos"} este mes`}
+            icon={CheckCircle2}
+            accent="bg-success/15 text-success"
+          />
+        </Link>
+        <Link
+          to="/pedidos"
+          search={{ filter: "en_produccion" }}
+          title="Ir a Pedidos en producción"
+          className={KPI_LINK_CLASS}
+        >
+          <KpiCard
+            label="Pedidos en Producción"
+            value={inProductionCount}
+            caption={inProductionCount === 1 ? "pedido activo" : "pedidos activos"}
+            icon={ClipboardList}
+            accent="bg-warning/15 text-warning"
+          />
+        </Link>
+        <Link to="/pedidos" search={pedidosListSearch} title="Ir a Pedidos" className={KPI_LINK_CLASS}>
+          <KpiCard
+            label="Clientes registrados"
+            value={registeredClientsCount}
+            caption={`${registeredClientsCount === 1 ? "cliente" : "clientes"} · ${
+              summary?.clientsWithReceivablesCount ?? 0
+            } con deuda`}
+            icon={Users}
+            accent="bg-info/15 text-info"
+          />
+        </Link>
+        <Link to="/empleados" title="Ir a Empleados" className={KPI_LINK_CLASS}>
+          <KpiCard
+            label="Empleados activos"
+            value={activeEmployeesCount}
+            caption={activeEmployeesCount === 1 ? "trabajador activo" : "trabajadores activos"}
+            icon={UserCog}
+            accent="bg-primary/15 text-primary"
+          />
+        </Link>
+        <Link to="/empleados/nomina-diaria" title="Ir a Nómina diaria" className={KPI_LINK_CLASS}>
+          <KpiCard
+            label="Nómina diaria"
+            value={<span className="text-warning">{formatAmount(payrollTodayTotals.pending)}</span>}
+            caption={`${moneyHeading("Pendiente", "CUP")} · ${payrollTodayTotals.workers} trabajador${
+              payrollTodayTotals.workers === 1 ? "" : "es"
+            } hoy`}
+            icon={CalendarDays}
+            accent="bg-warning/15 text-warning"
+          />
+        </Link>
+        <Link
+          to="/empleados/historial-nomina"
+          title="Ir a Historial de nómina"
+          className={KPI_LINK_CLASS}
+        >
+          <KpiCard
+            label="Historial de Nómina"
+            value={<span className="text-success">{formatAmount(payrollMonthPaid)}</span>}
+            caption={`${moneyHeading("Pagado", "CUP")} este mes · ${payrollMonthWorkers} trabajador${
+              payrollMonthWorkers === 1 ? "" : "es"
+            }`}
+            icon={Banknote}
+            accent="bg-success/15 text-success"
+          />
+        </Link>
+        <Link to="/inventario" title="Ir a Inventario" className={KPI_LINK_CLASS}>
+          <KpiCard
+            label="Materiales de inventario"
+            value={materialesCount}
+            caption={
+              materialesDeficitCount > 0
+                ? `${materialesCount === 1 ? "material" : "materiales"} · ${materialesLowStockCount} stock bajo · ${materialesDeficitCount} déficit`
+                : `${materialesCount === 1 ? "material" : "materiales"} · ${materialesLowStockCount} stock bajo`
+            }
+            icon={Package}
+            accent={
+              materialesDeficitCount > 0 || materialesLowStockCount > 0
+                ? "bg-warning/15 text-warning"
+                : "bg-info/15 text-info"
+            }
+          />
+        </Link>
+        <Link to="/inventario/movimientos" title="Ir a Movimientos de inventario" className={KPI_LINK_CLASS}>
+          <KpiCard
+            label="Movimientos de inventario"
+            value={movimientosMesCount}
+            caption={`${movimientosMesCount === 1 ? "movimiento" : "movimientos"} este mes · ${movimientosEntradasCount} entrada${
+              movimientosEntradasCount === 1 ? "" : "s"
+            } · ${movimientosSalidasCount} salida${movimientosSalidasCount === 1 ? "" : "s"}`}
+            icon={ArrowLeftRight}
+            accent="bg-secondary/15 text-secondary"
+          />
+        </Link>
+        <Link to="/inventario/resumen" title="Ir a Resumen de consumo" className={KPI_LINK_CLASS}>
+          <KpiCard
+            label="Consumo de materiales"
+            value={formatConsumptionQty(consumoSalidas)}
+            caption={`salidas este mes · ${formatConsumptionQty(consumoMermas)} mermas · ${formatConsumptionQty(consumoVentas)} ventas`}
+            icon={PackageSearch}
+            accent="bg-accent/15 text-accent"
+          />
+        </Link>
+        <Link to="/precios" title="Ir a Precios" className={KPI_LINK_CLASS}>
+          <KpiCard
+            label="Precios de productos"
+            value={categoriasPreciosCount}
+            caption={`${categoriasPreciosCount === 1 ? "categoría" : "categorías"} · ${preciosDefinidosCount} precio${
+              preciosDefinidosCount === 1 ? "" : "s"
+            }`}
+            icon={Tag}
+            accent="bg-primary/15 text-primary"
+          />
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

@@ -7,6 +7,8 @@ interface DualPhysicalAmountsProps {
   /** Etiqueta de cada moneda (por defecto «Importe»). */
   label?: string;
   className?: string;
+  /** Una sola línea USD | CUP, sin etiquetas «Importe». */
+  compact?: boolean;
 }
 
 /**
@@ -18,7 +20,32 @@ interface DualPhysicalAmountsProps {
  * @returns Bloque dual USD | CUP.
  */
 export function DualPhysicalAmounts(props: DualPhysicalAmountsProps) {
-  const { amountCup, amountUsd, valueClassName = "", label = "Importe", className = "" } = props;
+  const {
+    amountCup,
+    amountUsd,
+    valueClassName = "",
+    label = "Importe",
+    className = "",
+    compact = false,
+  } = props;
+
+  if (compact) {
+    return (
+      <div className={`grid w-full min-w-0 grid-cols-2 gap-1 ${className}`.trim()}>
+        <p className={`truncate text-sm font-semibold leading-none tabular-nums ${valueClassName}`.trim()}>
+          {formatAmount(amountUsd)}
+          <span className="ml-0.5 text-[10px] font-normal text-base-content/50">USD</span>
+        </p>
+        <p
+          className={`truncate text-right text-sm font-semibold leading-none tabular-nums ${valueClassName}`.trim()}
+        >
+          {formatAmount(amountCup)}
+          <span className="ml-0.5 text-[10px] font-normal text-base-content/50">CUP</span>
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className={`grid grid-cols-2 gap-3 ${className}`.trim()}>
       <div>

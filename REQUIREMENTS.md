@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.49 | Última actualización: 2026-10-05
+### Versión: 2.55 | Última actualización: 2026-10-06
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -46,7 +46,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 ## 3. Módulos del Sistema
 
 ### 3.1 Inicio
-- KPIs: facturación del mes en USD y CUP (montos físicos de cobro, sin conversión; **USD a la izquierda**), pedidos pendientes, cobros pendientes en USD y CUP
+- KPIs clicables: **Facturación del mes**, **Facturación Pendiente**, **Pedidos procesados**, **Pedidos en Producción**; debajo **Clientes registrados** (abre Pedidos), **Empleados activos** (abre Empleados), **Nómina diaria** (abre `/empleados/nomina-diaria`) e **Historial de Nómina** (abre `/empleados/historial-nomina`); debajo **Materiales de inventario** (abre Inventario), **Movimientos de inventario** (abre `/inventario/movimientos`), **Consumo de materiales** (abre `/inventario/resumen`) y **Precios de productos** (abre Precios)
 - Lista de pedidos recientes con estado
 - Accesos rápidos a las acciones más frecuentes
 
@@ -104,7 +104,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Historial de nómina (v2.43)**: desde Empleados, listado de pagos (lotes y salarios fijos/destajo/mensual) y resumen por trabajador. Filtros por periodo (día, mes, rango o todos), trabajador, estado y concepto. **Excel y PDF** del listado filtrado (CUP)
 - Dar de baja (soft delete, no eliminar)
 - **Multi-rol (v2.5)**: cada empleado tiene un rol principal (`employees.role_id`) y puede tener roles adicionales (`employee_extra_roles`) para cuando cubre otra Área
-- **Nómina diaria (v2.5 / v2.12)**: vista de salario por empleado del día seleccionado (por defecto hoy; selector de fecha), con total, pagado, pendiente y botón **Pagar** por empleado (modal de denominaciones Efectivo/CUP). **Deshacer** (solo el día actual) revierte el pago con ingreso compensatorio en caja
+- **Nómina diaria (v2.51)**: pantalla `/empleados/nomina-diaria` (botón en Empleados); selector de fecha, total/pagado/pendiente CUP y **Pagar** por empleado. **Deshacer** (solo el día actual) revierte el pago con ingreso compensatorio en caja
 - Pago individual por lote desde el historial del empleado con el mismo modal reutilizable
 
 ### 3.5 Inventario
@@ -112,7 +112,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Categorías de material** (CRUD del usuario): obligatorias antes de dar de alta ítems; se gestionan desde la opción **Categorías** en Inventario (modal); el listado agrupa ítems en acordeón por categoría
 - Campos del ítem: categoría (obligatoria), nombre, **formato** (catálogo de Configuración; por defecto **Sin formato**), unidad, stock; **stock mínimo, costo unitario (CUP y/o USD, independientes) y proveedor opcionales**; descripción/apuntes; **edición** de datos del ítem (el stock solo cambia con movimientos)
 - Stock mínimo `0` o vacío = **Sin establecer** (sin alertas de stock bajo). Alertas solo si mínimo &gt; 0 y cantidad ≤ mínimo
-- Listado: **tabla** de categorías de material (ítems, alertas de déficit/stock bajo, búsqueda); al entrar, tabla de ítems y alta de ítem; sección **Movimientos** (día/mes/todos, **por defecto mes actual**) con método Manual vs Rebaja por Pedido vs Merma vs **Venta**; **Excel y PDF** del periodo activo; **Resumen** de consumo por tipo de material; **salida manual** (sin pedido) con **motivo obligatorio**; **venta de material** (sin pedido) con precio USD/CUP/mixto; **normas** desde la opción **Normas** (modal)
+- Listado: **tabla** de categorías de material (ítems, alertas de déficit/stock bajo, búsqueda); al entrar, tabla de ítems y alta de ítem; **Movimientos** en `/inventario/movimientos` (botón en Inventario; día/mes/todos, **por defecto mes actual**) con método Manual vs Rebaja por Pedido vs Merma vs **Venta**; **Excel y PDF** del periodo activo; **Resumen** de consumo por tipo de material; **salida manual** (sin pedido) con **motivo obligatorio**; **venta de material** (sin pedido) con precio USD/CUP/mixto; **normas** desde la opción **Normas** (modal)
 - Historial de movimientos por ítem (salidas con motivo obligatorio)
 - **Normas de producción**: por categoría de pedido + tipo de trabajo (tabs) + formato/acabado + material y cantidad/unidad; editables (solo afectan pedidos futuros); desactivadas ocultas con opción de ver/reactivar
 - En **Pedidos**, por línea: asignar materiales manualmente desde almacén (opción por defecto) **o** aplicar norma (se fijan materiales al crear el pedido). Solo materiales **existentes** (stock 0 o insuficiente permitido; no crear ítems desde el modal)
@@ -556,6 +556,26 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.49 — Estadísticas: gráfico de ingresos (2026-10)
 - El gráfico **Ingresos por categoría (mes actual)** sale del Inicio y vive en **Estadísticas** (`/estadisticas`), debajo de Reportes globales, con el icono de barras de Reportes.
+
+### v2.50 — Inicio: KPIs clicables de facturación (2026-10)
+- Inicio: **Facturación del mes** abre Facturas; **Facturación Pendiente** (USD/CUP, estilo alerta) abre Facturas en Pendientes; **Pedidos procesados** (listos del mes) abre Pedidos; **Pedidos en Producción** abre Pedidos en En Producción. Se retiran Cobros pendientes, Facturas de hoy y Pedidos pendientes.
+
+### v2.51 — Inicio: segunda fila de KPIs y nómina diaria aparte (2026-10)
+- Inicio: **Clientes registrados** (abre Pedidos), **Empleados activos** (abre Empleados), **Nómina diaria** (abre `/empleados/nomina-diaria`) e **Historial de Nómina** (abre `/empleados/historial-nomina`).
+- Empleados: la **Nómina diaria** pasa a `/empleados/nomina-diaria` (selector de fecha, pagar/deshacer); el listado conserva Habilitar y un botón hacia esa pantalla.
+
+### v2.52 — Inicio: panel Materiales de inventario (2026-10)
+- Inicio: debajo de los ocho KPIs, **Materiales de inventario** (cantidad, stock bajo y déficit) abre Inventario.
+
+### v2.53 — Inicio: panel Movimientos de inventario (2026-10)
+- Inventario: los **Movimientos** pasan a `/inventario/movimientos` (botón en Inventario; periodo, Excel/PDF).
+- Inicio: **Movimientos de inventario** (cantidad del mes, entradas y salidas) abre esa pantalla.
+
+### v2.54 — Inicio: panel Consumo de materiales (2026-10)
+- Inicio: **Consumo de materiales** (salidas, mermas y ventas del mes) abre **Resumen de consumo** (`/inventario/resumen`).
+
+### v2.55 — Inicio: panel Precios de productos (2026-10)
+- Inicio: **Precios de productos** (categorías y precios definidos) abre Precios.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
