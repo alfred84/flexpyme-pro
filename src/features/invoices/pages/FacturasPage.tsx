@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Eye, Printer } from "lucide-react";
 import { TablePagination } from "@/components/common/TablePagination";
@@ -10,6 +10,7 @@ import {
 } from "@/features/invoices/lib/invoice-dual-amounts";
 import { useClientPagination } from "@/hooks/use-client-pagination";
 import { formatDate } from "@/lib/format-date";
+import { facturaFilterToSearch } from "@/lib/facturas-search";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import {
   invoiceFinancialBadgeClass,
@@ -75,7 +76,9 @@ function DualKpiPanel(props: DualKpiPanelProps) {
  * @returns Página del módulo Facturas.
  */
 export function FacturasPage() {
-  const [filter, setFilter] = useState<FacturaFilter>("todas");
+  const navigate = useNavigate({ from: "/facturas" });
+  const { estado } = useSearch({ from: "/facturas" });
+  const filter: FacturaFilter = estado ?? "todas";
   const [search, setSearch] = useState("");
 
   const metricsQuery = useQuery({ queryKey: ["invoices", "metrics"], queryFn: fetchInvoiceMetrics });
@@ -163,7 +166,9 @@ export function FacturasPage() {
             key={f}
             type="button"
             className={`btn btn-sm ${filter === f ? "btn-primary" : "btn-ghost"}`}
-            onClick={() => setFilter(f)}
+            onClick={() =>
+              void navigate({ search: { estado: facturaFilterToSearch(f) } })
+            }
           >
             {f === "todas" ? "Todas" : invoiceFinancialLabel(f)}
           </button>

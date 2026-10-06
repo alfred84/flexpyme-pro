@@ -1,37 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { CalendarDays, Banknote, ClipboardList, Undo2, UserCog, UserPlus } from "lucide-react";
+import { CalendarDays, ClipboardList, UserCog, UserPlus } from "lucide-react";
 import {
   deactivateEmployee,
   fetchDestajoPendingForDate,
   fetchEmployees,
   fetchFixedDailyStatusForDate,
   fetchMonthlySalaryStatusForDate,
-  fetchPayrollDaily,
-  fetchUnpaidBatchesForDate,
-  payWorkBatchesMany,
   reactivateEmployee,
-  reverseEmployeePayment,
   scheduleFixedDailySalary,
   scheduleMonthlySalary,
   setDestajoDailySalary,
-  type UnpaidBatchDto,
 } from "@/db/queries/employees";
 import { DestajoDefineModal } from "@/features/employees/components/DestajoDefineModal";
-import { EmployeePayCashierModal } from "@/features/employees/components/EmployeePayCashierModal";
 import { FixedDailyEnableModal } from "@/features/employees/components/FixedDailyEnableModal";
 import { MonthlyEnableModal } from "@/features/employees/components/MonthlyEnableModal";
 import { formatDate, todayIso } from "@/lib/format-date";
-import { formatAmount, formatMoney, moneyHeading } from "@/lib/format-money";
+import { formatMoney } from "@/lib/format-money";
 import { pushFlashMessage } from "@/lib/flash-message";
 import type { EmployeePayMode } from "@/types/employee";
-
-/** Empleado seleccionado para pagar en el modal de caja. */
-interface PayEmployeeTarget {
-  employeeId: number;
-  employeeName: string;
-}
 
 /** Empleado seleccionado para habilitar el salario fijo diario. */
 interface FixedDailyTarget {
@@ -55,26 +43,20 @@ interface DestajoTarget {
 
 /**
  * Listado de empleados con alta y baja (soft delete).
+ * La nómina diaria y el historial viven en pantallas propias.
  *
  * @returns Página de empleados.
  */
 export function EmployeesListPage() {
   const queryClient = useQueryClient();
-  const [payTarget, setPayTarget] = useState<PayEmployeeTarget | null>(null);
   const [destajoTarget, setDestajoTarget] = useState<DestajoTarget | null>(null);
   const [monthlyTarget, setMonthlyTarget] = useState<MonthlyTarget | null>(null);
   const [fixedDailyTarget, setFixedDailyTarget] = useState<FixedDailyTarget | null>(null);
   const today = todayIso();
-  const [payrollDate, setPayrollDate] = useState(today);
 
   const employeesQuery = useQuery({
     queryKey: ["employees", "list"],
     queryFn: () => fetchEmployees(false),
-  });
-
-  const unpaidPayrollQuery = useQuery({
-    queryKey: ["employees", "unpaid", payrollDate],
-    queryFn: () => fetchUnpaidBatchesForDate(payrollDate),
   });
 
   const destajoTodayQuery = useQuery({
@@ -88,8 +70,8 @@ export function EmployeesListPage() {
   });
 
   const fixedDailyStatusQuery = useQuery({
-    queryKey: ["employees", "fixed-daily-status", payrollDate.slice(0, 7)],
-    queryFn: () => fetchFixedDailyStatusForDate(payrollDate),
+    queryKey: ["employees", "fixed-daily-status", today.slice(0, 7)],
+    queryFn: () => fetchFixedDailyStatusForDate(today),
   });
 
   const deactivateMutation = useMutation({
@@ -115,7 +97,6 @@ export function EmployeesListPage() {
     mutationFn: scheduleMonthlySalary,
     onSuccess: async (_id, variables) => {
       const date = variables.date ?? today;
-      setPayrollDate(date);
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       await queryClient.invalidateQueries({ queryKey: ["payroll-daily"] });
       pushFlashMessage({
@@ -129,7 +110,6 @@ export function EmployeesListPage() {
     mutationFn: scheduleFixedDailySalary,
     onSuccess: async (_id, variables) => {
       const date = variables.date ?? today;
-      setPayrollDate(date);
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       await queryClient.invalidateQueries({ queryKey: ["payroll-daily"] });
       pushFlashMessage({
@@ -139,32 +119,6 @@ export function EmployeesListPage() {
     },
   });
 
-  const reversePayMutation = useMutation({
-    mutationFn: reverseEmployeePayment,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["employees"] });
-      await queryClient.invalidateQueries({ queryKey: ["cashflow"] });
-      await queryClient.invalidateQueries({ queryKey: ["payroll-daily"] });
-    },
-  });
-
-  const isPayrollToday = payrollDate === today;
-
-  const payrollQuery = useQuery({
-    queryKey: ["payroll-daily", payrollDate],
-    queryFn: () => fetchPayrollDaily(payrollDate),
-  });
-  const payrollRows = payrollQuery.data ?? [];
-  const payrollTotals = payrollRows.reduce(
-    (acc, r) => ({
-      total: acc.total + r.totalCost,
-      paid: acc.paid + r.paid,
-      pending: acc.pending + r.pending,
-    }),
-    { total: 0, paid: 0, pending: 0 },
-  );
-
-  const unpaidPayroll = unpaidPayrollQuery.data ?? [];
   const destajoTodayByEmployee = useMemo(() => {
     const map = new Map<number, { amount: number; isPaid: boolean }>();
     for (const row of destajoTodayQuery.data ?? []) {
@@ -203,31 +157,10 @@ export function EmployeesListPage() {
     return map;
   }, [fixedDailyStatusQuery.data]);
 
-  const payItems = useMemo(() => {
-    if (!payTarget) {
-      return [] as UnpaidBatchDto[];
-    }
-    return unpaidPayroll.filter((b) => b.employeeId === payTarget.employeeId);
-  }, [payTarget, unpaidPayroll]);
-
-  const payAmount = useMemo(
-    () => payItems.reduce((s, b) => s + b.pending, 0),
-    [payItems],
-  );
-
   const handleDeactivate = (id: number, name: string) => {
     if (window.confirm(`¿Dar de baja a ${name}? Su historial se conserva.`)) {
       deactivateMutation.mutate(id);
     }
-  };
-
-  /**
-   * Invalida listados relacionados tras un pago.
-   */
-  const invalidateAfterPay = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["employees"] });
-    await queryClient.invalidateQueries({ queryKey: ["cashflow"] });
-    await queryClient.invalidateQueries({ queryKey: ["payroll-daily"] });
   };
 
   /**
@@ -248,7 +181,7 @@ export function EmployeesListPage() {
   ) => {
     if (payMode === "fixed") {
       const status = fixedDailyByEmployee.get(employeeId);
-      const payrollDay = payrollDate.slice(0, 10);
+      const payrollDay = today.slice(0, 10);
       const paidThatDay = Boolean(status?.paidDates.includes(payrollDay));
       const pendingThatDay = Boolean(status?.pendingDates.includes(payrollDay));
       return (
@@ -381,15 +314,9 @@ export function EmployeesListPage() {
           <UserCog className="h-6 w-6" /> Empleados
         </h1>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-sm">
-            <span className="text-base-content/70">Fecha de nómina</span>
-            <input
-              type="date"
-              className="input input-bordered input-sm"
-              value={payrollDate}
-              onChange={(e) => setPayrollDate(e.target.value || today)}
-            />
-          </label>
+          <Link to="/empleados/nomina-diaria" className="btn btn-outline btn-sm gap-1">
+            <CalendarDays className="h-4 w-4" /> Nómina diaria
+          </Link>
           <Link to="/empleados/historial-nomina" className="btn btn-outline btn-sm gap-1">
             <ClipboardList className="h-4 w-4" /> Historial de nómina
           </Link>
@@ -504,130 +431,6 @@ export function EmployeesListPage() {
         </div>
       )}
 
-      <div className="card bg-base-100 shadow-sm">
-        <div className="card-body gap-3 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="card-title flex items-center gap-2 text-base">
-              <CalendarDays className="h-5 w-5" /> Nómina diaria
-              <span className="font-normal text-sm text-base-content/60">
-                {formatDate(payrollDate)}
-              </span>
-            </h2>
-            <Link to="/empleados/historial-nomina" className="link link-hover text-sm">
-              Ver historial
-            </Link>
-          </div>
-          <p className="text-xs text-base-content/60">
-            El salario fijo diario y el mensual no aparecen solos: pulsa Habilitar en la tabla,
-            elige el día y luego págalo aquí. El diario se habilita por cada día trabajado.
-          </p>
-          {payrollQuery.isLoading ? (
-            <p className="py-6 text-center text-sm text-base-content/60">Cargando nómina...</p>
-          ) : payrollRows.length === 0 ? (
-            <p className="py-6 text-center text-sm text-base-content/60">
-              Sin salarios registrados el {formatDate(payrollDate)}.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="table table-sm">
-                <thead>
-                  <tr>
-                    <th>Empleado</th>
-                    <th className="text-right">{moneyHeading("Total")}</th>
-                    <th className="text-right">{moneyHeading("Pagado")}</th>
-                    <th className="text-right">{moneyHeading("Pendiente")}</th>
-                    <th className="text-right">Acción</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payrollRows.map((r) => {
-                    const canPay = r.pending > 1e-9;
-                    const canReverse = isPayrollToday && r.paid > 1e-9;
-                    return (
-                      <tr key={`${r.employeeId}-${r.date}`}>
-                        <td>{r.employeeName}</td>
-                        <td className="text-right">{formatAmount(r.totalCost)}</td>
-                        <td className="text-right text-success">{formatAmount(r.paid)}</td>
-                        <td className="text-right text-warning">{formatAmount(r.pending)}</td>
-                        <td className="text-right">
-                          <div className="flex flex-wrap justify-end gap-1">
-                            {canPay && (
-                              <button
-                                type="button"
-                                className="btn btn-xs btn-secondary gap-1"
-                                onClick={() =>
-                                  setPayTarget({
-                                    employeeId: r.employeeId,
-                                    employeeName: r.employeeName,
-                                  })
-                                }
-                              >
-                                <Banknote className="h-3.5 w-3.5" /> Pagar
-                              </button>
-                            )}
-                            {canReverse && (
-                              <button
-                                type="button"
-                                className="btn btn-xs btn-outline btn-error gap-1"
-                                disabled={reversePayMutation.isPending}
-                                title="Revertir el pago de hoy (solo mismo día)"
-                                onClick={() => {
-                                  if (
-                                    !window.confirm(
-                                      `¿Revertir el pago de ${r.employeeName} del ${formatDate(payrollDate)}?\n\nSe registrará un ingreso compensatorio en caja y el salario quedará pendiente de nuevo.`,
-                                    )
-                                  ) {
-                                    return;
-                                  }
-                                  void reversePayMutation
-                                    .mutateAsync({
-                                      employeeId: r.employeeId,
-                                      date: payrollDate,
-                                    })
-                                    .then(() => {
-                                      pushFlashMessage({
-                                        kind: "success",
-                                        text: `Pago a ${r.employeeName} revertido.`,
-                                      });
-                                    })
-                                    .catch((e: unknown) => {
-                                      pushFlashMessage({
-                                        kind: "error",
-                                        text:
-                                          e instanceof Error
-                                            ? e.message
-                                            : "No se pudo revertir el pago.",
-                                      });
-                                    });
-                                }}
-                              >
-                                <Undo2 className="h-3.5 w-3.5" /> Deshacer
-                              </button>
-                            )}
-                            {!canPay && !canReverse && (
-                              <span className="text-xs text-base-content/40">—</span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="font-semibold">
-                    <td>Total día</td>
-                    <td className="text-right">{formatAmount(payrollTotals.total)}</td>
-                    <td className="text-right text-success">{formatAmount(payrollTotals.paid)}</td>
-                    <td className="text-right text-warning">{formatAmount(payrollTotals.pending)}</td>
-                    <td />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
       <MonthlyEnableModal
         open={monthlyTarget !== null}
         employeeName={monthlyTarget?.employeeName ?? ""}
@@ -648,7 +451,7 @@ export function EmployeesListPage() {
       <FixedDailyEnableModal
         open={fixedDailyTarget !== null}
         employeeName={fixedDailyTarget?.employeeName ?? ""}
-        referenceDate={payrollDate}
+        referenceDate={today}
         pendingDates={
           fixedDailyTarget
             ? (fixedDailyByEmployee.get(fixedDailyTarget.employeeId)?.pendingDates ?? [])
@@ -687,41 +490,6 @@ export function EmployeesListPage() {
             date: today,
             amountCup,
           });
-        }}
-      />
-
-      <EmployeePayCashierModal
-        open={payTarget !== null}
-        title={payTarget ? `Pago a ${payTarget.employeeName}` : "Pago a empleado"}
-        description={
-          payTarget
-            ? payItems.length === 0
-              ? "No hay pagos pendientes."
-              : `${payItems.length} ítem(s) pendientes de ${payTarget.employeeName} el ${formatDate(payrollDate)}.`
-            : undefined
-        }
-        amountCup={payAmount}
-        onClose={() => setPayTarget(null)}
-        onConfirm={async (data) => {
-          if (!payTarget || payItems.length === 0) {
-            throw new Error("No hay pagos pendientes.");
-          }
-          await payWorkBatchesMany({
-            batchIds: payItems.filter((b) => !b.isFixedSalary).map((b) => b.id),
-            dailySalaryIds: payItems.filter((b) => b.isFixedSalary).map((b) => b.id),
-            paymentMethod: data.paymentMethod,
-            currency: data.currency,
-            denominationBreakdown: data.denominationBreakdown,
-            amountCup: data.amountCup,
-            amountUsd: data.amountUsd,
-            date: payrollDate,
-          });
-          await invalidateAfterPay();
-          pushFlashMessage({
-            kind: "success",
-            text: `Pago a ${payTarget.employeeName} registrado.`,
-          });
-          setPayTarget(null);
         }}
       />
     </section>

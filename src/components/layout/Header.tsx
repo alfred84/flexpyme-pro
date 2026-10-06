@@ -20,6 +20,18 @@ interface HeaderProps {
  * @returns Etiqueta de la sección activa.
  */
 function resolvePageTitle(pathname: string): string {
+  if (pathname === "/empleados/nomina-diaria") {
+    return "Nómina diaria";
+  }
+  if (pathname === "/empleados/historial-nomina") {
+    return "Historial de nómina";
+  }
+  if (pathname === "/inventario/movimientos") {
+    return "Movimientos de inventario";
+  }
+  if (pathname === "/inventario/resumen") {
+    return "Resumen de consumo";
+  }
   const all = [...PRIMARY_NAV, ...SECONDARY_NAV];
   const exact = all.find((item) => item.to === pathname);
   if (exact) {

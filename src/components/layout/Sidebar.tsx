@@ -4,6 +4,7 @@ import { BusinessLogo } from "@/components/common/BusinessLogo";
 import { PRIMARY_NAV, SECONDARY_NAV, type NavItem } from "@/config/navigation";
 import { useSidebarBadges } from "@/hooks/use-sidebar-badges";
 import { pedidosListSearch } from "@/lib/pedidos-search";
+import { facturasListSearch } from "@/lib/facturas-search";
 import { preciosListSearch } from "@/lib/precios-search";
 
 interface SidebarProps {
@@ -79,6 +80,9 @@ interface SidebarLinkProps {
 function sidebarSearchFor(to: string): Record<string, unknown> | undefined {
   if (to === "/pedidos") {
     return pedidosListSearch;
+  }
+  if (to === "/facturas") {
+    return facturasListSearch;
   }
   if (to === "/precios") {
     return preciosListSearch;

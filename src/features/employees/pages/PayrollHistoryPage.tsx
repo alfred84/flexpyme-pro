@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
+  CalendarDays,
   ClipboardList,
   FileSpreadsheet,
   FileText,
@@ -182,6 +183,9 @@ export function PayrollHistoryPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Link to="/empleados/nomina-diaria" className="btn btn-outline btn-sm gap-1">
+            <CalendarDays className="h-4 w-4" /> Nómina diaria
+          </Link>
           <button
             type="button"
             className="btn btn-outline btn-sm gap-1"

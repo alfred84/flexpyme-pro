@@ -6,6 +6,7 @@ import {
   BadgeDollarSign,
   ClipboardList,
   FolderTree,
+  ArrowLeftRight,
   Package,
   PackageMinus,
   PackageSearch,
@@ -14,7 +15,6 @@ import {
 import { ModalPortal } from "@/components/common/ModalPortal";
 import { fetchInventoryItems, fetchMaterialCategories, fetchInventoryPendingOrderDemand } from "@/db/queries/inventory";
 import { InventoryRecipesPanel } from "@/features/inventory/components/InventoryRecipesPanel";
-import { InventoryMovementsSection } from "@/features/inventory/components/InventoryMovementsSection";
 import { ManualOutboundModal } from "@/features/inventory/components/ManualOutboundModal";
 import { MaterialSaleModal } from "@/features/inventory/components/MaterialSaleModal";
 import { MaterialCategoriesPanel } from "@/features/inventory/components/MaterialCategoriesPanel";
@@ -99,6 +99,9 @@ export function InventoryListPage() {
         <div className="flex flex-wrap gap-2">
           <Link to="/inventario/resumen" className="btn btn-outline btn-sm gap-1">
             <PackageSearch className="h-4 w-4" /> Resumen
+          </Link>
+          <Link to="/inventario/movimientos" className="btn btn-outline btn-sm gap-1">
+            <ArrowLeftRight className="h-4 w-4" /> Movimientos
           </Link>
           <button
             type="button"
@@ -288,8 +291,6 @@ export function InventoryListPage() {
           </div>
         )}
       </div>
-
-      <InventoryMovementsSection />
 
       {showOutbound && <ManualOutboundModal onClose={() => setShowOutbound(false)} />}
       {showMaterialSale && <MaterialSaleModal onClose={() => setShowMaterialSale(false)} />}

@@ -1,4 +1,5 @@
 import { createRootRoute, createRoute, createRouter, redirect } from "@tanstack/react-router";
+import { parseFacturaEstado } from "@/lib/facturas-search";
 import { AppShell } from "@/components/layout/AppShell";
 import { DashboardPage } from "@/features/dashboard/pages/DashboardPage";
 import { ClientDetailPage } from "@/features/clients/pages/ClientDetailPage";
@@ -27,10 +28,12 @@ import { EmployeeEditPage } from "@/features/employees/pages/EmployeeEditPage";
 import { EmployeeDetailPage } from "@/features/employees/pages/EmployeeDetailPage";
 import { EmployeeWorkBatchPage } from "@/features/employees/pages/EmployeeWorkBatchPage";
 import { PayrollHistoryPage } from "@/features/employees/pages/PayrollHistoryPage";
+import { PayrollDailyPage } from "@/features/employees/pages/PayrollDailyPage";
 import { InventoryListPage } from "@/features/inventory/pages/InventoryListPage";
 import { InventoryNewPage } from "@/features/inventory/pages/InventoryNewPage";
 import { InventoryCategoryPage } from "@/features/inventory/pages/InventoryCategoryPage";
 import { InventoryConsumptionPage } from "@/features/inventory/pages/InventoryConsumptionPage";
+import { InventoryMovementsPage } from "@/features/inventory/pages/InventoryMovementsPage";
 import { InventoryItemDetailPage } from "@/features/inventory/pages/InventoryItemDetailPage";
 import { InventoryItemEditPage } from "@/features/inventory/pages/InventoryItemEditPage";
 import { CashflowPage } from "@/features/cashflow/pages/CashflowPage";
@@ -181,6 +184,9 @@ const stockDetailRoute = createRoute({
 const facturasListRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "facturas",
+  validateSearch: (search: Record<string, unknown>) => ({
+    estado: parseFacturaEstado(search.estado),
+  }),
   component: FacturasPage,
 });
 
@@ -257,6 +263,12 @@ const employeeNewRoute = createRoute({
   component: EmployeeNewPage,
 });
 
+const payrollDailyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "empleados/nomina-diaria",
+  component: PayrollDailyPage,
+});
+
 const payrollHistoryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "empleados/historial-nomina",
@@ -304,6 +316,12 @@ const inventorySummaryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "inventario/resumen",
   component: InventoryConsumptionPage,
+});
+
+const inventoryMovementsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "inventario/movimientos",
+  component: InventoryMovementsPage,
 });
 
 const inventoryCategoryRoute = createRoute({
@@ -401,6 +419,7 @@ const routeTree = rootRoute.addChildren([
   invoiceDetailRoute,
   employeesListRoute,
   employeeNewRoute,
+  payrollDailyRoute,
   payrollHistoryRoute,
   employeeDetailRoute,
   employeeEditRoute,
@@ -408,6 +427,7 @@ const routeTree = rootRoute.addChildren([
   inventoryListRoute,
   inventoryNewRoute,
   inventorySummaryRoute,
+  inventoryMovementsRoute,
   inventoryCategoryRoute,
   inventoryItemEditRoute,
   inventoryItemDetailRoute,

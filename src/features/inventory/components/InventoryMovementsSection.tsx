@@ -25,9 +25,11 @@ const PERIOD_OPTIONS: { id: InventoryMovementPeriod; label: string }[] = [
  * Sección de movimientos globales de inventario con filtro Día/Mes/Todos
  * (por defecto mes actual) y exporte Excel/PDF del periodo activo.
  *
- * @returns Bloque de UI para la pantalla principal de Inventario.
+ * @param props - `hideHeading` oculta el título cuando la página ya lo muestra.
+ * @returns Bloque de UI de movimientos.
  */
-export function InventoryMovementsSection() {
+export function InventoryMovementsSection(props: { hideHeading?: boolean }) {
+  const { hideHeading = false } = props;
   const [period, setPeriod] = useState<InventoryMovementPeriod>("mes");
   const [exporting, setExporting] = useState(false);
   const [exportFlash, setExportFlash] = useState<string | null>(null);
@@ -85,15 +87,19 @@ export function InventoryMovementsSection() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Movimientos de materiales de inventario</h2>
-          <p className="text-xs text-base-content/60">
-            Filtra la tabla de forma rápida. Por defecto: mes actual. Las ventas de material
-            aparecen como método <span className="font-medium">Venta</span>. Excel y PDF usan este
-            mismo periodo.
-          </p>
-        </div>
+      <div
+        className={`flex flex-wrap items-center gap-3 ${hideHeading ? "justify-end" : "justify-between"}`}
+      >
+        {hideHeading ? null : (
+          <div>
+            <h2 className="text-lg font-semibold">Movimientos de materiales de inventario</h2>
+            <p className="text-xs text-base-content/60">
+              Filtra la tabla de forma rápida. Por defecto: mes actual. Las ventas de material
+              aparecen como método <span className="font-medium">Venta</span>. Excel y PDF usan este
+              mismo periodo.
+            </p>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <div className="join" role="group" aria-label="Filtrar movimientos por periodo">
             {PERIOD_OPTIONS.map((opt) => (

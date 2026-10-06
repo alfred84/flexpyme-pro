@@ -14,6 +14,7 @@ import {
 } from "@/features/invoices/lib/invoice-dual-amounts";
 import { invoiceItemIsIncludedInProductCharge } from "@/features/invoices/lib/product-charge";
 import { formatDate } from "@/lib/format-date";
+import { facturasListSearch } from "@/lib/facturas-search";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import {
   invoiceFinancialBadgeClass,
@@ -104,7 +105,7 @@ export function FacturaDetailPage() {
               Imprimir
             </Link>
           )}
-          <Link to="/facturas" className="btn btn-ghost btn-sm">
+          <Link to="/facturas" search={facturasListSearch} className="btn btn-ghost btn-sm">
             Volver
           </Link>
         </div>
