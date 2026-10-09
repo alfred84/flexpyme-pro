@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.55 | Última actualización: 2026-10-06
+### Versión: 2.59 | Última actualización: 2026-10-06
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -46,7 +46,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 ## 3. Módulos del Sistema
 
 ### 3.1 Inicio
-- KPIs clicables: **Facturación del mes**, **Facturación Pendiente**, **Pedidos procesados**, **Pedidos en Producción**; debajo **Clientes registrados** (abre Pedidos), **Empleados activos** (abre Empleados), **Nómina diaria** (abre `/empleados/nomina-diaria`) e **Historial de Nómina** (abre `/empleados/historial-nomina`); debajo **Materiales de inventario** (abre Inventario), **Movimientos de inventario** (abre `/inventario/movimientos`), **Consumo de materiales** (abre `/inventario/resumen`) y **Precios de productos** (abre Precios)
+- KPIs clicables: **Facturación del mes**, **Facturación Pendiente**, **Pedidos procesados**, **Pedidos en Producción**; debajo **Clientes registrados** (abre Pedidos), **Empleados activos** (abre Empleados), **Nómina diaria** (abre `/empleados/nomina-diaria`) e **Historial de Nómina** (abre `/empleados/historial-nomina`); debajo **Materiales de inventario** (abre Inventario), **Movimientos de inventario** (abre `/inventario/movimientos`), **Consumo de materiales** (abre `/inventario/resumen`) y **Precios de productos** (abre Precios); debajo **Flujo de Caja** (abre Flujo de Caja), **Control de efectivo** (abre `/caja/control`), **Historial de caja** (abre `/caja/historial`) y **Otros gastos** (abre Otros gastos)
 - Lista de pedidos recientes con estado
 - Accesos rápidos a las acciones más frecuentes
 
@@ -576,6 +576,18 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.55 — Inicio: panel Precios de productos (2026-10)
 - Inicio: **Precios de productos** (categorías y precios definidos) abre Precios.
+
+### v2.56 — Inicio: panel Flujo de Caja (2026-10)
+- Inicio: debajo de los doce KPIs, **Flujo de Caja** (saldo USD/CUP y neto de hoy) abre Flujo de Caja.
+
+### v2.57 — Inicio: panel Control de efectivo (2026-10)
+- Inicio: **Control de efectivo** (estimado USD/CUP del mes y si hay saldo inicial) abre `/caja/control`.
+
+### v2.58 — Inicio: panel Historial de caja (2026-10)
+- Inicio: **Historial de caja** (movimientos del mes, ingresos y egresos) abre `/caja/historial`.
+
+### v2.59 — Inicio: panel Otros gastos (2026-10)
+- Inicio: **Otros gastos** (importe USD/CUP y cantidad del mes) abre Otros gastos.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

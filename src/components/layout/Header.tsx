@@ -32,6 +32,12 @@ function resolvePageTitle(pathname: string): string {
   if (pathname === "/inventario/resumen") {
     return "Resumen de consumo";
   }
+  if (pathname === "/caja/control") {
+    return "Control de efectivo";
+  }
+  if (pathname === "/caja/historial") {
+    return "Historial de caja";
+  }
   const all = [...PRIMARY_NAV, ...SECONDARY_NAV];
   const exact = all.find((item) => item.to === pathname);
   if (exact) {

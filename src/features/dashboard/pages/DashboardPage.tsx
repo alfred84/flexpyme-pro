@@ -11,30 +11,36 @@ import {
   CircleDollarSign,
   ClipboardList,
   DatabaseBackup,
+  History,
   Package,
   PackageSearch,
   Receipt,
   Tag,
   UserCog,
   Users,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
+import { fetchCashBalance, fetchCashControlSummary, fetchCashNetSummary, fetchCashTransactions } from "@/db/queries/cashflow";
 import { fetchCategories } from "@/db/queries/categories";
+import { formatCashNet } from "@/features/cashflow/lib/cash-amount-display";
 import { fetchClients } from "@/db/queries/clients";
 import { fetchEmployees, fetchPayrollDaily, fetchPayrollInRange } from "@/db/queries/employees";
 import { fetchInventoryItems, fetchInventoryMovementsList, fetchInventoryConsumptionSummary } from "@/db/queries/inventory";
 import { formatConsumptionQty } from "@/features/inventory/lib/consumption-summary";
 import { fetchInvoiceMetrics, fetchInvoices } from "@/db/queries/invoices";
+import { fetchOtherExpenses, fetchOtherExpensesSummary } from "@/db/queries/other-expenses";
 import { fetchPrices } from "@/db/queries/prices";
 import { fetchReportsSummary } from "@/db/queries/reports";
 import { fetchBackupOverview } from "@/db/queries/settings";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { cupToUsd } from "@/lib/currency";
 import { DualPhysicalAmounts } from "@/components/common/DualPhysicalAmounts";
-import { formatDate, formatDateTime, monthEndIso, monthStartIso, todayIso } from "@/lib/format-date";
+import { currentMonthYm, formatDate, formatDateTime, monthEndIso, monthStartIso, todayIso } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 import { facturasListSearch } from "@/lib/facturas-search";
 import { pedidosListSearch } from "@/lib/pedidos-search";
+import { preciosListSearch } from "@/lib/precios-search";
 
 /**
  * Tarjeta KPI del dashboard (contenido interno; el enlace lo pone el padre).
@@ -148,6 +154,36 @@ export function DashboardPage() {
     queryFn: () => fetchPrices(false),
   });
 
+  const cashBalanceQuery = useQuery({
+    queryKey: ["cashflow", "balance"],
+    queryFn: fetchCashBalance,
+  });
+
+  const cashNetQuery = useQuery({
+    queryKey: ["cashflow", "net-summary"],
+    queryFn: fetchCashNetSummary,
+  });
+
+  const cashControlQuery = useQuery({
+    queryKey: ["cashflow", "control", currentMonthYm(), today],
+    queryFn: () => fetchCashControlSummary(currentMonthYm(), today),
+  });
+
+  const cashHistoryQuery = useQuery({
+    queryKey: ["cashflow", "history", monthStart, monthEnd],
+    queryFn: () => fetchCashTransactions({ dateFrom: monthStart, dateTo: monthEnd }),
+  });
+
+  const otherExpensesQuery = useQuery({
+    queryKey: ["other-expenses", "list"],
+    queryFn: fetchOtherExpenses,
+  });
+
+  const otherExpensesSummaryQuery = useQuery({
+    queryKey: ["other-expenses", "summary"],
+    queryFn: fetchOtherExpensesSummary,
+  });
+
   const backupOverviewQuery = useQuery({
     queryKey: ["settings", "backup-overview"],
     queryFn: fetchBackupOverview,
@@ -203,6 +239,24 @@ export function DashboardPage() {
   const consumoVentas = consumoMes.reduce((sum, row) => sum + row.ventas, 0);
   const categoriasPreciosCount = categoriesQuery.data?.length ?? 0;
   const preciosDefinidosCount = pricesQuery.data?.length ?? 0;
+  const cashBalance = cashBalanceQuery.data;
+  const cashNet = cashNetQuery.data;
+  const cashNetTodayUsd = formatCashNet(cashNet?.netTodayUsd ?? 0);
+  const cashNetTodayCup = formatCashNet(cashNet?.netTodayCup ?? 0);
+  const cashNetTodayNegative =
+    (cashNet?.netTodayUsd ?? 0) < -1e-3 || (cashNet?.netTodayCup ?? 0) < -1e-3;
+  const cashControlCup = cashControlQuery.data?.cup;
+  const cashControlUsd = cashControlQuery.data?.usd;
+  const cashControlHasOpening = Boolean(cashControlCup?.hasOpening);
+  const cashHistoryMonth = cashHistoryQuery.data ?? [];
+  const cashHistoryCount = cashHistoryMonth.length;
+  const cashHistoryIngresos = cashHistoryMonth.filter((tx) => tx.transactionType === "ingreso").length;
+  const cashHistoryEgresos = cashHistoryCount - cashHistoryIngresos;
+  const otherExpensesMonthCount = (otherExpensesQuery.data ?? []).filter(
+    (gasto) => gasto.date >= monthStart && gasto.date <= monthEnd,
+  ).length;
+  const otherExpensesMonthCup = otherExpensesSummaryQuery.data?.monthCup ?? 0;
+  const otherExpensesMonthUsd = otherExpensesSummaryQuery.data?.monthUsd ?? 0;
 
   const backups = backupOverviewQuery.data?.backups ?? [];
 
@@ -358,7 +412,7 @@ export function DashboardPage() {
             accent="bg-accent/15 text-accent"
           />
         </Link>
-        <Link to="/precios" title="Ir a Precios" className={KPI_LINK_CLASS}>
+        <Link to="/precios" search={preciosListSearch} title="Ir a Precios" className={KPI_LINK_CLASS}>
           <KpiCard
             label="Precios de productos"
             value={categoriasPreciosCount}
@@ -367,6 +421,71 @@ export function DashboardPage() {
             }`}
             icon={Tag}
             accent="bg-primary/15 text-primary"
+          />
+        </Link>
+        <Link to="/caja" title="Ir a Flujo de Caja" className={KPI_LINK_CLASS}>
+          <KpiCard
+            label="Flujo de Caja"
+            value={
+              <DualPhysicalAmounts
+                compact
+                amountCup={cashBalance?.balanceCup ?? 0}
+                amountUsd={cashBalance?.balanceUsd ?? 0}
+              />
+            }
+            caption={`neto hoy ${cashNetTodayUsd.text} USD · ${cashNetTodayCup.text} CUP`}
+            icon={Wallet}
+            accent={
+              cashNetTodayNegative ? "bg-error/15 text-error" : "bg-success/15 text-success"
+            }
+          />
+        </Link>
+        <Link to="/caja/control" title="Ir a Control de efectivo" className={KPI_LINK_CLASS}>
+          <KpiCard
+            label="Control de efectivo"
+            value={
+              <DualPhysicalAmounts
+                compact
+                amountCup={cashControlCup?.estimatedTotal ?? 0}
+                amountUsd={cashControlUsd?.estimatedTotal ?? 0}
+              />
+            }
+            caption={
+              cashControlHasOpening
+                ? "estimado del mes · saldo inicial registrado"
+                : "estimado del mes · sin saldo inicial"
+            }
+            icon={Banknote}
+            accent={
+              cashControlHasOpening ? "bg-success/15 text-success" : "bg-warning/15 text-warning"
+            }
+          />
+        </Link>
+        <Link to="/caja/historial" title="Ir a Historial de caja" className={KPI_LINK_CLASS}>
+          <KpiCard
+            label="Historial de caja"
+            value={cashHistoryCount}
+            caption={`${cashHistoryCount === 1 ? "movimiento" : "movimientos"} este mes · ${cashHistoryIngresos} ingreso${
+              cashHistoryIngresos === 1 ? "" : "s"
+            } · ${cashHistoryEgresos} egreso${cashHistoryEgresos === 1 ? "" : "s"}`}
+            icon={History}
+            accent="bg-info/15 text-info"
+          />
+        </Link>
+        <Link to="/otros-gastos" title="Ir a Otros gastos" className={KPI_LINK_CLASS}>
+          <KpiCard
+            label="Otros gastos"
+            value={
+              <DualPhysicalAmounts
+                compact
+                amountCup={otherExpensesMonthCup}
+                amountUsd={otherExpensesMonthUsd}
+                valueClassName="text-error"
+              />
+            }
+            caption={`${otherExpensesMonthCount === 1 ? "gasto" : "gastos"} este mes`}
+            icon={Receipt}
+            accent="bg-error/15 text-error"
           />
         </Link>
       </div>
