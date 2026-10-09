@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.59 | Última actualización: 2026-10-06
+### Versión: 2.60 | Última actualización: 2026-10-09
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -46,7 +46,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 ## 3. Módulos del Sistema
 
 ### 3.1 Inicio
-- KPIs clicables: **Facturación del mes**, **Facturación Pendiente**, **Pedidos procesados**, **Pedidos en Producción**; debajo **Clientes registrados** (abre Pedidos), **Empleados activos** (abre Empleados), **Nómina diaria** (abre `/empleados/nomina-diaria`) e **Historial de Nómina** (abre `/empleados/historial-nomina`); debajo **Materiales de inventario** (abre Inventario), **Movimientos de inventario** (abre `/inventario/movimientos`), **Consumo de materiales** (abre `/inventario/resumen`) y **Precios de productos** (abre Precios); debajo **Flujo de Caja** (abre Flujo de Caja), **Control de efectivo** (abre `/caja/control`), **Historial de caja** (abre `/caja/historial`) y **Otros gastos** (abre Otros gastos)
+- KPIs clicables: **Facturación del mes**, **Facturación Pendiente**, **Pedidos procesados**, **Pedidos en Producción**; debajo **Clientes registrados** (abre Clientes), **Empleados activos** (abre Empleados), **Nómina diaria** (abre `/empleados/nomina-diaria`) e **Historial de Nómina** (abre `/empleados/historial-nomina`); debajo **Materiales de inventario** (abre Inventario), **Movimientos de inventario** (abre `/inventario/movimientos`), **Consumo de materiales** (abre `/inventario/resumen`) y **Precios de productos** (abre Precios); debajo **Flujo de Caja** (abre Flujo de Caja), **Control de efectivo** (abre `/caja/control`), **Historial de caja** (abre `/caja/historial`) y **Otros gastos** (abre Otros gastos)
 - Lista de pedidos recientes con estado
 - Accesos rápidos a las acciones más frecuentes
 
@@ -588,6 +588,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.59 — Inicio: panel Otros gastos (2026-10)
 - Inicio: **Otros gastos** (importe USD/CUP y cantidad del mes) abre Otros gastos.
+
+### v2.60 — Inicio: Clientes registrados abre Clientes (2026-10)
+- Inicio: **Clientes registrados** abre Clientes (`/clientes`), no Pedidos.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).

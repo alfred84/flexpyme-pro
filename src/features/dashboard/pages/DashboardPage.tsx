@@ -329,7 +329,7 @@ export function DashboardPage() {
             accent="bg-warning/15 text-warning"
           />
         </Link>
-        <Link to="/pedidos" search={pedidosListSearch} title="Ir a Pedidos" className={KPI_LINK_CLASS}>
+        <Link to="/clientes" title="Ir a Clientes" className={KPI_LINK_CLASS}>
           <KpiCard
             label="Clientes registrados"
             value={registeredClientsCount}
