@@ -268,6 +268,29 @@ export function DashboardPage() {
       </div>
 
       <div className="grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Link to="/pedidos" search={pedidosListSearch} title="Ir a Pedidos" className={KPI_LINK_CLASS}>
+          <KpiCard
+            label="Pedidos procesados"
+            value={processedThisMonthCount}
+            caption={`${processedThisMonthCount === 1 ? "pedido listo" : "pedidos listos"} este mes`}
+            icon={CheckCircle2}
+            accent="bg-success/15 text-success"
+          />
+        </Link>
+        <Link
+          to="/pedidos"
+          search={{ filter: "en_produccion" }}
+          title="Ir a Pedidos en producción"
+          className={KPI_LINK_CLASS}
+        >
+          <KpiCard
+            label="Pedidos en Producción"
+            value={inProductionCount}
+            caption={inProductionCount === 1 ? "pedido activo" : "pedidos activos"}
+            icon={ClipboardList}
+            accent="bg-warning/15 text-warning"
+          />
+        </Link>
         <Link to="/facturas" search={facturasListSearch} title="Ir a Facturas" className={KPI_LINK_CLASS}>
           <KpiCard
             label="Facturación del mes"
@@ -304,29 +327,6 @@ export function DashboardPage() {
             }`}
             icon={Receipt}
             accent="bg-error/15 text-error"
-          />
-        </Link>
-        <Link to="/pedidos" search={pedidosListSearch} title="Ir a Pedidos" className={KPI_LINK_CLASS}>
-          <KpiCard
-            label="Pedidos procesados"
-            value={processedThisMonthCount}
-            caption={`${processedThisMonthCount === 1 ? "pedido listo" : "pedidos listos"} este mes`}
-            icon={CheckCircle2}
-            accent="bg-success/15 text-success"
-          />
-        </Link>
-        <Link
-          to="/pedidos"
-          search={{ filter: "en_produccion" }}
-          title="Ir a Pedidos en producción"
-          className={KPI_LINK_CLASS}
-        >
-          <KpiCard
-            label="Pedidos en Producción"
-            value={inProductionCount}
-            caption={inProductionCount === 1 ? "pedido activo" : "pedidos activos"}
-            icon={ClipboardList}
-            accent="bg-warning/15 text-warning"
           />
         </Link>
         <Link to="/clientes" title="Ir a Clientes" className={KPI_LINK_CLASS}>
