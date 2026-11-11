@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangle,
   BadgeDollarSign,
@@ -12,6 +12,7 @@ import {
   PackageSearch,
   Search,
 } from "lucide-react";
+import { ClickableTableRow } from "@/components/common/ClickableTableRow";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import { fetchInventoryItems, fetchMaterialCategories, fetchInventoryPendingOrderDemand } from "@/db/queries/inventory";
 import { InventoryRecipesPanel } from "@/features/inventory/components/InventoryRecipesPanel";
@@ -38,6 +39,7 @@ interface CategoryRow {
  * @returns Página de inventario.
  */
 export function InventoryListPage() {
+  const navigate = useNavigate();
   const [showOutbound, setShowOutbound] = useState(false);
   const [showMaterialSale, setShowMaterialSale] = useState(false);
   const [managePanel, setManagePanel] = useState<InventoryManagePanel>(null);
@@ -231,21 +233,21 @@ export function InventoryListPage() {
                   <th>Descripción</th>
                   <th className="text-right">Ítems</th>
                   <th>Alertas</th>
-                  <th className="text-right">Acción</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredTiles.map((tile) => (
-                  <tr key={tile.id} className="hover">
-                    <td className="font-medium">
-                      <Link
-                        to="/inventario/categoria/$categoryId"
-                        params={{ categoryId: String(tile.id) }}
-                        className="link link-hover"
-                      >
-                        {tile.name}
-                      </Link>
-                    </td>
+                  <ClickableTableRow
+                    key={tile.id}
+                    ariaLabel={`Ver materiales de ${tile.name}`}
+                    onOpen={() => {
+                      void navigate({
+                        to: "/inventario/categoria/$categoryId",
+                        params: { categoryId: String(tile.id) },
+                      });
+                    }}
+                  >
+                    <td className="font-medium">{tile.name}</td>
                     <td className="max-w-md text-sm text-base-content/70">
                       {tile.description?.trim() ? tile.description : "—"}
                     </td>
@@ -268,20 +270,11 @@ export function InventoryListPage() {
                         <span className="text-base-content/40">—</span>
                       )}
                     </td>
-                    <td className="text-right">
-                      <Link
-                        to="/inventario/categoria/$categoryId"
-                        params={{ categoryId: String(tile.id) }}
-                        className="btn btn-outline btn-xs"
-                      >
-                        Ver materiales
-                      </Link>
-                    </td>
-                  </tr>
+                  </ClickableTableRow>
                 ))}
                 {filteredTiles.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-6 text-center text-base-content/60">
+                    <td colSpan={4} className="py-6 text-center text-base-content/60">
                       Ninguna categoría coincide con «{categoryFilter.trim()}».
                     </td>
                   </tr>

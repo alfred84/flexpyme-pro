@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.62 | Última actualización: 2026-11-11
+### Versión: 2.63 | Última actualización: 2026-11-11
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -112,7 +112,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Categorías de material** (CRUD del usuario): obligatorias antes de dar de alta ítems; se gestionan desde la opción **Categorías** en Inventario (modal); el listado agrupa ítems en acordeón por categoría
 - Campos del ítem: categoría (obligatoria), nombre, **formato** (catálogo de Configuración; por defecto **Sin formato**), unidad, stock; **stock mínimo, costo unitario (CUP y/o USD, independientes) y proveedor opcionales**; descripción/apuntes; **edición** de datos del ítem (el stock solo cambia con movimientos)
 - Stock mínimo `0` o vacío = **Sin establecer** (sin alertas de stock bajo). Alertas solo si mínimo &gt; 0 y cantidad ≤ mínimo
-- Listado: **tabla** de categorías de material (ítems, alertas de déficit/stock bajo, búsqueda); al entrar, tabla de ítems y alta de ítem; **Movimientos** en `/inventario/movimientos` (botón en Inventario; día/mes/todos, **por defecto mes actual**) con método Manual vs Rebaja por Pedido vs Merma vs **Venta**; **Excel y PDF** del periodo activo; **Resumen** de consumo por tipo de material; **salida manual** (sin pedido) con **motivo obligatorio**; **venta de material** (sin pedido) con precio USD/CUP/mixto; **normas** desde la opción **Normas** (modal)
+- Listado: **tabla** de categorías de material (ítems, alertas de déficit/stock bajo, búsqueda); el clic sobre la fila abre los materiales de esa categoría; al entrar, tabla de ítems y alta de ítem; **Movimientos** en `/inventario/movimientos` (botón en Inventario; día/mes/todos, **por defecto mes actual**) con método Manual vs Rebaja por Pedido vs Merma vs **Venta**; **Excel y PDF** del periodo activo; **Resumen** de consumo por tipo de material; **salida manual** (sin pedido) con **motivo obligatorio**; **venta de material** (sin pedido) con precio USD/CUP/mixto; **normas** desde la opción **Normas** (modal)
 - Historial de movimientos por ítem (salidas con motivo obligatorio)
 - **Normas de producción**: por categoría de pedido + tipo de trabajo (tabs) + formato/acabado + material y cantidad/unidad; editables (solo afectan pedidos futuros); desactivadas ocultas con opción de ver/reactivar
 - En **Pedidos**, por línea: asignar materiales manualmente desde almacén (opción por defecto) **o** aplicar norma (se fijan materiales al crear el pedido). Solo materiales **existentes** (stock 0 o insuficiente permitido; no crear ítems desde el modal)
@@ -597,6 +597,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.62 — Tablas: clic en la fila en lugar de Ver (2026-11)
 - Listados principales: se retira el botón **Ver**; el clic sobre la fila abre el detalle. Hover y foco de teclado marcan la fila. El resto de botones (Editar, Cobrar, Anular, Imprimir, etc.) se conservan y no abren el detalle.
+
+### v2.63 — Inventario: clic en categoría en lugar de Ver materiales (2026-11)
+- Inventario → Materiales por categoría: se retiran la columna **Acción** y el botón **Ver materiales**; el clic sobre la fila abre los materiales de esa categoría.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
