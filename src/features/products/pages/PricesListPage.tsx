@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, Plus, Search, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ClickableTableRow } from "@/components/common/ClickableTableRow";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import {
   fetchAllCategoryFormats,
@@ -605,18 +606,20 @@ export function PricesListPage() {
                   const Icon = resolveCategoryIcon(row.icon);
                   const extraWorkTypes = Math.max(0, row.workTypeNames.length - 3);
                   return (
-                    <tr key={row.id} className="hover">
+                    <ClickableTableRow
+                      key={row.id}
+                      ariaLabel={`Ver precios de ${row.name}`}
+                      onOpen={() => {
+                        if (category) {
+                          handleSelectCategory(category);
+                        }
+                      }}
+                    >
                       <td>
                         <div className="flex items-center gap-2">
                           <Icon className="h-4 w-4 shrink-0 text-base-content/70" aria-hidden />
                           <div className="min-w-0">
-                            <button
-                              type="button"
-                              className="link link-hover font-medium"
-                              onClick={() => category && handleSelectCategory(category)}
-                            >
-                              {row.name}
-                            </button>
+                            <p className="font-medium">{row.name}</p>
                             <p className="text-xs text-base-content/50">{row.code}</p>
                           </div>
                         </div>
@@ -669,26 +672,17 @@ export function PricesListPage() {
                         )}
                       </td>
                       <td className="text-right">
-                        <div className="flex flex-wrap justify-end gap-1">
-                          <button
-                            type="button"
-                            className="btn btn-outline btn-xs"
-                            onClick={() => category && handleSelectCategory(category)}
-                          >
-                            Ver precios
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-outline btn-xs gap-1"
-                            title="Configurar tipos de trabajo, formatos y acabados"
-                            onClick={() => category && setConfiguring(category)}
-                          >
-                            <Settings2 className="h-3.5 w-3.5" />
-                            Configurar
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-xs gap-1"
+                          title="Configurar tipos de trabajo, formatos y acabados"
+                          onClick={() => category && setConfiguring(category)}
+                        >
+                          <Settings2 className="h-3.5 w-3.5" />
+                          Configurar
+                        </button>
                       </td>
-                    </tr>
+                    </ClickableTableRow>
                   );
                 })}
                 {filteredCategoryRows.length === 0 && (

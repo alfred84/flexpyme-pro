@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.63 | Última actualización: 2026-11-11
+### Versión: 2.64 | Última actualización: 2026-11-11
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -143,7 +143,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 ### 3.7 Configuración
 - Datos del negocio (nombre, dirección, teléfono, logo)
 - Tasa de cambio USD → CUP (actualizable desde cabecera o Configuración; histórico de cambios)
-- **Precios** como entrada del sidebar (debajo de Flujo de Caja), no como tab de Configuración. Incluye precios de venta (**USD por defecto**; CUP opcional, activables por fila) y **tarifas de pago** a trabajadores en CUP (antes «Costos»); la ruta legacy `/costos` redirige a `/precios`. El precio de venta CUP/USD es **único del producto terminado** (categoría + formato + acabado); las pestañas por tipo de trabajo lo muestran como referencia y no pueden divergir. La tarifa de pago sí es por tipo de trabajo. Cada moneda se define de forma independiente; se puede aplicar la tasa vigente de la app para derivar un precio a partir del otro. En el listado (tabla), **Nueva categoría** abre el mismo formulario que Configuración → Categorías de productos. **Configurar** (en la fila o al entrar a una categoría) abre el mismo modal de tipos de trabajo, formatos y acabados.
+- **Precios** como entrada del sidebar (debajo de Flujo de Caja), no como tab de Configuración. Incluye precios de venta (**USD por defecto**; CUP opcional, activables por fila) y **tarifas de pago** a trabajadores en CUP (antes «Costos»); la ruta legacy `/costos` redirige a `/precios`. El precio de venta CUP/USD es **único del producto terminado** (categoría + formato + acabado); las pestañas por tipo de trabajo lo muestran como referencia y no pueden divergir. La tarifa de pago sí es por tipo de trabajo. Cada moneda se define de forma independiente; se puede aplicar la tasa vigente de la app para derivar un precio a partir del otro. En el listado (tabla), el clic sobre la fila abre los precios de esa categoría; **Nueva categoría** abre el mismo formulario que Configuración → Categorías de productos. **Configurar** (en la fila o al entrar a una categoría) abre el mismo modal de tipos de trabajo, formatos y acabados.
 - **Categorías** de productos (CRUD con `is_system`, snapshot en pedidos)
 - **Roles de empleados**: catálogo `employee_roles`; cada rol puede asociarse a uno o más **tipos de trabajo** (`role_work_types`) que definen qué trabajos pueden realizar los empleados con ese rol (principal o secundario)
 - **Tipos de trabajo, formatos y acabados por categoría**: tablas `category_work_types`, `category_formats` y `category_finishes` (vinculadas a los catálogos `work_types`, `formats` y `finishes`). Catálogo global de acabados en Configuración → Acabados. Al crear líneas se preseleccionan tipos y acabados «por defecto»; cada tipo se expande en un `invoice_item` para producción, pero el cobro es una sola vez (precio del producto).
@@ -600,6 +600,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.63 — Inventario: clic en categoría en lugar de Ver materiales (2026-11)
 - Inventario → Materiales por categoría: se retiran la columna **Acción** y el botón **Ver materiales**; el clic sobre la fila abre los materiales de esa categoría.
+
+### v2.64 — Precios: clic en categoría en lugar de Ver precios (2026-11)
+- Precios: se retira el botón **Ver precios**; el clic sobre la fila (con hover) abre los precios de esa categoría. **Configurar** se conserva.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
