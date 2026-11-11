@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { History } from "lucide-react";
+import { ClickableTableRow } from "@/components/common/ClickableTableRow";
 import { ProductionStatusBadge, PaymentStatusBadge } from "@/components/invoices/InvoiceStatusBadges";
 import { fetchClientWorkHistory } from "@/db/queries/clients";
 import { formatDate } from "@/lib/format-date";
@@ -22,6 +23,7 @@ interface ClientWorkHistorySectionProps {
  * @returns Sección con estadística y tabla (vacía si no hay pedidos).
  */
 export function ClientWorkHistorySection(props: ClientWorkHistorySectionProps) {
+  const navigate = useNavigate();
   const { clientId, totalHistoricalUsdHint, totalHistoricalCupHint } = props;
 
   const historyQuery = useQuery({
@@ -80,13 +82,12 @@ export function ClientWorkHistorySection(props: ClientWorkHistorySectionProps) {
                   <th className="text-right">{moneyHeading("Total", "CUP")}</th>
                   <th>Producción</th>
                   <th>Cobro</th>
-                  <th className="w-0" />
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center text-base-content/60">
+                    <td colSpan={6} className="text-center text-base-content/60">
                       Este cliente no tiene pedidos registrados.
                     </td>
                   </tr>
@@ -98,7 +99,16 @@ export function ClientWorkHistorySection(props: ClientWorkHistorySectionProps) {
                     const amountUsd = row.dueUsd > 0 ? row.dueUsd : row.totalUsd;
                     const amountCup = row.dueCup > 0 ? row.dueCup : showCup ? row.total : 0;
                     return (
-                      <tr key={row.id}>
+                      <ClickableTableRow
+                        key={row.id}
+                        ariaLabel={`Ver pedido ${row.invoiceNumber}`}
+                        onOpen={() => {
+                          void navigate({
+                            to: "/pedidos/$invoiceId",
+                            params: { invoiceId: String(row.id) },
+                          });
+                        }}
+                      >
                         <td className="font-mono text-xs">{row.invoiceNumber}</td>
                         <td>{formatDate(row.date)}</td>
                         <td className="text-right tabular-nums">
@@ -113,16 +123,7 @@ export function ClientWorkHistorySection(props: ClientWorkHistorySectionProps) {
                         <td>
                           <PaymentStatusBadge status={row.paymentStatus} />
                         </td>
-                        <td>
-                          <Link
-                            className="btn btn-xs btn-ghost"
-                            to="/pedidos/$invoiceId"
-                            params={{ invoiceId: String(row.id) }}
-                          >
-                            Ver pedido
-                          </Link>
-                        </td>
-                      </tr>
+                      </ClickableTableRow>
                     );
                   })
                 )}

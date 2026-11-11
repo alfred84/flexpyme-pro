@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Eye, Printer } from "lucide-react";
+import { Printer } from "lucide-react";
+import { ClickableTableRow } from "@/components/common/ClickableTableRow";
 import { TablePagination } from "@/components/common/TablePagination";
 import { fetchInvoiceMetrics, fetchInvoicesFinancial } from "@/db/queries/invoices";
 import {
@@ -213,7 +214,16 @@ export function FacturasPage() {
               const fin = invoiceFinancialStatus(row.balance, row.paid, row.status === "anulada");
               const dual = resolveInvoiceDualAmounts(row);
               return (
-                <tr key={row.id}>
+                <ClickableTableRow
+                  key={row.id}
+                  ariaLabel={`Ver factura ${row.invoiceNumber}`}
+                  onOpen={() => {
+                    void navigate({
+                      to: "/facturas/$invoiceId",
+                      params: { invoiceId: String(row.id) },
+                    });
+                  }}
+                >
                   <td className="font-mono text-xs">{row.invoiceNumber}</td>
                   <td>{row.clientName}</td>
                   <td>{formatDate(row.date)}</td>
@@ -235,13 +245,6 @@ export function FacturasPage() {
                     <div className="flex gap-1">
                       <Link
                         className="btn btn-xs btn-ghost gap-1"
-                        to="/facturas/$invoiceId"
-                        params={{ invoiceId: String(row.id) }}
-                      >
-                        <Eye className="h-3 w-3" /> Ver
-                      </Link>
-                      <Link
-                        className="btn btn-xs btn-ghost gap-1"
                         to="/facturas/$invoiceId/imprimir"
                         params={{ invoiceId: String(row.id) }}
                       >
@@ -249,7 +252,7 @@ export function FacturasPage() {
                       </Link>
                     </div>
                   </td>
-                </tr>
+                </ClickableTableRow>
               );
             })}
           </tbody>

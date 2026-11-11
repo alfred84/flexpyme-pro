@@ -8,9 +8,10 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
+import { ClickableTableRow } from "@/components/common/ClickableTableRow";
 import { RestoreClientsModal } from "@/features/clients/components/RestoreClientsModal";
 import {
   clientBalanceStatusBadgeClass,
@@ -104,13 +105,6 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
         cell: ({ row }) => (
           <div className="flex gap-2">
             <Link
-              className="btn btn-xs btn-outline"
-              to="/clientes/$clientId"
-              params={{ clientId: String(row.original.id) }}
-            >
-              Ver
-            </Link>
-            <Link
               className="btn btn-xs btn-ghost"
               to="/clientes/$clientId/editar"
               params={{ clientId: String(row.original.id) }}
@@ -131,6 +125,7 @@ function useClientColumns(): ColumnDef<ClientDto>[] {
  * @returns Página de tabla de clientes.
  */
 export function ClientsListPage() {
+  const navigate = useNavigate();
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [flash] = useState<FlashMessage | null>(() => popFlashMessage());
@@ -247,13 +242,22 @@ export function ClientsListPage() {
                   </tr>
                 ) : (
                   table.getRowModel().rows.map((row) => (
-                    <tr key={row.id}>
+                    <ClickableTableRow
+                      key={row.id}
+                      ariaLabel={`Ver cliente ${row.original.name}`}
+                      onOpen={() => {
+                        void navigate({
+                          to: "/clientes/$clientId",
+                          params: { clientId: String(row.original.id) },
+                        });
+                      }}
+                    >
                       {row.getVisibleCells().map((cell) => (
                         <td key={cell.id}>
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </td>
                       ))}
-                    </tr>
+                    </ClickableTableRow>
                   ))
                 )}
               </tbody>

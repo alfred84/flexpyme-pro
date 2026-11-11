@@ -8,6 +8,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { ClickableTableRow } from "@/components/common/ClickableTableRow";
 import { ModalPortal } from "@/components/common/ModalPortal";
 import { TablePagination } from "@/components/common/TablePagination";
 import { PaymentStatusBadge, ProductionStatusBadge } from "@/components/invoices/InvoiceStatusBadges";
@@ -61,8 +62,8 @@ function paymentCurrencyOf(row: InvoiceListDto): "CUP" | "USD" | "mixto" | null 
 }
 
 /**
- * Lista pedidos con badges de producción/cobro, filtros y acciones (cobrar, editar, anular, ver).
- * Marcar Listo se hace desde el detalle del pedido, línea a línea.
+ * Lista pedidos con badges de producción/cobro, filtros y acciones (cobrar, editar, anular).
+ * El detalle se abre al pulsar la fila. Marcar Listo se hace desde el detalle, línea a línea.
  *
  * @returns Página de listado de pedidos.
  */
@@ -224,13 +225,6 @@ export function InvoicesListPage() {
                   Anular
                 </button>
               )}
-              <Link
-                className="btn btn-xs btn-ghost"
-                to="/pedidos/$invoiceId"
-                params={{ invoiceId: String(inv.id) }}
-              >
-                Ver
-              </Link>
             </div>
           );
         },
@@ -327,13 +321,22 @@ export function InvoicesListPage() {
                   </tr>
                 ) : (
                   table.getRowModel().rows.map((row) => (
-                    <tr key={row.id}>
+                    <ClickableTableRow
+                      key={row.id}
+                      ariaLabel={`Ver pedido ${row.original.invoiceNumber}`}
+                      onOpen={() => {
+                        void navigate({
+                          to: "/pedidos/$invoiceId",
+                          params: { invoiceId: String(row.original.id) },
+                        });
+                      }}
+                    >
                       {row.getVisibleCells().map((cell) => (
                         <td key={cell.id}>
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </td>
                       ))}
-                    </tr>
+                    </ClickableTableRow>
                   ))
                 )}
               </tbody>

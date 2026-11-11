@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { FileSpreadsheet, FileText, Plus, Receipt, Settings2, Trash2 } from "lucide-react";
 import {
   deleteOtherExpense,
   fetchOtherExpenses,
   fetchOtherExpensesSummary,
 } from "@/db/queries/other-expenses";
+import { ClickableTableRow } from "@/components/common/ClickableTableRow";
 import { ExpenseTypesConfigModal } from "@/features/expenses/components/ExpenseTypesConfigModal";
 import { reportExportBasename } from "@/features/reports/lib/report-period";
 import { formatDate, todayIso } from "@/lib/format-date";
@@ -147,6 +148,7 @@ function buildExpenseExportSections(
  * @returns Página de otros gastos.
  */
 export function OtherExpensesPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showTypesModal, setShowTypesModal] = useState(false);
   const [period, setPeriod] = useState<ExpensePeriodFilter>("hoy");
@@ -397,17 +399,18 @@ export function OtherExpensesPage() {
           </thead>
           <tbody>
             {filteredExpenses.map((exp) => (
-              <tr key={exp.id}>
+              <ClickableTableRow
+                key={exp.id}
+                ariaLabel={`Ver gasto ${exp.concept}`}
+                onOpen={() => {
+                  void navigate({
+                    to: "/otros-gastos/$expenseId",
+                    params: { expenseId: String(exp.id) },
+                  });
+                }}
+              >
                 <td className="text-xs">{formatDate(exp.date)}</td>
-                <td>
-                  <Link
-                    to="/otros-gastos/$expenseId"
-                    params={{ expenseId: String(exp.id) }}
-                    className="link link-hover font-medium"
-                  >
-                    {exp.concept}
-                  </Link>
-                </td>
+                <td className="font-medium">{exp.concept}</td>
                 <td>{exp.expenseType}</td>
                 <td>{exp.employeeName ?? "—"}</td>
                 <td className="capitalize">{exp.paymentMethod}</td>
@@ -419,13 +422,6 @@ export function OtherExpensesPage() {
                 </td>
                 <td className="text-right">
                   <div className="flex justify-end gap-1">
-                    <Link
-                      to="/otros-gastos/$expenseId"
-                      params={{ expenseId: String(exp.id) }}
-                      className="btn btn-xs btn-outline"
-                    >
-                      Ver
-                    </Link>
                     <Link
                       to="/otros-gastos/$expenseId/editar"
                       params={{ expenseId: String(exp.id) }}
@@ -448,7 +444,7 @@ export function OtherExpensesPage() {
                     </button>
                   </div>
                 </td>
-              </tr>
+              </ClickableTableRow>
             ))}
             {expensesQuery.isSuccess && filteredExpenses.length === 0 && (
               <tr>

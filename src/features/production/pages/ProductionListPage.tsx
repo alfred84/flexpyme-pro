@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { ClickableTableRow } from "@/components/common/ClickableTableRow";
 import { fetchProductionBatches } from "@/db/queries/production";
 import { formatDate } from "@/lib/format-date";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 export function ProductionListPage() {
+  const navigate = useNavigate();
   const batchesQuery = useQuery({
     queryKey: ["production", "list"],
     queryFn: fetchProductionBatches,
@@ -37,36 +39,34 @@ export function ProductionListPage() {
                 <th className="text-right">{moneyHeading("Costo total")}</th>
                 <th className="text-right">{moneyHeading("Pagado")}</th>
                 <th className="text-right">{moneyHeading("Pendiente")}</th>
-                <th />
               </tr>
             </thead>
             <tbody>
               {batchesQuery.data.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-base-content/60">
+                  <td colSpan={6} className="text-center text-base-content/60">
                     No hay lotes registrados.
                   </td>
                 </tr>
               ) : (
                 batchesQuery.data.map((row) => (
-                  <tr key={row.id}>
+                  <ClickableTableRow
+                    key={row.id}
+                    ariaLabel={`Ver lote del ${formatDate(row.date)}`}
+                    onOpen={() => {
+                      void navigate({
+                        to: "/produccion/$batchId",
+                        params: { batchId: String(row.id) },
+                      });
+                    }}
+                  >
                     <td>{formatDate(row.date)}</td>
                     <td>{row.type}</td>
                     <td>{row.workerName ?? "—"}</td>
                     <td className="text-right">{formatAmount(row.totalCost)}</td>
                     <td className="text-right">{formatAmount(row.paid)}</td>
                     <td className="text-right">{formatAmount(row.pending)}</td>
-                    <td>
-                      <Link
-                        className="btn btn-xs btn-outline"
-                        to="/produccion/$batchId"
-                        params={{ batchId: String(row.id) }}
-                        preload="intent"
-                      >
-                        Ver
-                      </Link>
-                    </td>
-                  </tr>
+                  </ClickableTableRow>
                 ))
               )}
             </tbody>

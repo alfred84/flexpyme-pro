@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { CalendarDays, ClipboardList, UserCog, UserPlus } from "lucide-react";
 import {
@@ -13,6 +13,7 @@ import {
   scheduleMonthlySalary,
   setDestajoDailySalary,
 } from "@/db/queries/employees";
+import { ClickableTableRow } from "@/components/common/ClickableTableRow";
 import { DestajoDefineModal } from "@/features/employees/components/DestajoDefineModal";
 import { FixedDailyEnableModal } from "@/features/employees/components/FixedDailyEnableModal";
 import { MonthlyEnableModal } from "@/features/employees/components/MonthlyEnableModal";
@@ -48,6 +49,7 @@ interface DestajoTarget {
  * @returns Página de empleados.
  */
 export function EmployeesListPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [destajoTarget, setDestajoTarget] = useState<DestajoTarget | null>(null);
   const [monthlyTarget, setMonthlyTarget] = useState<MonthlyTarget | null>(null);
@@ -349,7 +351,17 @@ export function EmployeesListPage() {
             </thead>
             <tbody>
               {employeesQuery.data.map((emp) => (
-                <tr key={emp.id} className={emp.isActive ? "" : "opacity-50"}>
+                <ClickableTableRow
+                  key={emp.id}
+                  className={emp.isActive ? "" : "opacity-50"}
+                  ariaLabel={`Ver empleado ${emp.name}`}
+                  onOpen={() => {
+                    void navigate({
+                      to: "/empleados/$employeeId",
+                      params: { employeeId: String(emp.id) },
+                    });
+                  }}
+                >
                   <td className="font-medium">{emp.name}</td>
                   <td className="capitalize">{emp.role ?? "—"}</td>
                   <td>
@@ -382,42 +394,37 @@ export function EmployeesListPage() {
                       {emp.isActive ? "Activo" : "Baja"}
                     </span>
                   </td>
-                  <td className="flex flex-wrap justify-end gap-1">
-                    <Link
-                      className="btn btn-xs btn-outline"
-                      to="/empleados/$employeeId"
-                      params={{ employeeId: String(emp.id) }}
-                    >
-                      Ver
-                    </Link>
-                    <Link
-                      className="btn btn-xs btn-ghost"
-                      to="/empleados/$employeeId/editar"
-                      params={{ employeeId: String(emp.id) }}
-                    >
-                      Editar
-                    </Link>
-                    {!emp.isActive && (
-                      <button
-                        type="button"
-                        className="btn btn-xs btn-success btn-outline"
-                        disabled={reactivateMutation.isPending}
-                        onClick={() => void reactivateMutation.mutateAsync(emp.id)}
+                  <td>
+                    <div className="flex flex-wrap justify-end gap-1">
+                      <Link
+                        className="btn btn-xs btn-ghost"
+                        to="/empleados/$employeeId/editar"
+                        params={{ employeeId: String(emp.id) }}
                       >
-                        Reactivar
-                      </button>
-                    )}
-                    {emp.isActive && (
-                      <button
-                        type="button"
-                        className="btn btn-xs btn-ghost text-error"
-                        onClick={() => handleDeactivate(emp.id, emp.name)}
-                      >
-                        Dar de baja
-                      </button>
-                    )}
+                        Editar
+                      </Link>
+                      {!emp.isActive && (
+                        <button
+                          type="button"
+                          className="btn btn-xs btn-success btn-outline"
+                          disabled={reactivateMutation.isPending}
+                          onClick={() => void reactivateMutation.mutateAsync(emp.id)}
+                        >
+                          Reactivar
+                        </button>
+                      )}
+                      {emp.isActive && (
+                        <button
+                          type="button"
+                          className="btn btn-xs btn-ghost text-error"
+                          onClick={() => handleDeactivate(emp.id, emp.name)}
+                        >
+                          Dar de baja
+                        </button>
+                      )}
+                    </div>
                   </td>
-                </tr>
+                </ClickableTableRow>
               ))}
               {employeesQuery.data.length === 0 && (
                 <tr>

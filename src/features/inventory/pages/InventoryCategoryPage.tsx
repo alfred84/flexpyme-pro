@@ -1,8 +1,9 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { ArrowLeft, Plus } from "lucide-react";
 import { fetchInventoryItems, fetchMaterialCategories, fetchInventoryPendingOrderDemand } from "@/db/queries/inventory";
+import { ClickableTableRow } from "@/components/common/ClickableTableRow";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
 
 /**
@@ -31,6 +32,7 @@ function formatCost(cost: number): string {
  * @returns Pantalla de categoría de inventario.
  */
 export function InventoryCategoryPage() {
+  const navigate = useNavigate();
   const params = useParams({ strict: false }) as { categoryId?: string };
   const categoryId = Number(params.categoryId);
 
@@ -134,7 +136,17 @@ export function InventoryCategoryPage() {
               {items.map((item) => {
                 const demand = demandByItemId.get(item.id);
                 return (
-                <tr key={item.id} className={item.deficit || item.lowStock || demand ? "bg-error/10" : ""}>
+                <ClickableTableRow
+                  key={item.id}
+                  className={item.deficit || item.lowStock || demand ? "bg-error/10" : ""}
+                  ariaLabel={`Ver material ${item.name}`}
+                  onOpen={() => {
+                    void navigate({
+                      to: "/inventario/$itemId",
+                      params: { itemId: String(item.id) },
+                    });
+                  }}
+                >
                   <td className="font-medium">
                     {item.name}
                     {demand && (
@@ -166,13 +178,6 @@ export function InventoryCategoryPage() {
                   <td className="text-right">
                     <div className="flex justify-end gap-1">
                       <Link
-                        className="btn btn-xs btn-outline"
-                        to="/inventario/$itemId"
-                        params={{ itemId: String(item.id) }}
-                      >
-                        Ver
-                      </Link>
-                      <Link
                         className="btn btn-xs btn-ghost"
                         to="/inventario/$itemId/editar"
                         params={{ itemId: String(item.id) }}
@@ -181,7 +186,7 @@ export function InventoryCategoryPage() {
                       </Link>
                     </div>
                   </td>
-                </tr>
+                </ClickableTableRow>
                 );
               })}
               {items.length === 0 && (

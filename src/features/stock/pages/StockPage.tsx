@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { ClickableTableRow } from "@/components/common/ClickableTableRow";
 import { PaymentStatusBadge } from "@/components/invoices/InvoiceStatusBadges";
 import { fetchStockItems, fetchStockMetrics } from "@/db/queries/stock";
 import { formatAmount, moneyHeading } from "@/lib/format-money";
@@ -13,6 +14,7 @@ type StockFilter = "todos" | "sin_cobrar" | "cobrados";
  * @returns Página del módulo Stock.
  */
 export function StockPage() {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<StockFilter>("todos");
   const [search, setSearch] = useState("");
 
@@ -116,7 +118,17 @@ export function StockPage() {
               </tr>
             )}
             {rows.map((row) => (
-              <tr key={row.id} className={row.daysWaiting >= 7 ? "bg-warning/10" : undefined}>
+              <ClickableTableRow
+                key={row.id}
+                className={row.daysWaiting >= 7 ? "bg-warning/10" : undefined}
+                ariaLabel={`Ver pedido ${row.invoiceNumber}`}
+                onOpen={() => {
+                  void navigate({
+                    to: "/stock/$invoiceId",
+                    params: { invoiceId: String(row.id) },
+                  });
+                }}
+              >
                 <td className="font-mono text-xs">{row.invoiceNumber}</td>
                 <td>{row.clientName}</td>
                 <td className="max-w-xs truncate text-sm">{row.productsSummary}</td>
@@ -128,18 +140,13 @@ export function StockPage() {
                 </td>
                 <td className="tabular-nums">{formatAmount(row.total)}</td>
                 <td>
-                  <div className="flex gap-1">
-                    <Link className="btn btn-xs btn-ghost" to="/stock/$invoiceId" params={{ invoiceId: String(row.id) }}>
-                      Ver
+                  {row.paymentStatus === "pendiente" && row.balance > 1e-6 ? (
+                    <Link className="btn btn-xs btn-primary" to="/pedidos/$invoiceId/caja" params={{ invoiceId: String(row.id) }}>
+                      Cobrar
                     </Link>
-                    {row.paymentStatus === "pendiente" && row.balance > 1e-6 && (
-                      <Link className="btn btn-xs btn-primary" to="/pedidos/$invoiceId/caja" params={{ invoiceId: String(row.id) }}>
-                        Cobrar
-                      </Link>
-                    )}
-                  </div>
+                  ) : null}
                 </td>
-              </tr>
+              </ClickableTableRow>
             ))}
           </tbody>
         </table>

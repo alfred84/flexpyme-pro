@@ -1,7 +1,7 @@
 # REQUIREMENTS.md — FlexPyme Pro
 ## Taller de Impresión Gráfica · Requisitos del Sistema
 
-### Versión: 2.61 | Última actualización: 2026-11-04
+### Versión: 2.62 | Última actualización: 2026-11-11
 
 > **v2.5 — Reenfoque a Producción**: producción/salario/inventario se derivan de
 > los trabajos concluidos por Área/día ligados a pedidos. Novedades: Reportes de
@@ -234,7 +234,7 @@ clientes, controlar inventario, pagar empleados y llevar el flujo de caja.
 - **Tipografía**: moderna y legible
 - **Colores**: paleta profesional con azul/índigo como color primario, acentos de color para estados
 - **Estados visuales**: badges de colores para estados de pedidos (pendiente=amarillo, ejecutado=verde)
-- **Tablas**: con paginación, búsqueda y ordenamiento
+- **Tablas**: con paginación, búsqueda y ordenamiento. En listados con detalle, el clic (o Enter/Espacio) sobre la fila abre lo que antes era el botón **Ver**; hover y cursor indican la fila activa. Editar, cobrar, anular, imprimir y demás acciones de la fila siguen en botones y no disparan el detalle
 - **Formularios**: validación en tiempo real con mensajes de error claros en español
 - **Responsive**: optimizado para laptop (no móvil)
 
@@ -594,6 +594,9 @@ Reglas: `is_system = true` → solo lectura; `is_active = false` → no aparece 
 
 ### v2.61 — Inicio: primera fila Pedidos a la izquierda (2026-11)
 - Inicio: la primera fila queda **Pedidos procesados**, **Pedidos en Producción**, **Facturación del mes**, **Facturación Pendiente**.
+
+### v2.62 — Tablas: clic en la fila en lugar de Ver (2026-11)
+- Listados principales: se retira el botón **Ver**; el clic sobre la fila abre el detalle. Hover y foco de teclado marcan la fila. El resto de botones (Editar, Cobrar, Anular, Imprimir, etc.) se conservan y no abren el detalle.
 
 ### Pendientes / próximos refinamientos
 - PDF de pedido con imagen de logo embebida (hoy logo en impresión HTML; PDF Rust es texto).
